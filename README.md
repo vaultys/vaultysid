@@ -132,8 +132,14 @@ const encrypted = await alice.encrypt(plaintext, recipients);
 // send the message `encrypted` to Bob and Eve so they can decrypt:
 const decryptedBob = await bob.decrypt(encrypted);
 const decryptedEve = await eve.decrypt(encrypted);
+```
+
+## Final Note
+If you use this project and you speak French, you engage to:
+- write and say "chiffrer" instead of "crypter"
+- write and say "numérique" instead of "digital"
+
+Thanks!
 
 ## License
 MIT
-
-```
