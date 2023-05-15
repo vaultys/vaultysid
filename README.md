@@ -1,10 +1,24 @@
 # VaultysID
+Your Swiss Army Knife for the future of Self-Sovereign Identity (SSI). Create, Manage identities and Webs Of Trust independently in a YDNABFT (You Don't Need A Blockchain For That) way. 
 Reference Implementation in javascript of the Vaultys Protocol.
 
-### This library is still in beta. While working, the API might change in the near future
+## Features
+- create and manage ids
+- use any FIDO2 or FIDO-U2F compatible hardware key to secure your ID (successfully tested yubikey, feitian, cryptknox, ledger secure-key app or passkey)
+- sign and verify - ECDSA and EDDSA
+- encrypt and decrypt
+- secure handcheck to include any id in your Web of Trust over various channels (Memory, P2P WebRTC, Nostr, build your own)
+- backup your WoT (File, LocalStorage)
+- nodejs/browser compatible
+- pure P2P, no third party service. Vaultys does not handle your data, neither see it pass through its servers.
+- no token or whatever to buy to get started!
+- free (as in free beer) and open-source for ever
+- COMING SOON: complete replacement of login system without password  or email or phone number (aka Web3 "Connect" without the need buying crypto and leaving footprints everywhere!)
 
-### Security
-This project use a maximum of reviewed library and minimize dependencies. The code has **NOT** been reviewed by independent security team, but we are working to sort this out very soon. Use at your own risk.
+#### This library is still in beta. While working, the API might change in the near future
+
+### Security Note
+This project use a maximum of reviewed library and minimize dependencies. The code has **NOT** been reviewed by an independent security team, but we are working to sort this out very soon. Use at your own risk.
 
 ## Getting Started
 Install vaultys lib
@@ -15,14 +29,30 @@ Then you an create a new Vaultys ID:
 import { VaultysId } from '@vaultyshq/id'
 const vaultysId = await VaultysId.generate();
 // you can distribute this to your friend
-console.log(vaultys.id);
+console.log(vaultysId.id);
 
 // for DiD fingerprint
-console.log(vaultys.did);
+console.log(vaultysId.did);
+
+// be sure to backup your seed
+console.log(vaultysId.getSecret());
 ```
 
-The object is handling basic operations (signature, encryption, verification etc...). However if you want to interact with other Vaultys IDs in your Web of Trust, there is a special IdManager for you that is handling this as well as storage.
-Available now:
+If you have a FIDO2 Key, you also can create an ID (browser only for now):
+```js
+import { SoftCredentials } from '@vaultyshq/id';
+// -7 = curve NIST P-256, (or -8 of Ed25519 only compatible with some keys like feitian or cryptknox)
+const request = SoftCredentials.createRequest(-7);
+// you are supposed to plug your key and enter your pin here:
+const attestation = await navigator.credentials.create(request);
+// create your ID now
+const vaultysId = VaultysId.fido2FromAttestation(attestation);
+```
+Warning: call the function `navigator.credentials.create` and all requests to `sign` data in the same thread as user interaction on Safari, otherwise it will throw an error.
+
+## Managing IDs
+The object `VaultysId` is handling basic operations (signature, encryption, verification etc...). However if you want to interact with other Vaultys IDs in your Web of Trust, there is a special IdManager for you that is handling this as well as storage.
+For Storage we have available now:
 - MemoryStorage: to use a hashmap as backend (in the property _raw)
 - LocalStorage: to use Browser LocalStorage as backend.
 
@@ -43,9 +73,9 @@ Now we have all setup, both ids need to communicate over a channel (ie throug in
 
 For now we have setup several kind of channels:
 - MemoryChannel: to communicate in the same nodejs process
-- @vaultyshq/channel-peerjs: for P2P communication between various browser (using WebRTC through peerjs lib)
+- @vaultyshq/channel-peerjs: for P2P communication between browsers (using WebRTC through peerjs lib)
 - @vaultyshq/channel-browser and @vaultyshq/channel-server: for classic server/client architecture
-- @vaultyshq/channel-patr: be like "I am your Father" to Nostr protocol (aka Patr Nostr)
+- @vaultyshq/channel-patr: be like "I am your Father" to Nostr, squatting its protocol (aka Patr Nostr)
 - more to come
 
 if you want to implement your own channel, just implement 3 functions (`send`, `receive` and `close`) and you can use our crytpo implementation that let you automagically encrypt your channel
@@ -96,10 +126,14 @@ const alice = await VaultysId.generatePerson();
 const bob = await VaultysId.generatePerson();
 const eve = await VaultysId.generatePerson();
 const plaintext = "This message is authentic!";
-const recipients = [bob.id, JSON.parse(JSON.stringify(eve.id)), alice.id.toString("hex")];
+const recipients = [bob.id, eve.id, alice.id];
 const encrypted = await alice.encrypt(plaintext, recipients);
 
-// send the message encrypted to Bob and Eve so they can decrypt:
-const decryptedBob = await bob.decrypt(encrypted, alice.id);
-const decryptedEve = await eve.decrypt(encrypted, alice.id);
+// send the message `encrypted` to Bob and Eve so they can decrypt:
+const decryptedBob = await bob.decrypt(encrypted);
+const decryptedEve = await eve.decrypt(encrypted);
+
+## License
+MIT
+
 ```

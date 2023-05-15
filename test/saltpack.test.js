@@ -14,7 +14,7 @@ describe("Saltpack", () => {
       "BEGIN SALTPACK ENCRYPTED MESSAGE.",
     );
     const decryptedBob = await bob.decrypt(encrypted, alice.id);
-    const decryptedEve = await eve.decrypt(encrypted, alice.id);
+    const decryptedEve = await eve.decrypt(encrypted);
     const decryptedAlice = await alice.decrypt(encrypted, JSON.parse(JSON.stringify(alice.id)));
     assert.equal(decryptedEve, plaintext);
     assert.equal(decryptedEve, decryptedBob);
