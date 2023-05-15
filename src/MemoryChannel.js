@@ -2,7 +2,7 @@ import cc from "./cryptoChannel.js";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export default class MemoryChannel {
+export class MemoryChannel {
   setChannel(chan, name) {
     this.name = name;
     this.otherend = chan;

@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import IdManager from "../src/IdManager.js";
 import VaultysId from "../src/VaultysId.js";
 import { MemoryChannel } from "../src/MemoryChannel.js";
-import { MemoryStorage } from "../src/MemoryStorage.js";
+import { MemoryStorage }  from "../src/MemoryStorage.js";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
@@ -46,7 +46,7 @@ describe("IdManager", () => {
   });
 
   it("sign unspecified data and log it in the store", async () => {
-    const s = MemoryStorage();
+    const s = MemoryStorage(() => "");
     const manager = new IdManager(await VaultysId.generatePerson(), s);
     const signature = await manager.signChallenge(manager.vaultysId.id);
     const signatures = manager.getSignatures();
@@ -57,7 +57,7 @@ describe("IdManager", () => {
   });
 
   it("sign random document hash and log it in the store", async () => {
-    const s = MemoryStorage();
+    const s = MemoryStorage(() => "");
     const fileHashMock = randomBytes(32);
     const manager = new IdManager(await VaultysId.generatePerson(), s);
     const payload = await manager.signFile(fileHashMock);
@@ -72,7 +72,7 @@ describe("IdManager", () => {
   });
 
   // it("sign login and log it in the store", async () => {
-  //   const s = MemoryStorage();
+  //   const s = MemoryStorage(() => "");
   //   const loginMock = 'vaultys://login?host=https://sso.vaultys.net/interaction/1UfGEF9HDQiIreFPS3wlI&nonce=9c0c7621a790c6e697032093aeca614d183319d663aa5cc1a085e052c7f904d5&timestamp=1665498137687&challenge=dummy'
   //   const manager = new IdManager(await VaultysId.generatePerson(), s);
   //   const payload = await manager.signLogin(loginMock);

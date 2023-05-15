@@ -14,13 +14,13 @@ const reviver = (key, value) => {
 const serialize = data => JSON.stringify(data, replacer);
 const deserialize = string => JSON.parse(string, reviver);
 
-const MemoryStorage = (save) => {
+export const MemoryStorage = (save) => {
   let data = {}; 
   if(!save) save = () => console.log(serialize(data));
   return storagify(data, save, () => "");
 }
 
-const LocalStorage = (key = "vaultysStorage") => {
+export const LocalStorage = (key = "vaultysStorage") => {
   let data = {};
   if(!localStorage.getItem(key)) localStorage.setItem(key, "{}")
   else data = deserialize(localStorage.getItem(key));
@@ -45,4 +45,3 @@ const storagify =  (object, save, destroy) => {
 }
 
 
-export default { MemoryStorage, LocalStorage };
