@@ -1,16 +1,16 @@
-import cc from "../src/cryptoChannel.js";
+import cc from "./cryptoChannel.js";
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-export class ChannelMock {
+export class MemoryChannel {
   setChannel(chan, name) {
     this.name = name;
     this.otherend = chan;
   }
 
   static createBidirectionnal() {
-    const input = new ChannelMock();
-    const output = new ChannelMock();
+    const input = new MemoryChannel();
+    const output = new MemoryChannel();
     input.setChannel(output);
     output.setChannel(input);
     return input;
@@ -18,8 +18,8 @@ export class ChannelMock {
 
   static createEncryptedBidirectionnal(key) {
     key = key ? key : cc.generateKey();
-    const input = cc.encryptChannel(new ChannelMock(), key);
-    const output = cc.encryptChannel(new ChannelMock(), key);
+    const input = cc.encryptChannel(new MemoryChannel(), key);
+    const output = cc.encryptChannel(new MemoryChannel(), key);
     input.setChannel(output);
     output.setChannel(input);
     return input;
