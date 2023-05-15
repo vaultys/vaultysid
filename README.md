@@ -1,6 +1,10 @@
 # VaultysID
 Reference Implementation in javascript of the Vaultys Protocol.
 
+### This library is still in beta. While working, the API might change in the near future
+
+### Security
+This project use a maximum of reviewed library and minimize dependencies. The code has **NOT** been reviewed by independent security team, but we are working to sort this out very soon. Use at your own risk.
 
 ## Getting Started
 Install vaultys lib
@@ -19,7 +23,7 @@ console.log(vaultys.did);
 
 The object is handling basic operations (signature, encryption, verification etc...). However if you want to interact with other Vaultys IDs in your Web of Trust, there is a special IdManager for you that is handling this as well as storage.
 Available now:
-- MemoryStorge: to use a hashmap as backend (in the property _raw)
+- MemoryStorage: to use a hashmap as backend (in the property _raw)
 - LocalStorage: to use Browser LocalStorage as backend.
 
 More to come...
