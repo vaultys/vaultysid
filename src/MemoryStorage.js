@@ -45,4 +45,4 @@ const storagify =  (object, save, destroy) => {
 }
 
 
-export { MemoryStorage, LocalStorage };
+export default { MemoryStorage, LocalStorage };
