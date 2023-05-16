@@ -56,7 +56,7 @@ const COSEALGHASH = {
   "-36": "SHA-512",
 };
 
-const hash = (alg, message) => myhash(alg.replaceAll("-", ""), message);
+const hash = (alg, message) => myhash(alg.replace("-", ""), message);
 
 const base64ToPem = (b64cert) => {
   let pemcert = "";

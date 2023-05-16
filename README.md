@@ -2,6 +2,8 @@
 Your Swiss Army Knife for the future of Self-Sovereign Identity (SSI). Create, Manage identities and Webs Of Trust independently in a YDNABFT (You Don't Need A Blockchain For That) way. 
 Reference Implementation in javascript of the Vaultys Protocol.
 
+[![Build Status](https://github.com/vaultys/vaultysid/workflows/test/badge.svg?branch=main)](https://github.com/vaultys/vaultysid/actions/workflows/test.yml)
+
 ## Features
 - create and manage ids
 - use any FIDO2 or FIDO-U2F compatible hardware key to secure your ID (successfully tested yubikey, feitian, cryptknox, ledger secure-key app or passkey)
