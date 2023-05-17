@@ -313,7 +313,7 @@ export default class IdManager {
     const context = challenger.getContext();
     if (context.protocol != protocol || context.service != service) {
       throw new Error(
-        `The challenge was expecting protocol 'p2p' and service 'auth', received '${protocol}' and '${service}'`,
+        `The challenge was expecting protocol '${protocol}' and service '${service}', received '${context.protocol}' and '${context.service}'`,
       );
     }
     channel.send(challenger.getCertificate());

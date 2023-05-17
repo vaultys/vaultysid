@@ -1,6 +1,6 @@
 {
   "name": "@vaultyshq/id",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "handling decentralised id protocol vaultys",
   "main": "index.js",
   "author": "vaultys",

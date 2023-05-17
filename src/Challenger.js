@@ -81,17 +81,17 @@ const deserialize = (challenge) => {
 
 const serialize = (data) => {
   if (data.state == INIT) {
-    const { protocol, service, timestamp, pk1, nonce } = data;
-    const picked = { protocol, service, timestamp, pk1, nonce };
+    const { protocol, service, timestamp, pk1, nonce, metadata } = data;
+    const picked = { protocol, service, timestamp, pk1, nonce, metadata };
     return msgpack.serialize(picked);
   }
   if (data.state == STEP1) {
-    const { protocol, service, timestamp, pk1, pk2, nonce, sign2 } = data;
-    const picked = { protocol, service, timestamp, pk1, pk2, nonce, sign2 };
+    const { protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata } = data;
+    const picked = { protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata };
     return msgpack.serialize(picked);
   }
   if (data.state == COMPLETE) {
-    const { protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2 } =
+    const { protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata } =
       data;
     const picked = {
       protocol,
@@ -102,6 +102,7 @@ const serialize = (data) => {
       nonce,
       sign1,
       sign2,
+      metadata
     };
     return msgpack.serialize(picked);
   }
@@ -109,8 +110,8 @@ const serialize = (data) => {
 };
 
 const serializeUnsigned = (challenge) => {
-  const { protocol, service, timestamp, pk1, pk2, nonce } = challenge;
-  return msgpack.serialize({ protocol, service, timestamp, pk1, pk2, nonce });
+  const { protocol, service, timestamp, pk1, pk2, nonce, metadata } = challenge;
+  return msgpack.serialize({ protocol, service, timestamp, pk1, pk2, nonce, metadata });
 };
 
 const isLive = (challenge, liveliness) => {
@@ -200,16 +201,18 @@ export default class Challenger {
     return {
       protocol: this.challenge.protocol,
       service: this.challenge.service,
+      metadata: this.challenge.metadata
     };
   }
 
-  createChallenge(protocol, service) {
+  createChallenge(protocol, service, metadata = {}) {
     if (this.state == UNITIALISED) {
       this.myKey = this.vaultysId.id;
       // console.log(this)
       this.challenge = {
         protocol,
         service,
+        metadata,
         timestamp: Date.now(),
         pk1: this.myKey,
         nonce: randomBytes(16),
@@ -227,8 +230,8 @@ export default class Challenger {
   }
 
   getUnsignedChallenge() {
-    const { protocol, service, timestamp, pk1, pk2, nonce } = this.challenge;
-    return msgpack.serialize({ protocol, service, timestamp, pk1, pk2, nonce });
+    const { protocol, service, timestamp, pk1, pk2, nonce, metadata } = this.challenge;
+    return msgpack.serialize({ protocol, service, timestamp, pk1, pk2, nonce, metadata });
   }
 
   getContactId() {
@@ -260,7 +263,7 @@ export default class Challenger {
     return this.myKey == this.hisKey;
   }
 
-  async update(challengeString) {
+  async update(challengeString, metadata = {}) {
     if (this.state == UNITIALISED) await this.setChallenge(challengeString);
     else if (this.state == INIT) {
       this.challenge = await deserialize(challengeString);
@@ -272,10 +275,6 @@ export default class Challenger {
       }
       if (this.challenge.state == STEP1) {
         this.state = STEP1;
-        const context = {
-          protocol: this.challenge.protocol,
-          service: this.challenge.service,
-        };
         if (Buffer.compare(this.myKey, this.challenge.pk1) != 0) {
           throw new Error(
             `The challenge has been tampered with. Received pk1 = '${this.challenge.pk1}', expected pk1 = '${this.myKey}'`,
