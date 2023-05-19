@@ -32,7 +32,9 @@ export default class KeyManager {
     this.proof = null;
     this.proofPublicKey = null;
     this.signer = null;
+    this.authType = "Ed25519VerificationKey2020";
     this.cypher = null;
+    this.encType = "X25519KeyAgreementKey2019";
     this.swapIndex = 0;
   }
 
@@ -76,6 +78,7 @@ export default class KeyManager {
       }),
     );
   }
+
 
   getSecret() {
     return Buffer.from(

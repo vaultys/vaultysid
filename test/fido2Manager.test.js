@@ -1,6 +1,7 @@
 import Fido2Manager from "../src/Fido2Manager.js";
 import SoftCredentials from "../src/SoftCredentials.js";
 import assert from "assert";
+import VaultysId from "../src/VaultysId.js";
 
 // nodejs polyfill
 global.navigator = {
@@ -20,6 +21,24 @@ describe("Fido2Manager", () => {
     const secret = f2m.getSecret();
     const f2mbis = Fido2Manager.fromSecret(secret);
     assert.equal(f2m.id.toString("hex"), f2mbis.id.toString("hex"));
+  });
+
+  it("serder a VaultysId backed by a Fido2Manager (EdDSA)", async () => {
+    const attestation = await navigator.credentials.create(
+      SoftCredentials.createRequest(-7),
+    );
+    const id1 = await VaultysId.fido2FromAttestation(attestation);
+    const id2 = VaultysId.fromId(id1.id);
+    assert.deepStrictEqual(id1.didDocument, id2.didDocument);
+  });
+
+  it("serder a VaultysId backed by a Fido2Manager (EcDSA)", async () => {
+    const attestation = await navigator.credentials.create(
+      SoftCredentials.createRequest(-8),
+    );
+    const id1 = await VaultysId.fido2FromAttestation(attestation);
+    const id2 = VaultysId.fromId(id1.id);
+    assert.deepStrictEqual(id1.didDocument, id2.didDocument);
   });
 
   it("serder a private Fido2Manager to a public Fido2Manager (EdDSA)", async () => {

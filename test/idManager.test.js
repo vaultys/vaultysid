@@ -11,6 +11,8 @@ describe("IdManager", () => {
     const secret = id1.getSecret();
     const id2 = await VaultysId.fromSecret(secret);
     assert.equal(id2.fingerprint, id1.fingerprint);
+    assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
+    assert.deepStrictEqual(id2.didDocument, id1.didDocument);
   });
 
   it("serder a vaultys secret in base64", async () => {
@@ -18,12 +20,16 @@ describe("IdManager", () => {
     const secret = id1.getSecret("base64");
     const id2 = await VaultysId.fromSecret(secret, "base64");
     assert.equal(id2.fingerprint, id1.fingerprint);
+    assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
+    assert.deepStrictEqual(id2.didDocument, id1.didDocument);
   });
 
   it("serder to public Idmanager", async () => {
     const id1 = await VaultysId.generateMachine();
     const id2 = await VaultysId.fromId(id1.id);
     assert.equal(id2.fingerprint, id1.fingerprint);
+    assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
+    assert.deepStrictEqual(id2.didDocument, id1.didDocument);
   });
 
   it("serder to public Idmanager stringified", async () => {
@@ -31,6 +37,8 @@ describe("IdManager", () => {
     const id = JSON.stringify(id1.id);
     const id2 = await VaultysId.fromId(JSON.parse(id));
     assert.equal(id2.fingerprint, id1.fingerprint);
+    assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
+    assert.deepStrictEqual(id2.didDocument, id1.didDocument);
   });
 
   it("serder to public Idmanager as hex string", async () => {
@@ -43,6 +51,8 @@ describe("IdManager", () => {
     const id1 = await VaultysId.generateMachine();
     const id2 = await VaultysId.fromId(id1.id.toString('base64'), null, "base64");
     assert.equal(id2.fingerprint, id1.fingerprint);
+    assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
+    assert.deepStrictEqual(id2.didDocument, id1.didDocument);
   });
 
   it("sign unspecified data and log it in the store", async () => {

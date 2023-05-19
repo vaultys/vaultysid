@@ -1,5 +1,6 @@
 import { hash, randomBytes } from "./crypto.js";
 import { dearmorAndDecrypt, encryptAndArmor } from "@samuelthomas2774/saltpack";
+import cbor from "cbor";
 import nacl from "tweetnacl";
 import msgpack from "@ygoe/msgpack";
 import SoftCredentials from "./SoftCredentials.js";
@@ -26,6 +27,16 @@ export default class Fido2Manager {
     this.t = null;
     this.ckey = null;
     this.cypher = null;
+    this.encType = "X25519KeyAgreementKey2019";
+  }
+
+  get authType() {
+    const type = cbor.decode(this.ckey).get(1)
+    if(type === 1) {
+      return "Ed25519VerificationKey2020";
+    } else if(type === 2) {
+      return "P256VerificationKey2020";
+    } else return "Unknown";
   }
 
   get transports() {
@@ -44,8 +55,16 @@ export default class Fido2Manager {
     const entropy = randomBytes(32);
     const seed = sha512(entropy, "hex");
     f2m.cypher = nacl.box.keyPair.fromSecretKey(seed.slice(0, 32));
+    f2m.cypher.publicKey = Buffer.from(f2m.cypher.publicKey);
+    f2m.cypher.secretKey = Buffer.from(f2m.cypher.secretKey);
     f2m.entropy = entropy;
     return f2m;
+  }
+
+  get signer() {
+    return {
+      publicKey: cbor.decode(this.ckey).get(-2)
+    };
   }
 
   get id() {

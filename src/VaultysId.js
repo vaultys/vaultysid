@@ -146,6 +146,28 @@ export default class VaultysId {
     return `did:vaultys:${fp.slice(0, 40)}`;
   }
 
+  get didDocument() {
+    return {
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1"
+      ],
+      id: this.did,
+      authentication: [{
+        id: `${this.did}#keys-1`,
+        type: this.keyManager.authType,
+        controller: this.did,
+        publicKeyMultibase: "m"+this.keyManager.signer.publicKey.toString("base64")
+      }],
+      keyAgreement: [{
+        id: `${this.did}#keys-2`,
+        type: this.keyManager.encType,
+        controller: this.did,
+        publicKeyMultibase: "m"+this.keyManager.cypher.publicKey.toString("base64")
+      }]
+    };
+  }
+
   get id() {
     return Buffer.concat([Buffer.from([this.type]), this.keyManager.id]);
   }

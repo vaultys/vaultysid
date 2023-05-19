@@ -33,8 +33,9 @@ const vaultysId = await VaultysId.generate();
 // you can distribute this to your friend
 console.log(vaultysId.id);
 
-// for DiD fingerprint
+// for DiD fingerprint and didDocument (higly subject to change)
 console.log(vaultysId.did);
+console.log(vaultysId.didDocument);
 
 // be sure to backup your seed
 console.log(vaultysId.getSecret());
