@@ -64,7 +64,7 @@ describe("Fido2Manager", () => {
     );
     const signature = await signer.sign(message);
     assert.equal(CredentialUserInteractionRequested, 1);
-    assert.ok(await verifier.verify(message, signature));
+    assert.ok(verifier.verify(message, signature));
   });
 
   it("sign and verify a message using ECDSA", async () => {

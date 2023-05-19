@@ -2,12 +2,17 @@
 import crypto from "crypto";
 import { randomBytes, hash as myhash, fromBase64, fromUTF8 } from "./crypto.js";
 import cbor from "cbor";
-import { verify as verifyNoble } from "@noble/ed25519";
+import { ed25519 } from "@noble/curves/ed25519";
 import elliptic from "elliptic";
 import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
 const p256 = new elliptic.ec("p256");
 const credentials = {};
 
+// // polyfill for node <= 18
+// if(!ed.etc.sha512Sync) {
+//   console.log("polyfill")
+//   ed.etc.sha512Sync = (...m) => Uint8Array.from(myhash("sha512", ed.etc.concatBytes(...m)));
+// }
 //const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
 
 const COSEKEYS = {
@@ -250,8 +255,8 @@ const verifyECDSA = (data, publicKey, signature) => {
   return p256.verify(data, Buffer.from(signature), publicKey);
 };
 
-const verifyEdDSA = async (data, publicKey, signature) => {
-  return verifyNoble(signature, data, publicKey);
+const verifyEdDSA = (data, publicKey, signature) => {
+  return ed25519.verify(signature, data, publicKey);
 };
 
 // not available in browser

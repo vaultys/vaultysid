@@ -86,13 +86,32 @@ const serialize = (data) => {
     return msgpack.serialize(picked);
   }
   if (data.state == STEP1) {
-    const { protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata } = data;
-    const picked = { protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata };
+    const { protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata } =
+      data;
+    const picked = {
+      protocol,
+      service,
+      timestamp,
+      pk1,
+      pk2,
+      nonce,
+      sign2,
+      metadata,
+    };
     return msgpack.serialize(picked);
   }
   if (data.state == COMPLETE) {
-    const { protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata } =
-      data;
+    const {
+      protocol,
+      service,
+      timestamp,
+      pk1,
+      pk2,
+      nonce,
+      sign1,
+      sign2,
+      metadata,
+    } = data;
     const picked = {
       protocol,
       service,
@@ -102,7 +121,7 @@ const serialize = (data) => {
       nonce,
       sign1,
       sign2,
-      metadata
+      metadata,
     };
     return msgpack.serialize(picked);
   }
@@ -111,7 +130,15 @@ const serialize = (data) => {
 
 const serializeUnsigned = (challenge) => {
   const { protocol, service, timestamp, pk1, pk2, nonce, metadata } = challenge;
-  return msgpack.serialize({ protocol, service, timestamp, pk1, pk2, nonce, metadata });
+  return msgpack.serialize({
+    protocol,
+    service,
+    timestamp,
+    pk1,
+    pk2,
+    nonce,
+    metadata,
+  });
 };
 
 const isLive = (challenge, liveliness) => {
@@ -201,7 +228,7 @@ export default class Challenger {
     return {
       protocol: this.challenge.protocol,
       service: this.challenge.service,
-      metadata: this.challenge.metadata
+      metadata: this.challenge.metadata,
     };
   }
 
@@ -230,8 +257,17 @@ export default class Challenger {
   }
 
   getUnsignedChallenge() {
-    const { protocol, service, timestamp, pk1, pk2, nonce, metadata } = this.challenge;
-    return msgpack.serialize({ protocol, service, timestamp, pk1, pk2, nonce, metadata });
+    const { protocol, service, timestamp, pk1, pk2, nonce, metadata } =
+      this.challenge;
+    return msgpack.serialize({
+      protocol,
+      service,
+      timestamp,
+      pk1,
+      pk2,
+      nonce,
+      metadata,
+    });
   }
 
   getContactId() {

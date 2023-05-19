@@ -1,6 +1,5 @@
 import assert from "assert";
 import KeyManager, { derivePath } from "../src/KeyManager.js";
-import * as ed from '@noble/ed25519';
 import { randomBytes } from "crypto";
 
 import bip32ed25519 from '@stricahq/bip32ed25519';

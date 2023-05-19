@@ -79,7 +79,6 @@ export default class KeyManager {
     );
   }
 
-
   getSecret() {
     return Buffer.from(
       msgpack.serialize({

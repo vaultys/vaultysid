@@ -31,10 +31,10 @@ export default class Fido2Manager {
   }
 
   get authType() {
-    const type = cbor.decode(this.ckey).get(1)
-    if(type === 1) {
+    const type = cbor.decode(this.ckey).get(1);
+    if (type === 1) {
       return "Ed25519VerificationKey2020";
-    } else if(type === 2) {
+    } else if (type === 2) {
       return "P256VerificationKey2020";
     } else return "Unknown";
   }
@@ -63,7 +63,7 @@ export default class Fido2Manager {
 
   get signer() {
     return {
-      publicKey: cbor.decode(this.ckey).get(-2)
+      publicKey: cbor.decode(this.ckey).get(-2),
     };
   }
 
