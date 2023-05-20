@@ -170,7 +170,6 @@ export default class Fido2Manager {
       clientDataJSON: decoded.c,
       authenticatorData: decoded.a,
     };
-    //console.log(signature, response)
     const challenge = hash("sha256", data).toString("base64");
     const extractedChallenge = SoftCredentials.extractChallenge(
       response.clientDataJSON,

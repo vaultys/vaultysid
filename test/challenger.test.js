@@ -3,6 +3,16 @@ import Challenger from "../src/Challenger.js";
 import SoftCredentials from "../src/SoftCredentials.js";
 import VaultysId from "../src/VaultysId.js";
 
+// nodejs polyfill
+global.navigator = {
+  credentials: SoftCredentials,
+};
+global.atob = (str) => Buffer.from(str, "base64").toString("latin1");
+global.btoa = (str) => Buffer.from(str, "latin1").toString("base64");
+
+global.CredentialUserInteractionRequest = () => global.CredentialUserInteractionRequested++
+
+
 describe("Symetric Proof of Relationship - SRG", () => {
   it("Perform Protocol with KeyManager", async () => {
     const vaultysId1 = await VaultysId.generateMachine();
@@ -62,8 +72,13 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
     await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.rejects(challenger2.update(challenger1.getCertificate()));
-    // challenger2.update(challenger1.getCertificate())
+    await assert.rejects(
+      challenger2.update(challenger1.getCertificate()), 
+      {
+        name: "Error",
+        message: "challenge timestamp failed the liveliness at first signature"
+      }
+    );
   });
 
   it("Fail for liveliness at second round", async () => {
@@ -79,7 +94,13 @@ describe("Symetric Proof of Relationship - SRG", () => {
     challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
     await new Promise((resolve) => setTimeout(resolve, 100));
-    assert.rejects(challenger1.update(challenger2.getCertificate()));
+    await assert.rejects(
+      challenger1.update(challenger2.getCertificate()), 
+      {
+        name: "Error",
+        message: "challenge timestamp failed the liveliness at 2nd signature"
+      }
+    );
   });
 
   it("Pass for liveliness at third round", async () => {
@@ -100,6 +121,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
 
     assert.ok(challenger1.isComplete());
     assert.ok(challenger2.isComplete());
+    assert.ok(!challenger1.hasFailed())
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
@@ -119,9 +141,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
     await challenger1.update(challenger2.getCertificate());
     await new Promise((resolve) => setTimeout(resolve, 100));
     await challenger2.update(challenger1.getCertificate());
-
     assert.ok(challenger1.isComplete());
     assert.ok(challenger2.isComplete());
+    assert.ok(!challenger1.hasFailed());
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
@@ -137,6 +159,12 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
     challenger1.challenge.timestamp = challenger1.challenge.timestamp + 15000;
-    assert.rejects(challenger2.update(challenger1.getCertificate()));
+    await assert.rejects(
+      challenger2.update(challenger1.getCertificate()), 
+      {
+        name: "Error",
+        message: "challenge timestamp failed the liveliness at first signature"
+      }
+    );
   });
 });

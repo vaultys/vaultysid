@@ -3,16 +3,13 @@ import crypto from "crypto";
 import { randomBytes, hash as myhash, fromBase64, fromUTF8 } from "./crypto.js";
 import cbor from "cbor";
 import { ed25519 } from "@noble/curves/ed25519";
-import elliptic from "elliptic";
+import { p256 } from "@noble/curves/p256";
+import { p384 } from "@noble/curves/p384";
+import { p521 } from "@noble/curves/p521";
 import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
-const p256 = new elliptic.ec("p256");
+
 const credentials = {};
 
-// // polyfill for node <= 18
-// if(!ed.etc.sha512Sync) {
-//   console.log("polyfill")
-//   ed.etc.sha512Sync = (...m) => Uint8Array.from(myhash("sha512", ed.etc.concatBytes(...m)));
-// }
 //const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
 
 const COSEKEYS = {
@@ -42,9 +39,9 @@ const COSERSASCHEME = {
 };
 
 const COSECRV = {
-  1: "p256",
-  2: "p384",
-  3: "p521",
+  1: p256,
+  2: p384,
+  3: p521,
 };
 
 const COSEALGHASH = {
@@ -148,14 +145,12 @@ const verifyPackedAttestation = async (response, userVerification = false) => {
   const attestationBuffer = Buffer.from(response.attestationObject, "base64");
   const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
   if (attestationStruct.fmt == "none") return false;
-
   const authDataStruct = parseAuthData(attestationStruct.authData);
+
   // check if user has actually touched the device
   if (!authDataStruct.flags.up) return false;
   // check if did enter PIN code
-  if (userVerification) {
-    if (!authDataStruct.flags.uv) return false;
-  }
+  if (userVerification && !authDataStruct.flags.uv) return false;
 
   const clientDataHashBuf = hash(
     "sha256",
@@ -165,7 +160,7 @@ const verifyPackedAttestation = async (response, userVerification = false) => {
     attestationStruct.authData,
     clientDataHashBuf,
   ]);
-  const signatureBuffer = attestationStruct.attStmt.sig;
+  const signature = attestationStruct.attStmt.sig;
 
   let signatureIsValid = false;
 
@@ -202,32 +197,27 @@ const verifyPackedAttestation = async (response, userVerification = false) => {
     signatureIsValid = crypto
       .createVerify("sha256")
       .update(dataBuffer)
-      .verify(leafCert, signatureBuffer);
+      .verify(leafCert, signature);
     /* ----- Verify FULL attestation ENDS ----- */
   } else if (attestationStruct.attStmt.ecdaaKeyId) {
-    throw new Error("ECDAA IS NOT SUPPORTED YET!");
+    throw new Error("ECDAA IS NOT SUPPORTED!");
   } else {
     /* ----- Verify SURROGATE attestation ----- */
     const pubKeyCose = cbor.decodeAllSync(authDataStruct.COSEPublicKey)[0];
     const hashAlg = COSEALGHASH[pubKeyCose.get(COSEKEYS.alg)];
+    const data = hash(hashAlg, dataBuffer);
     if (pubKeyCose.get(COSEKEYS.kty) === COSEKTY.EC2) {
+      // ECDSA
       const x = pubKeyCose.get(COSEKEYS.x);
       const y = pubKeyCose.get(COSEKEYS.y);
-      const ansiKey = Buffer.concat([Buffer.from([0x04]), x, y]);
-      const dataHash = hash(hashAlg, dataBuffer);
-      const ec = new elliptic.ec(COSECRV[pubKeyCose.get(COSEKEYS.crv)]);
-      const key = ec.keyFromPublic(ansiKey);
-      console.log(key.verify(dataHash, signatureBuffer));
-      signatureIsValid = crypto
-        .createVerify(hashAlg.replaceAll("-", ""))
-        .update(dataBuffer)
-        .verify(key, signatureBuffer);
+      const pubKey = Buffer.concat([Buffer.from([0x04]), x, y]);
+      const ec = COSECRV[pubKeyCose.get(COSEKEYS.crv)];
+      const sig = ec.Signature.fromDER(signature);
+      signatureIsValid = ec.verify(sig, data, pubKey);
     } else if (pubKeyCose.get(COSEKEYS.kty) === COSEKTY.OKP) {
+      // EdDSA
       const x = pubKeyCose.get(COSEKEYS.x);
-      const dataHash = hash(hashAlg, dataBuffer);
-      const key = new elliptic.eddsa("ed25519");
-      key.keyFromPublic(x);
-      signatureIsValid = key.verify(dataHash, signatureBuffer);
+      signatureIsValid = ed25519.verify(signature, data, x);
     } else {
       return false;
     }
@@ -252,7 +242,7 @@ class PublicKeyCredential {
 }
 
 const verifyECDSA = (data, publicKey, signature) => {
-  return p256.verify(data, Buffer.from(signature), publicKey);
+  return p256.verify(p256.Signature.fromDER(signature), data, publicKey);
 };
 
 const verifyEdDSA = (data, publicKey, signature) => {
@@ -399,24 +389,19 @@ export default class SoftCredentials {
 
     const hash = myhash("sha256", Buffer.from(response.clientDataJSON));
     let data = Buffer.concat([Buffer.from(response.authenticatorData), hash]);
+    if (ckey.get(3) == -7) {
+      data = myhash("sha256", data);
+    }
     if (ckey.get(1) == 1) {
       // EdDSA
       const x = ckey.get(-2);
-      if (ckey.get(3) == -7) {
-        // SHA256
-        data = myhash("sha256", data);
-      }
       return verifyEdDSA(data, x, Buffer.from(response.signature));
     } else if (ckey.get(1) == 2) {
       // ECDSA
       const x = ckey.get(-2);
       const y = ckey.get(-3);
-      const publicKey = p256.keyFromPublic({ x, y }, "hex");
-      if (ckey.get(3) == -7) {
-        // SHA256
-        data = myhash("SHA256", data);
-      }
-      return verifyECDSA(data, publicKey, response.signature);
+      const pubKey = Buffer.concat([Buffer.from("04", "hex"), x, y]);
+      return verifyECDSA(data, pubKey, response.signature);
     }
     return false;
   }
@@ -430,7 +415,7 @@ export default class SoftCredentials {
     return verifyPackedAttestation(attestation, userVerification);
   }
 
-  static async verify(attestation, assertion, userVerifiation = false) {
+  static verify(attestation, assertion, userVerifiation = false) {
     if (assertion.id !== attestation.id) return false;
     const hash = myhash("sha256", assertion.response.clientDataJSON);
     let data = Buffer.concat([assertion.response.authenticatorData, hash]);
@@ -439,80 +424,40 @@ export default class SoftCredentials {
     // check if user has actually touched the device
     if (!authData.flags.up) return false;
     // check if the user has entered his PIN code or used biometric sensor
-    if (userVerifiation) {
-      if (!authData.flags.uv) return false;
-    }
+    if (userVerifiation && !authData.flags.uv) return false;
     const ckey = cbor.decode(authData.COSEPublicKey);
+    if (ckey.get(3) == -7) {
+      data = myhash("sha256", data);
+    }
     if (ckey.get(1) == 1) {
       // EdDSA
       const x = ckey.get(-2);
-      if (ckey.get(3) == -7) {
-        // SHA256
-        data = myhash("SHA256", data);
-      }
       return verifyEdDSA(data, x, assertion.response.signature);
     } else if (ckey.get(1) == 2) {
       // ECDSA
       const x = ckey.get(-2);
       const y = ckey.get(-3);
-      const publicKey = p256.keyFromPublic({ x, y }, "hex");
-      if (ckey.get(3) == -7) {
-        // SHA256
-        data = myhash("SHA256", data);
-      }
-      return verifyECDSA(data, publicKey, assertion.response.signature);
+      const pubKey = Buffer.concat([Buffer.from("04", "hex"), x, y]);
+      return verifyECDSA(data, pubKey, assertion.response.signature);
     }
   }
 
-  static async verifySafe(attestation, assertion, userVerifiation = false) {
-    if (assertion.id != attestation.id) return false;
-    const hash = myhash(
-      "sha256",
-      fromBase64(assertion.response.clientDataJSON),
-    );
-    let data = Buffer.concat([
-      Buffer.from(assertion.response.authenticatorData, "base64"),
-      hash,
-    ]);
-    const ato = cbor.decode(
-      Buffer.from(attestation.response.attestationObject, "base64"),
-    );
-    const authData = parseAuthData(ato.authData);
-    // check if user has actually touched the device
-    if (!authData.flags.up) return false;
-    // check if the user has entered his PIN code or used biometric sensor
-    if (userVerifiation) {
-      if (!authData.flags.uv) return false;
-    }
-    const ckey = cbor.decode(authData.COSEPublicKey);
-    if (ckey.get(1) == 1) {
-      // EdDSA
-      // not standard on browser
-      const x = ckey.get(-2);
-      if (ckey.get(3) == -7) {
-        // SHA256
-        data = myhash("SHA256", data);
-      }
-      return verifyEdDSA(
-        data,
-        x,
-        Buffer.from(assertion.response.signature, "base64"),
-      );
-    } else if (ckey.get(1) == 2) {
-      // ECDSA
-      const x = ckey.get(-2);
-      const y = ckey.get(-3);
-      const publicKey = p256.keyFromPublic({ x, y }, "hex");
-      if (ckey.get(3) == -7) {
-        // SHA256
-        data = myhash("SHA256", data);
-      }
-      return verifyECDSA(
-        data,
-        publicKey,
-        Buffer.from(assertion.response.signature, "base64"),
-      );
-    }
+  static verifySafe(attestation, assertion, userVerifiation = false) {
+    const parsedAttestation = {
+      id: attestation.id,
+      response: {
+        attestationObject: fromBase64(attestation.response.attestationObject),
+      },
+    };
+    const parsedAssertion = {
+      id: assertion.id,
+      response: {
+        clientDataJSON: fromBase64(assertion.response.clientDataJSON),
+        authenticatorData: fromBase64(assertion.response.authenticatorData),
+        signature: fromBase64(assertion.response.signature),
+      },
+    };
+    return this.verify(parsedAttestation, parsedAssertion, userVerifiation);
   }
 
   static extractChallenge(clientDataJSON) {
