@@ -69,7 +69,6 @@ const deserialize = (challenge) => {
         result.error =
           "challenge failed to verification of pk2, looks like a tentative to tamper with an existing signature";
       }
-      result.state = COMPLETE;
     }
   } catch (error) {
     console.log(error);
