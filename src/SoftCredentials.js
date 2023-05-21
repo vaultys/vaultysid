@@ -242,16 +242,11 @@ class PublicKeyCredential {
 }
 
 const verifyECDSA = (data, publicKey, signature) => {
-  return p256.verify(p256.Signature.fromDER(signature), data, publicKey);
+  return p256.verify(p256.Signature.fromDER(signature).toCompactHex(), data, publicKey);
 };
 
 const verifyEdDSA = (data, publicKey, signature) => {
   return ed25519.verify(signature, data, publicKey);
-};
-
-// not available in browser
-const sign = (data, privateKey) => {
-  return crypto.sign(null, data, privateKey);
 };
 
 // Webauthn Partial Implementation for testing
@@ -307,36 +302,33 @@ export default class SoftCredentials {
     credential.rpId = options.rp.id;
     credential.userHandle = Buffer.from(options.user.id, "utf-8");
     credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
-    if (options.pubKeyCredParams[0].alg === -8) {
-      credential.keyPair = await crypto.generateKeyPairSync("ed25519");
+    credential.alg = options.pubKeyCredParams[0].alg;
+    if (credential.alg === -8) {
+      credential.keyPair = { privateKey: ed25519.utils.randomPrivateKey() };
+      credential.keyPair.publicKey = ed25519.getPublicKey(
+        credential.keyPair.privateKey,
+      );
       credential.coseKey = new Map();
       credential.coseKey.set(1, 1);
       credential.coseKey.set(3, -8);
       credential.coseKey.set(-1, 6);
-      const x = credential.keyPair.publicKey
-        .export({ format: "der", type: "spki" })
-        .slice(12);
+      const x = credential.keyPair.publicKey.slice(0, 32);
       credential.coseKey.set(-2, x);
-    } else if (options.pubKeyCredParams[0].alg === -7) {
-      credential.keyPair = await crypto.generateKeyPairSync("ec", {
-        namedCurve: "prime256v1",
-      });
+    } else if (credential.alg === -7) {
+      credential.keyPair = { privateKey: p256.utils.randomPrivateKey() };
+      credential.keyPair.publicKey = p256.getPublicKey(
+        credential.keyPair.privateKey,
+        false
+      );
       credential.coseKey = new Map();
       credential.coseKey.set(1, 2);
       credential.coseKey.set(3, -7);
       credential.coseKey.set(-1, 6);
-      const der = credential.keyPair.publicKey.export({
-        format: "der",
-        type: "spki",
-      });
-      const x = der.slice(27, 27 + 32);
-      const y = der.slice(27 + 32);
-      // NOT possible for nodejs < 15.9
-      // const jwk = credential.keyPair.publicKey.export({format:'jwk', type:'spki'})
-      //  x = Buffer.from(jwk.x, 'base64')
-      //  y = Buffer.from(jwk.y, 'base64')
+      const x = credential.keyPair.publicKey.slice(1, 33);
+      const y = credential.keyPair.publicKey.slice(33);
       credential.coseKey.set(-2, x);
       credential.coseKey.set(-3, y);
+      // console.log(extpk,x,y)
     }
     const clientData = {
       type: "webauthn.create",
@@ -497,7 +489,12 @@ export default class SoftCredentials {
     signCount.writeUInt32BE(credential.signCount);
     const authenticatorData = Buffer.concat([rpIdHash, flags, signCount]);
     let toSign = Buffer.concat([authenticatorData, clientDataHash]);
-    const signature = sign(toSign, credential.keyPair.privateKey);
+    let signature;
+    if (credential.alg === -7) {
+      signature = p256.sign(toSign, credential.keyPair.privateKey, {prehash: true}).toDERRawBytes();
+    } else if (credential.alg === -8) {
+      signature = ed25519.sign(toSign, credential.keyPair.privateKey);
+    }
     //generate assertion
     return new PublicKeyCredential({
       id: credential.rawId.toString("base64"),

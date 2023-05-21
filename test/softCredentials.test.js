@@ -119,11 +119,18 @@ describe("SoftCredentials", () => {
       attestationObject: "o2NmbXRmcGFja2VkZ2F0dFN0bXSjY2FsZyZjc2lnWEcwRQIhAIzOihC6Ba80o5JnoYOJJ_EtEVmWQcAvxVCnsCFnVRQZAiAfeIddLPsPl1FeSX8B5xZANcQKGNoO7pb0TZPnuJdebGN4NWOBWQKzMIICrzCCAZegAwIBAgIESFs9tjANBgkqhkiG9w0BAQsFADAhMR8wHQYDVQQDDBZZdWJpY28gRklETyBQcmV2aWV3IENBMB4XDTE4MDQxMjEwNTcxMFoXDTE4MTIzMTEwNTcxMFowbzELMAkGA1UEBhMCU0UxEjAQBgNVBAoMCVl1YmljbyBBQjEiMCAGA1UECwwZQXV0aGVudGljYXRvciBBdHRlc3RhdGlvbjEoMCYGA1UEAwwfWXViaWNvIFUyRiBFRSBTZXJpYWwgMTIxMzkzOTEyNjBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABPss3TBDKMVySlDM5vYLrX0nqRtZ4eZvKXuJydQ9wrLHeIm08P-dAijLlG384BsZWJtngEqsl38oGJzNsyV0yiijbDBqMCIGCSsGAQQBgsQKAgQVMS4zLjYuMS40LjEuNDE0ODIuMS42MBMGCysGAQQBguUcAgEBBAQDAgQwMCEGCysGAQQBguUcAQEEBBIEEPigEfOMCk0VgAYXER-e3H0wDAYDVR0TAQH_BAIwADANBgkqhkiG9w0BAQsFAAOCAQEAMvPkvVjXQiuvSZmGCB8NqTvGqhxyEfkoU-vz63PaaTsG3jEzjl0C7PZ26VxCvqWPJdM3P3e7Kp18sj4RjEHUmkya2PPipOwBd3p0qMQSQ8MeziCPLQ9uvGGb4YShcvaprMv4c21b4piza-znHneNCmmq-ZS4Y23o-vYv085_BEwyLPcmPjSZ5qWysCq7rVvZ7OWwcU1zu5RhSZyUKl8dzK9lAzs5OdRH2fzEewsW2OkB_Ow_jBvAxqwLXXTHuwMFaRfpmBoZuQlcofSrnwJ8KA-K-e0dKTz2zC8EbZrWYrSpbrHKyqxeBT6DkUd8H4tgAd5lOr_yqrtVmIaRfq07NmhhdXRoRGF0YVjElWkIjx7O4yMpVANdvRDXyuORMFonUbVZu4_Xy7IpvdRBAAAAAPigEfOMCk0VgAYXER-e3H0AQMLC68jgMVzFOeLNnwklj81o1xzgSj6ZaDflB37Y-P66SLugWcTV6aZvNn-2Ool_RRDiinkufjdkwC3ssy5yXwClAQIDJiABIVggAYD1TSpf120DSVxen8ki56kF1bmT4EXO-P0JnSk5mMwiWCB3TlMZBRqPY6llzDcfHd-oW0EHdaFNgBdlGGFobpHKlw"
     }
     const info = SoftCredentials.getCertificateInfo(response);
-    assert.equal(info.issuer, 'CN=Yubico FIDO Preview CA');
-    assert.equal(info.subject.CN, 'Yubico U2F EE Serial 1213939126');
-    assert.equal(info.version, 'v3 (2)');
-    assert.ok(!info.basicConstraintsCA);
-
+    assert.deepStrictEqual(info, {
+      issuer: 'CN=Yubico FIDO Preview CA',
+      issuerName: 'CN=Yubico FIDO Preview CA',
+      subject: {
+        C: 'SE',
+        O: 'Yubico AB',
+        OU: 'Authenticator Attestation',
+        CN: 'Yubico U2F EE Serial 1213939126'
+      },
+      version: 'v3 (2)',
+      basicConstraintsCA: false
+    });
     assert.ok(await SoftCredentials.verifyPackedAttestation(response));
   });
 
@@ -132,6 +139,8 @@ describe("SoftCredentials", () => {
       attestationObject: "o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YVjFk2rw5H3LiaP/1p3XV4I1wW43p60EG8RCpFuQTrBOPiRFAAAAAAAAAAAAAAAAAAAAAAAAAAAAQQGV0qcd/M/uuCBaLC0jX8PRZ9e5cEZTKp9Ngf6NCKWSdWinmpK7FYog14m5kfAepzh93Z4hrGD8M57ljxoBKXL0pQECAyYgASFYIIqukdwfB/WgIxfpOO3tGOKIp+xPsx1TCc2UPjC7G7BlIlggNJL1zJSlN2EAFhnKSxihoY6HZXopi1Wte83dgWlosoQ=",
       clientDataJSON: "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiWXpTYkpBbGIya0N6Qm1xa1U3cG9Nem92LXNONU5HcHRuWUFrUElkRWt4VSIsIm9yaWdpbiI6Imh0dHBzOi8vdmF1bHR5c2lkMi5sb2NhLmx0IiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ=="
     }
+    const info = SoftCredentials.getCertificateInfo(response);
+    assert.equal(info, null);
     assert.ok(!await SoftCredentials.verifyPackedAttestation(response));
   });
 
@@ -174,7 +183,7 @@ describe("SoftCredentials", () => {
       SoftCredentials.extractChallenge(assertion.response.clientDataJSON),
       "mIrJ3lUll5tZv8/knd0BDyMvVUErxAc/BYcd/hNCiYg=",
     );
-    const verified = await SoftCredentials.verifySafe(
+    const verified = SoftCredentials.verifySafe(
       attestationSafe,
       assertion,
       true,

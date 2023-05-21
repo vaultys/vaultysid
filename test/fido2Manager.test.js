@@ -23,7 +23,7 @@ describe("Fido2Manager", () => {
     assert.equal(f2m.id.toString("hex"), f2mbis.id.toString("hex"));
   });
 
-  it("serder a VaultysId backed by a Fido2Manager (EdDSA)", async () => {
+  it("serder a VaultysId backed by a Fido2Manager (ECDSA)", async () => {
     const attestation = await navigator.credentials.create(
       SoftCredentials.createRequest(-7),
     );
@@ -32,7 +32,7 @@ describe("Fido2Manager", () => {
     assert.deepStrictEqual(id1.didDocument, id2.didDocument);
   });
 
-  it("serder a VaultysId backed by a Fido2Manager (EcDSA)", async () => {
+  it("serder a VaultysId backed by a Fido2Manager (EdDSA)", async () => {
     const attestation = await navigator.credentials.create(
       SoftCredentials.createRequest(-8),
     );

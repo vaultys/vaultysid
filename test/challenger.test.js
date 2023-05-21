@@ -144,6 +144,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(challenger1.isComplete());
     assert.ok(challenger2.isComplete());
     assert.ok(!challenger1.hasFailed());
+    
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 

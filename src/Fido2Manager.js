@@ -62,8 +62,12 @@ export default class Fido2Manager {
   }
 
   get signer() {
+    const k = cbor.decode(this.ckey);
+    let publicKey;
+    if(k.get(3) == -7) publicKey = Buffer.concat([Buffer.from("04", "hex"), k.get(-2), k.get(-3)])
+    else if(k.get(3) == -8) publicKey = k.get(-2);
     return {
-      publicKey: cbor.decode(this.ckey).get(-2),
+      publicKey,
     };
   }
 
