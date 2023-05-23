@@ -20,7 +20,7 @@ const deserialize = (challenge) => {
   };
   const result = {
     ...unpacked,
-    ...state,
+    ...state
   };
 
   try {
@@ -71,7 +71,7 @@ const deserialize = (challenge) => {
       }
     }
   } catch (error) {
-    console.log(error);
+    // console.log(error);
     result.state = ERROR;
     result.error = error.message;
   }
@@ -80,12 +80,12 @@ const deserialize = (challenge) => {
 
 const serialize = (data) => {
   if (data.state == INIT) {
-    const { protocol, service, timestamp, pk1, nonce, metadata } = data;
-    const picked = { protocol, service, timestamp, pk1, nonce, metadata };
+    const { protocol, service, timestamp, pk1, nonce, metadata1} = data;
+    const picked = { protocol, service, timestamp, pk1, nonce, metadata1};
     return msgpack.serialize(picked);
   }
   if (data.state == STEP1) {
-    const { protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata } =
+    const { protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata1, metadata2 } =
       data;
     const picked = {
       protocol,
@@ -95,7 +95,8 @@ const serialize = (data) => {
       pk2,
       nonce,
       sign2,
-      metadata,
+      metadata1,
+      metadata2
     };
     return msgpack.serialize(picked);
   }
@@ -109,7 +110,8 @@ const serialize = (data) => {
       nonce,
       sign1,
       sign2,
-      metadata,
+      metadata1,
+      metadata2
     } = data;
     const picked = {
       protocol,
@@ -120,7 +122,8 @@ const serialize = (data) => {
       nonce,
       sign1,
       sign2,
-      metadata,
+      metadata1,
+      metadata2
     };
     return msgpack.serialize(picked);
   }
@@ -128,7 +131,7 @@ const serialize = (data) => {
 };
 
 const serializeUnsigned = (challenge) => {
-  const { protocol, service, timestamp, pk1, pk2, nonce, metadata } = challenge;
+  const { protocol, service, timestamp, pk1, pk2, nonce, metadata1, metadata2 } = challenge;
   return msgpack.serialize({
     protocol,
     service,
@@ -136,7 +139,8 @@ const serializeUnsigned = (challenge) => {
     pk1,
     pk2,
     nonce,
-    metadata,
+    metadata1,
+    metadata2
   });
 };
 
@@ -155,20 +159,21 @@ export default class Challenger {
     this.vaultysId = vaultysId;
     this.myKey = null;
     this.hisKey = null;
+    this.hisMetadata = null;
     this.liveliness = liveliness;
   }
 
-  static async verifyCertificate(certificate) {
-    const deser = await deserialize(certificate);
+  static verifyCertificate(certificate) {
+    const deser = deserialize(certificate);
     return deser.state == COMPLETE;
   }
 
   static deserializeCertificate = deserialize;
 
-  async setChallenge(challengeString) {
+  async setChallenge(challengeString, requestMetadata = (keys) => {}) {
     if (this.state !== UNITIALISED)
       throw new Error("Challenger already initialised, can't reset the state");
-    this.challenge = await deserialize(challengeString);
+    this.challenge = deserialize(challengeString);
     if (!isLive(this.challenge, this.liveliness)) {
       this.state == ERROR;
       this.challenge.error =
@@ -177,7 +182,7 @@ export default class Challenger {
     }
     if (this.challenge.state == ERROR) {
       this.state == ERROR;
-      console.error(this.challenge);
+      // console.error(this.challenge);
       throw new Error(this.challenge.error);
     } else if (this.challenge.state == INIT) {
       const context = {
@@ -192,10 +197,12 @@ export default class Challenger {
       } else {
         this.challenge.pk2 = this.mykey;
         this.hisKey = this.challenge.pk1;
+        this.hisMetadata = this.challenge.metadata1;
         this.challenge.nonce = Buffer.concat([
           this.challenge.nonce,
           randomBytes(16),
         ]);
+        this.challenge.metadata2 = requestMetadata(Object.keys(this.hisMetadata)) || {};
         this.challenge.sign2 = await this.vaultysId.signChallenge(
           this.getUnsignedChallenge(),
         );
@@ -227,7 +234,10 @@ export default class Challenger {
     return {
       protocol: this.challenge.protocol,
       service: this.challenge.service,
-      metadata: this.challenge.metadata,
+      metadata: {
+        metadata1: this.challenge.metadata1,
+        metadata2: this.challenge.metadata2
+      }
     };
   }
 
@@ -238,7 +248,7 @@ export default class Challenger {
       this.challenge = {
         protocol,
         service,
-        metadata,
+        metadata1: metadata,
         timestamp: Date.now(),
         pk1: this.myKey,
         nonce: randomBytes(16),
@@ -256,7 +266,7 @@ export default class Challenger {
   }
 
   getUnsignedChallenge() {
-    const { protocol, service, timestamp, pk1, pk2, nonce, metadata } =
+    const { protocol, service, timestamp, pk1, pk2, nonce, metadata1, metadata2 } =
       this.challenge;
     return msgpack.serialize({
       protocol,
@@ -265,7 +275,8 @@ export default class Challenger {
       pk1,
       pk2,
       nonce,
-      metadata,
+      metadata1,
+      metadata2
     });
   }
 
@@ -277,6 +288,17 @@ export default class Challenger {
     } else
       throw new Error(
         "The challenge is not COMPLETE, it is unsafe to get the Contact ID before",
+      );
+  }
+
+  getContactMetadata() {
+    // console.log(this)
+    // to be sure this function is not misused, we get the id of the contact only once the protocol is complete
+    if (this.isComplete()) {
+      return this.hisMetadata;
+    } else
+      throw new Error(
+        "The challenge is not COMPLETE, it is unsafe to get the Contact Metadata before",
       );
   }
 
@@ -298,10 +320,10 @@ export default class Challenger {
     return this.myKey == this.hisKey;
   }
 
-  async update(challengeString, metadata = {}) {
-    if (this.state == UNITIALISED) await this.setChallenge(challengeString);
+  async update(challengeString, requestMetadata = (keys) => {}) {
+    if (this.state == UNITIALISED) await this.setChallenge(challengeString, requestMetadata);
     else if (this.state == INIT) {
-      this.challenge = await deserialize(challengeString);
+      this.challenge = deserialize(challengeString);
       if (!isLive(this.challenge, this.liveliness)) {
         this.state == ERROR;
         this.challenge.error =
@@ -316,6 +338,8 @@ export default class Challenger {
           );
         }
         this.hisKey = this.challenge.pk2;
+        this.hisMetadata = this.challenge.metadata2;
+        // this.challenge.metadata1 = requestMetadata(Object.keys(this.hisMetadata));
         this.challenge.sign1 = await this.vaultysId.signChallenge(
           this.getUnsignedChallenge(),
         );
@@ -328,7 +352,7 @@ export default class Challenger {
         );
       }
     } else if (this.state == STEP1) {
-      this.challenge = await deserialize(challengeString);
+      this.challenge = deserialize(challengeString);
       if (this.challenge.state == COMPLETE) {
         this.state = COMPLETE;
       } else {

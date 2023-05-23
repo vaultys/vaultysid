@@ -9,7 +9,7 @@ describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
     const id1 = await VaultysId.generateMachine();
     const secret = id1.getSecret();
-    const id2 = await VaultysId.fromSecret(secret);
+    const id2 = VaultysId.fromSecret(secret);
     assert.equal(id2.fingerprint, id1.fingerprint);
     assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
     assert.deepStrictEqual(id2.didDocument, id1.didDocument);
@@ -18,7 +18,7 @@ describe("IdManager", () => {
   it("serder a vaultys secret in base64", async () => {
     const id1 = await VaultysId.generateMachine();
     const secret = id1.getSecret("base64");
-    const id2 = await VaultysId.fromSecret(secret, "base64");
+    const id2 = VaultysId.fromSecret(secret, "base64");
     assert.equal(id2.fingerprint, id1.fingerprint);
     assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
     assert.deepStrictEqual(id2.didDocument, id1.didDocument);
@@ -26,7 +26,7 @@ describe("IdManager", () => {
 
   it("serder to public Idmanager", async () => {
     const id1 = await VaultysId.generateMachine();
-    const id2 = await VaultysId.fromId(id1.id);
+    const id2 = VaultysId.fromId(id1.id);
     assert.equal(id2.fingerprint, id1.fingerprint);
     assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
     assert.deepStrictEqual(id2.didDocument, id1.didDocument);
@@ -35,7 +35,7 @@ describe("IdManager", () => {
   it("serder to public Idmanager stringified", async () => {
     const id1 = await VaultysId.generateMachine();
     const id = JSON.stringify(id1.id);
-    const id2 = await VaultysId.fromId(JSON.parse(id));
+    const id2 = VaultysId.fromId(JSON.parse(id));
     assert.equal(id2.fingerprint, id1.fingerprint);
     assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
     assert.deepStrictEqual(id2.didDocument, id1.didDocument);
@@ -43,13 +43,13 @@ describe("IdManager", () => {
 
   it("serder to public Idmanager as hex string", async () => {
     const id1 = await VaultysId.generateMachine();
-    const id2 = await VaultysId.fromId(id1.id.toString('hex'));
+    const id2 = VaultysId.fromId(id1.id.toString('hex'));
     assert.equal(id2.fingerprint, id1.fingerprint);
   });
 
   it("serder to public Idmanager as base64 string", async () => {
     const id1 = await VaultysId.generateMachine();
-    const id2 = await VaultysId.fromId(id1.id.toString('base64'), null, "base64");
+    const id2 = VaultysId.fromId(id1.id.toString('base64'), null, "base64");
     assert.equal(id2.fingerprint, id1.fingerprint);
     assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
     assert.deepStrictEqual(id2.didDocument, id1.didDocument);
@@ -104,14 +104,27 @@ describe("SRG challenge with IdManager", () => {
     const s2 = MemoryStorage(() => "");
     const manager1 = new IdManager(await VaultysId.generatePerson(), s1);
     const manager2 = new IdManager(await VaultysId.generateMachine(), s2);
+    const metadata1 = {
+      name: "a",
+      email: "b",
+      phone: "c"
+    };
+    const metadata2 = {
+      name: "d",
+      email: "e",
+      phone: "f"
+    };
 
     const contacts = await Promise.all([
-      manager1.askContact(channel),
-      manager2.acceptContact(channel.otherend),
+      manager1.askContact(channel, metadata1),
+      manager2.acceptContact(channel.otherend, metadata2),
     ]);
 
     assert.equal(contacts[0].did, manager2.vaultysId.did);
     assert.equal(contacts[1].did, manager1.vaultysId.did);
+    
+    assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
+    assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);
 
     assert.equal(Object.values(s1.substore("wot")._raw).length, 1);
     assert.equal(Object.values(s2.substore("wot")._raw).length, 1);
@@ -143,31 +156,46 @@ describe("SRG challenge with IdManager", () => {
   it("pass a challenge over encrypted Channel", async () => {
     const channel = MemoryChannel.createBidirectionnal();
 
-    const s1 = MemoryStorage(()=>"");
-    const s2 = MemoryStorage(()=>"");
+    const s1 = MemoryStorage(() => "");
+    const s2 = MemoryStorage(() => "");
     const manager1 = new IdManager(await VaultysId.generatePerson(), s1);
     const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
+    const metadata1 = {
+      name: "a",
+      email: "b"
+    };
+    const metadata2 = {
+      name: "d",
+      phone: "f"
+    };
 
     const contacts = await Promise.all([
-      manager1.askContact(channel),
-      manager2.acceptContact(channel.otherend),
+      manager1.askContact(channel, metadata1),
+      manager2.acceptContact(channel.otherend, metadata2),
     ]);
 
     assert.equal(contacts[0].did, manager2.vaultysId.did);
     assert.equal(contacts[1].did, manager1.vaultysId.did);
+
+    assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
+    assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);
 
     assert.equal(Object.values(s1.substore("wot")._raw).length, 1);
     assert.equal(Object.values(s2.substore("wot")._raw).length, 1);
 
     manager1.setContactMetadata(manager2.vaultysId.did, "name", "salut");
     manager1.setContactMetadata(manager2.vaultysId.did, "group", "pro");
-    assert.equal(
-      manager1.getContactMetadata(manager2.vaultysId.did, "name"),
-      "salut",
+    assert.deepStrictEqual(
+      manager1.getCertifiedMetadata(manager2.vaultysId.did),
+      metadata2
     );
-    assert.equal(
-      manager1.getContactMetadata(manager2.vaultysId.did, "group"),
-      "pro",
+    assert.deepStrictEqual(
+      manager1.getAllMetadata(manager2.vaultysId.did),
+      {
+        group: 'pro',
+        name: 'salut',
+        phone: 'f'
+      }
     );
 
     assert.ok(

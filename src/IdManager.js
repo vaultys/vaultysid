@@ -154,7 +154,7 @@ export default class IdManager {
     return null;
   }
 
-  getContactMetadatas(did) {
+  getAllMetadata(did) {
     const c = this.store.substore("contacts").get(did);
     if (c && c.metadata) {
       return c.metadata;
@@ -162,8 +162,25 @@ export default class IdManager {
     return null;
   }
 
-  async verifyRelationshipCertificate(did) {
+  getCertifiedMetadata(did) {
     const c = this.store.substore("contacts").get(did);
+    const certificate = Challenger.deserializeCertificate(c.certificate);
+    console.log(certificate)
+    if(certificate.state == 2) {
+      if(certificate.pk1.toString("hex") == c.id.toString("hex")) {
+        return certificate.metadata1
+      } else if(certificate.pk2.toString("hex") == c.id.toString("hex")) {
+        return certificate.metadata2
+      } else {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
+
+  async verifyRelationshipCertificate(did) {
+    const c = await this.store.substore("contacts").get(did);
     return Challenger.verifyCertificate(c.certificate);
   }
 
@@ -287,9 +304,9 @@ export default class IdManager {
     });
   }
 
-  async startSRP(channel, protocol, service) {
+  async startSRP(channel, protocol, service, metadata = {}) {
     const challenger = new Challenger(this.vaultysId);
-    challenger.createChallenge(protocol, service);
+    challenger.createChallenge(protocol, service, metadata);
     channel.send(challenger.getCertificate());
     const message = await channel.receive();
     await challenger.update(message);
@@ -306,10 +323,10 @@ export default class IdManager {
       );
   }
 
-  async acceptSRP(channel, protocol, service) {
+  async acceptSRP(channel, protocol, service, requestMetadata = (keys) => {} ) {
     const challenger = new Challenger(this.vaultysId);
     let message = await channel.receive();
-    await challenger.update(message);
+    await challenger.update(message, requestMetadata);
     const context = challenger.getContext();
     if (context.protocol != protocol || context.service != service) {
       throw new Error(
@@ -331,20 +348,32 @@ export default class IdManager {
       );
   }
 
-  // We assume the we have sent contact information to create a *SECURE* communicationChannel so he is the only one listenning to it
-  async askContact(channel) {
-    const challenger = await this.startSRP(channel, "p2p", "auth");
+  async ask(channel, protocol, service, metadata = {}) {
+    const challenger = await this.startSRP(channel, "p2p", "auth", metadata);
     const contactId = challenger.getContactId();
     this.store.substore("contacts").set(contactId.did, contactId);
     this.store.save();
     return contactId;
   }
 
-  // We assume the contact has sent information to create a *SECURE* communicationChannel so he is the only one listenning to it
-  async acceptContact(channel) {
-    const challenger = await this.acceptSRP(channel, "p2p", "auth");
+  // We assume the we have sent contact information to create a *SECURE* communicationChannel so he is the only one listenning to it
+  async askContact(channel, {name, email, phone}) {
+    const challenger = await this.startSRP(channel, "p2p", "auth", {name, email, phone});
     const contactId = challenger.getContactId();
     this.store.substore("contacts").set(contactId.did, contactId);
+    const metadata = challenger.getContactMetadata();
+    Object.keys(metadata).forEach(k => this.setContactMetadata(contactId.did, k, metadata[k]));
+    this.store.save();
+    return contactId;
+  }
+
+  // We assume the contact has sent information to create a *SECURE* communicationChannel so he is the only one listenning to it
+  async acceptContact(channel, {name, email, phone}) {
+    const challenger = await this.acceptSRP(channel, "p2p", "auth", () => {return {name, email, phone}});
+    const contactId = challenger.getContactId();
+    this.store.substore("contacts").set(contactId.did, contactId);
+    const metadata = challenger.getContactMetadata();
+    Object.keys(metadata).forEach(k => this.setContactMetadata(contactId.did, k, metadata[k]));
     this.store.save();
     return contactId;
   }
