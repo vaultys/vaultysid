@@ -11,7 +11,9 @@ const lookup = {
   usb: 1,
   nfc: 2,
   ble: 4,
-  hybrid: 8,
+  internal: 8,
+  hybrid: 16,
+  "smart-card": 32,
 };
 const getTransports = (num) =>
   Object.keys(lookup).filter((i) => num & lookup[i]);
@@ -158,32 +160,22 @@ export default class Fido2Manager {
       },
     };
     const assertion = await navigator.credentials.get(payload);
-    const header = Buffer.allocUnsafe(6);
-    header.writeUInt16BE(assertion.response.signature.length, 0),
-    header.writeUInt16BE(assertion.response.clientDataJSON.length, 2),
-    header.writeUInt16BE(assertion.response.authenticatorData.length, 4)
-    const response = Buffer.concat([
-      header,
-      Buffer.from(assertion.response.signature),
-      Buffer.from(assertion.response.clientDataJSON),
-      Buffer.from(assertion.response.authenticatorData)
-    ]);
-    return response;
+    //console.log(assertion)
+    const response = {
+      s: Buffer.from(assertion.response.signature),
+      c: Buffer.from(assertion.response.clientDataJSON),
+      a: Buffer.from(assertion.response.authenticatorData),
+    };
+    return Buffer.from(msgpack.encode(response));
   }
 
   verify(data, signature, userVerification) {
-    let buf = Buffer.from(signature)
-    const l1 = buf.readUInt16BE(0);
-    const l2 = buf.readUInt16BE(2);
-    const l3 = buf.readUInt16BE(4);
-    buf = signature.slice(6);
+    const decoded = msgpack.decode(signature);
     const response = {
-      signature: buf.slice(0, l1),
-      clientDataJSON: buf.slice(l1, l1 + l2),
-      authenticatorData: buf.slice(l1 + l2)
+      signature: decoded.s,
+      clientDataJSON: decoded.c,
+      authenticatorData: decoded.a,
     };
-    if(response.authenticatorData.length != l3) return false;
-    if(buf.length != l1 + l2 + l3) return false;
     const challenge = hash("sha256", data).toString("base64");
     const extractedChallenge = SoftCredentials.extractChallenge(
       response.clientDataJSON,

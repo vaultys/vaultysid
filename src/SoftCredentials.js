@@ -259,7 +259,7 @@ export default class SoftCredentials {
 
   // credentials request payload
   static createRequest(alg, onlyStrings = false) {
-    const challenge = randomBytes(32);
+    let challenge = randomBytes(32);
     if (onlyStrings) {
       challenge = Buffer.from(challenge).toString("base64");
     }

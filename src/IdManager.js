@@ -50,18 +50,36 @@ export default class IdManager {
     }
   }
 
-  merge(otherStore) {
+  merge(otherStore, master = true) {
     // TODO: check if same profile ?
     // TODO: revamp contact metadata and sync
-    ["contacts", "wot", "signatures"].forEach((table) => {
-      let me = this.store.substore(table);
+    const master_store = master ? otherStore : this.store;
+    const slave_store = master ? this.store : otherStore
+    this.store.set("metadata", {...slave_store.get("metadata"), ...master_store.get("metadata")});
+    ["signatures", "wot"].forEach((table) => {
       let other = otherStore.substore(table);
+      let me = this.store.substore(table);
       other.list().forEach((k) => {
         if (!me.get(k)) {
-          m.set(k, other.get(k));
+          me.set(k, other.get(k));
         }
       });
     });
+    
+    let other = otherStore.substore("contacts");
+    let me = this.store.substore("contacts");
+    const m = master ? other : me;
+    const s = master ? me : other;
+    other.list().forEach((did) => {
+      if (!me.get(did)) {
+        me.set(did, other.get(did));
+      } else {
+        const contact = me.get(did);
+        contact.metadata = {...s.get(did).metadata, ...m.get(did).metadata};
+        me.set(did, contact);
+      }
+    });
+
     this.store.save();
   }
 
@@ -137,7 +155,6 @@ export default class IdManager {
 
   setContactMetadata(did, name, value) {
     const c = this.store.substore("contacts").get(did);
-    // console.log(c, did, name, value, this.store)
     if (c) {
       if (!c.metadata) {
         c.metadata = {};
@@ -154,7 +171,7 @@ export default class IdManager {
     return null;
   }
 
-  getAllMetadata(did) {
+  getContactMetadatas(did) {
     const c = this.store.substore("contacts").get(did);
     if (c && c.metadata) {
       return c.metadata;
@@ -162,25 +179,8 @@ export default class IdManager {
     return null;
   }
 
-  getCertifiedMetadata(did) {
-    const c = this.store.substore("contacts").get(did);
-    const certificate = Challenger.deserializeCertificate(c.certificate);
-    console.log(certificate)
-    if(certificate.state == 2) {
-      if(certificate.pk1.toString("hex") == c.id.toString("hex")) {
-        return certificate.metadata1
-      } else if(certificate.pk2.toString("hex") == c.id.toString("hex")) {
-        return certificate.metadata2
-      } else {
-        return null;
-      }
-    } else {
-      return null;
-    }
-  }
-
   async verifyRelationshipCertificate(did) {
-    const c = await this.store.substore("contacts").get(did);
+    const c = this.store.substore("contacts").get(did);
     return Challenger.verifyCertificate(c.certificate);
   }
 
@@ -190,6 +190,11 @@ export default class IdManager {
 
   get name() {
     return this.store.get("metadata").name;
+  }
+
+  get displayName() {
+    const metadata = this.store.get("metadata");
+    return metadata.firstname ? (metadata.firstname + " " +(metadata.name??"")) : (metadata.name??("Anonymous "+this.vaultysId.fingerprint.slice(-4)));
   }
 
   set phone(n) {
@@ -290,6 +295,28 @@ export default class IdManager {
     return this.vaultysId.verifyChallenge(challenge, signature);
   }
 
+  async sync(channel, initiator = false) {
+    if(initiator) {
+      const challenger = await this.startSRP(channel, "p2p", "selfauth");
+      
+      if(challenger.isSelfAuth() && challenger.isComplete()) {
+        const data = this.store.fromString(await channel.receive());
+        channel.send(this.store.toString());
+        this.merge(data, !initiator)
+      };
+    } else {
+      const challenger = await this.acceptSRP(channel, "p2p", "selfauth", true);
+      
+      if(challenger.isSelfAuth() && challenger.isComplete()) {
+        channel.send(this.store.toString());
+        const data = this.store.fromString(await channel.receive());
+        this.merge(data, !initiator);
+      };
+      channel.close();
+    }
+    this.store.save();
+  }
+
   /***************************/
   /*   SIGNING PARTY HERE!   */
   /***************************/
@@ -297,16 +324,24 @@ export default class IdManager {
   listCertificates() {
     const wot = this.store.substore("wot");
     return wot.list().map((timestamp) => {
-      return {
-        timestamp,
-        certificate: Challenger.deserializeCertificate(wot.get(timestamp)),
-      };
+      const c = wot.get(timestamp);
+      if(c.timestamp) {
+        return c;
+      } else {
+        const result = {
+          ...Challenger.deserializeCertificate(wot.get(timestamp)),
+          raw: c,
+        }
+        wot.set(timestamp, result);
+        return result;
+      }
+      
     });
   }
 
-  async startSRP(channel, protocol, service, metadata = {}) {
+  async startSRP(channel, protocol, service) {
     const challenger = new Challenger(this.vaultysId);
-    challenger.createChallenge(protocol, service, metadata);
+    challenger.createChallenge(protocol, service);
     channel.send(challenger.getCertificate());
     const message = await channel.receive();
     await challenger.update(message);
@@ -323,10 +358,10 @@ export default class IdManager {
       );
   }
 
-  async acceptSRP(channel, protocol, service, requestMetadata = (keys) => {} ) {
+  async acceptSRP(channel, protocol, service, keepChannel=false) {
     const challenger = new Challenger(this.vaultysId);
     let message = await channel.receive();
-    await challenger.update(message, requestMetadata);
+    await challenger.update(message);
     const context = challenger.getContext();
     if (context.protocol != protocol || context.service != service) {
       throw new Error(
@@ -338,7 +373,7 @@ export default class IdManager {
     await challenger.update(message);
     if (challenger.isComplete()) {
       const certificate = challenger.getCertificate();
-      channel.close();
+      if(!keepChannel) channel.close();
       this.store.substore("wot").set(Date.now(), certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
@@ -348,32 +383,20 @@ export default class IdManager {
       );
   }
 
-  async ask(channel, protocol, service, metadata = {}) {
-    const challenger = await this.startSRP(channel, "p2p", "auth", metadata);
-    const contactId = challenger.getContactId();
-    this.store.substore("contacts").set(contactId.did, contactId);
-    this.store.save();
-    return contactId;
-  }
-
   // We assume the we have sent contact information to create a *SECURE* communicationChannel so he is the only one listenning to it
-  async askContact(channel, {name, email, phone}) {
-    const challenger = await this.startSRP(channel, "p2p", "auth", {name, email, phone});
+  async askContact(channel) {
+    const challenger = await this.startSRP(channel, "p2p", "auth");
     const contactId = challenger.getContactId();
     this.store.substore("contacts").set(contactId.did, contactId);
-    const metadata = challenger.getContactMetadata();
-    Object.keys(metadata).forEach(k => this.setContactMetadata(contactId.did, k, metadata[k]));
     this.store.save();
     return contactId;
   }
 
   // We assume the contact has sent information to create a *SECURE* communicationChannel so he is the only one listenning to it
-  async acceptContact(channel, {name, email, phone}) {
-    const challenger = await this.acceptSRP(channel, "p2p", "auth", () => {return {name, email, phone}});
+  async acceptContact(channel) {
+    const challenger = await this.acceptSRP(channel, "p2p", "auth");
     const contactId = challenger.getContactId();
     this.store.substore("contacts").set(contactId.did, contactId);
-    const metadata = challenger.getContactMetadata();
-    Object.keys(metadata).forEach(k => this.setContactMetadata(contactId.did, k, metadata[k]));
     this.store.save();
     return contactId;
   }
@@ -387,6 +410,7 @@ export default class IdManager {
 
   async acceptMyself(channel) {
     const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
+    console.log(challenger)
     this.store.save();
     return challenger.isSelfAuth() && challenger.isComplete();
   }

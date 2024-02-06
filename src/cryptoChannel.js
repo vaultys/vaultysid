@@ -56,6 +56,8 @@ const encryptChannel = (channel, key) => {
 const generateKey = () => randomBytes(32);
 
 export default {
+  decrypt,
+  encrypt,
   encryptChannel,
   generateKey,
 };
