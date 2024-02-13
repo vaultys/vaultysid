@@ -25,12 +25,30 @@ export class MemoryChannel {
     return input;
   }
 
+  // sniff all the data passed: logger = (data) => void
+  setLogger(logger) {
+    this.logger = logger;
+  }
+
+  // allow to modify the data passed to inject new data: injector = (data) => newdata
+  setInjector(injector) {
+    this.injector = injector;
+  }
+
   async send(data) {
+    if(this.logger) {
+      this.logger(data);
+    }
     // the other end might not listen yet
     while (!this.otherend.resolver) {
       await delay(100);
     }
-    this.otherend.resolver(data);
+    if(this.injector) {
+      this.otherend.resolver(this.injector(data));
+    }
+    else {
+      this.otherend.resolver(data);
+    }
   }
   async receive() {
     return new Promise((resolve) => (this.resolver = resolve));
