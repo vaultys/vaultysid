@@ -137,6 +137,9 @@ const decryptedBob = await bob.decrypt(encrypted);
 const decryptedEve = await eve.decrypt(encrypted);
 ```
 
+## Audit protocol
+Give a look at example/ folders to log and inject data for testing purpose.
+
 ## Final Note
 If you use this project and you speak French, you engage to:
 - write and say "chiffrer" instead of "crypter"
