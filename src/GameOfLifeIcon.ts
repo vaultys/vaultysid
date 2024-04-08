@@ -1,18 +1,12 @@
-import { hash, fromHex } from "./crypto.js";
+import { hash, fromHex } from "./crypto";
 const squareSize = 10;
 const boardTopx = 0;
 const boardTopy = 0;
 
-const createFrom256 = (hex) =>
-  hex
-    .match(/.{1,4}/g)
-    .map((line) => parseInt(line, 16).toString(2).padStart(16, "0"));
-const createFromFingerprint = (fp) =>
-  createFrom256(
-    hash("sha256", fromHex(fp.replaceAll(" ", ""))).toString("hex"),
-  );
+const createFrom256 = (hex: string) => hex.match(/.{1,4}/g)?.map((line) => parseInt(line, 16).toString(2).padStart(16, "0")) || [];
+const createFromFingerprint = (fp: string) => createFrom256(hash("sha256", fromHex(fp.replaceAll(" ", ""))).toString("hex"));
 
-const nextstep = (bin, memo) => {
+const nextstep = (bin: string[], memo: number[][]) => {
   const output = [];
   for (let i = 0; i < 16; i++) {
     let line = "";
@@ -38,8 +32,8 @@ const nextstep = (bin, memo) => {
   return output;
 };
 
-const run = (hex, max) => {
-  const result = createFrom256(hex).map((line) =>
+const run = (hex: string, max: number) => {
+  const result = createFrom256(hex)?.map((line) =>
     line.split("").map((c) => parseInt(c)),
   );
   let step = createFrom256(hex);
@@ -49,10 +43,10 @@ const run = (hex, max) => {
   return result;
 };
 
-const renderStep = (step) => {
+const renderStep = (context: CanvasRenderingContext2D, step: number[][]) => {
   for (let i = 0; i < 16; i++) {
     for (let j = 0; j < 16; j++) {
-      context.fillStyle = step[i][j] == "1" ? "black" : "white";
+      context.fillStyle = step[i][j] == 1 ? "black" : "white";
       let xOffset = boardTopx + j * squareSize;
       let yOffset = boardTopy + i * squareSize;
       context.fillRect(xOffset, yOffset, squareSize, squareSize);
@@ -63,13 +57,13 @@ const renderStep = (step) => {
   }
 };
 
-const heatMapColorforValue = (value, offset = 1) => {
+const heatMapColorforValue = (value: number, offset = 1) => {
   var h = (1.0 - value) * 240 + offset;
   //return `rgba(0,0,0,${value})`
   return "hsl(" + h + ", 100%, 50%)";
 };
 
-const renderMemo = (data, mapcolors = 2, context) => {
+const renderMemo = (data: number[][], mapcolors = 2, context: CanvasRenderingContext2D) => {
   let min = 1000;
   let max = 0;
   const memo = JSON.parse(JSON.stringify(data));
@@ -99,21 +93,23 @@ const renderMemo = (data, mapcolors = 2, context) => {
 };
 
 export default {
-  renderFingerprint: (fp, canvas, steps = 32) => {
+  renderFingerprint: (fp: string, canvas: HTMLCanvasElement, steps = 32) => {
     let step = createFromFingerprint(fp.replaceAll(" ", ""));
-    let memo = step.map((line) => line.split("").map((c) => parseInt(c)));
+    let memo = step?.map((line) => line.split("").map((c) => parseInt(c)));
+    const context = canvas.getContext("2d");
+    if(!context || !memo ) return;
     for (let t = 0; t < steps; t++) {
       step = nextstep(step, memo);
     }
-    const context = canvas.getContext("2d");
     renderMemo(memo, 3, context);
     return canvas;
   },
 
-  animateFingerprint: async (fp, canvas, steps = 32, speed = 500) => {
+  animateFingerprint: async (fp: string, canvas: HTMLCanvasElement, steps = 32, speed = 500) => {
     let step = createFromFingerprint(fp.replaceAll(" ", ""));
-    let memo = step.map((line) => line.split("").map((c) => parseInt(c)));
+    let memo = step?.map((line) => line.split("").map((c) => parseInt(c)));
     const context = canvas.getContext("2d");
+    if(!context || !memo) return;
     for (let t = 0; t < steps; t++) {
       step = nextstep(step, memo);
       renderMemo(memo, 3, context);

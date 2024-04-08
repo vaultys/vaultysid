@@ -1,9 +1,9 @@
 import assert from "assert";
 import { randomBytes } from "crypto";
-import IdManager from "../src/IdManager.js";
-import VaultysId from "../src/VaultysId.js";
-import { MemoryChannel } from "../src/MemoryChannel.js";
-import { MemoryStorage }  from "../src/MemoryStorage.js";
+import IdManager from "../src/IdManager";
+import VaultysId from "../src/VaultysId";
+import { MemoryChannel } from "../src/MemoryChannel";
+import { MemoryStorage }  from "../src/MemoryStorage";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
@@ -123,7 +123,7 @@ describe("SRG challenge with IdManager", () => {
     assert.equal(contacts[0].did, manager2.vaultysId.did);
     assert.equal(contacts[1].did, manager1.vaultysId.did);
 
-    console.log(s2.substore("contacts"))
+    // console.log(s2.substore("contacts"))
     
     // assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
     // assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);

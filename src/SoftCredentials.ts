@@ -1,6 +1,6 @@
 // TODO: to revamp and optimize
 import crypto from "crypto";
-import { randomBytes, hash as myhash, fromBase64, fromUTF8 } from "./crypto.js";
+import { randomBytes, hash as myhash, fromUTF8 } from "./crypto";
 import cbor from "cbor";
 import { ed25519 } from "@noble/curves/ed25519";
 import { p256 } from "@noble/curves/p256";
@@ -8,7 +8,7 @@ import { p384 } from "@noble/curves/p384";
 import { p521 } from "@noble/curves/p521";
 import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
 
-const credentials = {};
+const credentials: Record<string, SoftCredentials> = {};
 
 //const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
 
@@ -44,6 +44,8 @@ const COSECRV = {
   3: p521,
 };
 
+type HashOptions = "-257" | "-258" | "-259" | "-65535" | "-39" | "-38" | "-37" | "-260" | "-261" | "-7" | "-36"
+
 const COSEALGHASH = {
   "-257": "SHA-256",
   "-258": "SHA-384",
@@ -58,18 +60,15 @@ const COSEALGHASH = {
   "-36": "SHA-512",
 };
 
-const hash = (alg, message) => myhash(alg.replace("-", ""), message);
+const hash = (alg: string, message: Buffer) => myhash(alg.replace("-", ""), message);
 
-const base64ToPem = (b64cert) => {
+const base64ToPem = (b64cert: string) => {
   let pemcert = "";
-  for (let i = 0; i < b64cert.length; i += 64)
-    pemcert += b64cert.slice(i, i + 64) + "\n";
-  return (
-    "-----BEGIN CERTIFICATE-----\n" + pemcert + "-----END CERTIFICATE-----"
-  );
+  for (let i = 0; i < b64cert.length; i += 64) pemcert += b64cert.slice(i, i + 64) + "\n";
+  return "-----BEGIN CERTIFICATE-----\n" + pemcert + "-----END CERTIFICATE-----";
 };
 
-const getCertificateInfo = (certificate) => {
+const getCertificateInfo = (certificate: Buffer) => {
   const x509 = new X509Certificate(certificate);
 
   const subjectString = x509.subject;
@@ -77,25 +76,25 @@ const getCertificateInfo = (certificate) => {
   const issuerName = x509.issuerName.toString();
   const subjectParts = subjectString.split(",");
 
-  const subject = {};
+  const subject: Record<string, string> = {};
   for (const field of subjectParts) {
     const kv = field.split("=");
     subject[kv[0].trim()] = kv[1];
   }
   // console.log(subject);
-  const version = x509.toTextObject().Data.Version;
+  const { Version } = x509.toTextObject().Data as unknown as { Version: string };
   const bc = x509.getExtension(BasicConstraintsExtension);
   const basicConstraintsCA = bc ? bc.ca : false;
   return {
     issuer,
     issuerName,
     subject,
-    version,
+    version: Version,
     basicConstraintsCA,
   };
 };
 
-const parseAuthData = (buffer) => {
+const parseAuthData = (buffer: Buffer) => {
   const rpIdHash = buffer.slice(0, 32);
   buffer = buffer.slice(32);
   const flagsBuf = buffer.slice(0, 1);
@@ -141,8 +140,8 @@ const parseAuthData = (buffer) => {
   };
 };
 
-const verifyPackedAttestation = async (response, userVerification = false) => {
-  const attestationBuffer = Buffer.from(response.attestationObject, "base64");
+const verifyPackedAttestation = async (response: AuthenticatorAttestationResponse, userVerification = false) => {
+  const attestationBuffer = Buffer.from(response.attestationObject);
   const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
   if (attestationStruct.fmt == "none") return false;
   const authDataStruct = parseAuthData(attestationStruct.authData);
@@ -152,66 +151,51 @@ const verifyPackedAttestation = async (response, userVerification = false) => {
   // check if did enter PIN code
   if (userVerification && !authDataStruct.flags.uv) return false;
 
-  const clientDataHashBuf = hash(
-    "sha256",
-    Buffer.from(response.clientDataJSON, "base64url"),
-  );
-  const dataBuffer = Buffer.concat([
-    attestationStruct.authData,
-    clientDataHashBuf,
-  ]);
+  const clientDataHashBuf = hash("sha256", Buffer.from(response.clientDataJSON));
+  const dataBuffer = Buffer.concat([attestationStruct.authData, clientDataHashBuf]);
   const signature = attestationStruct.attStmt.sig;
 
   let signatureIsValid = false;
 
   /* ----- Verify FULL attestation ----- */
   if (attestationStruct.attStmt.x5c) {
-    const leafCert = base64ToPem(
-      attestationStruct.attStmt.x5c[0].toString("base64"),
-    );
+    const leafCert = base64ToPem(attestationStruct.attStmt.x5c[0].toString("base64"));
     const certInfo = getCertificateInfo(attestationStruct.attStmt.x5c[0]);
+    const subject = certInfo.subject as {
+      OU: string;
+      O: string;
+      C: string;
+      CN: string;
+    };
 
     // console.log(certInfo);
-    if (certInfo.subject.OU !== "Authenticator Attestation")
-      throw new Error(
-        'Batch certificate OU MUST be set strictly to "Authenticator Attestation"!',
-      );
+    if (subject.OU !== "Authenticator Attestation") throw new Error('Batch certificate OU MUST be set strictly to "Authenticator Attestation"!');
 
-    if (!certInfo.subject.CN)
-      throw new Error("Batch certificate CN MUST no be empty!");
+    if (!subject.CN) throw new Error("Batch certificate CN MUST no be empty!");
 
-    if (!certInfo.subject.O)
-      throw new Error("Batch certificate CN MUST no be empty!");
+    if (!subject.O) throw new Error("Batch certificate O MUST no be empty!");
 
-    if (!certInfo.subject.C || certInfo.subject.C.length !== 2)
-      throw new Error(
-        "Batch certificate C MUST be set to two character ISO 3166 code!",
-      );
+    if (!subject.C || subject.C.length !== 2) throw new Error("Batch certificate C MUST be set to two character ISO 3166 code!");
 
-    if (certInfo.basicConstraintsCA)
-      throw new Error("Batch certificate basic constraints CA MUST be false!");
+    if (certInfo.basicConstraintsCA) throw new Error("Batch certificate basic constraints CA MUST be false!");
 
-    if (certInfo.version !== "v3 (2)")
-      throw new Error("Batch certificate version MUST be 3(ASN1 2)!");
+    if (certInfo.version !== "v3 (2)") throw new Error("Batch certificate version MUST be 3(ASN1 2)!");
 
-    signatureIsValid = crypto
-      .createVerify("sha256")
-      .update(dataBuffer)
-      .verify(leafCert, signature);
+    signatureIsValid = crypto.createVerify("sha256").update(dataBuffer).verify(leafCert, signature);
     /* ----- Verify FULL attestation ENDS ----- */
   } else if (attestationStruct.attStmt.ecdaaKeyId) {
     throw new Error("ECDAA IS NOT SUPPORTED!");
   } else {
     /* ----- Verify SURROGATE attestation ----- */
-    const pubKeyCose = cbor.decodeAllSync(authDataStruct.COSEPublicKey)[0];
-    const hashAlg = COSEALGHASH[pubKeyCose.get(COSEKEYS.alg)];
+    const pubKeyCose = cbor.decodeAllSync(authDataStruct.COSEPublicKey!)[0];
+    const hashAlg = COSEALGHASH[pubKeyCose.get(COSEKEYS.alg) as HashOptions];
     const data = hash(hashAlg, dataBuffer);
     if (pubKeyCose.get(COSEKEYS.kty) === COSEKTY.EC2) {
       // ECDSA
       const x = pubKeyCose.get(COSEKEYS.x);
       const y = pubKeyCose.get(COSEKEYS.y);
       const pubKey = Buffer.concat([Buffer.from([0x04]), x, y]);
-      const ec = COSECRV[pubKeyCose.get(COSEKEYS.crv)];
+      const ec = COSECRV[pubKeyCose.get(COSEKEYS.crv) as 1 | 2 | 3];
       const sig = ec.Signature.fromDER(signature);
       signatureIsValid = ec.verify(sig, data, pubKey);
     } else if (pubKeyCose.get(COSEKEYS.kty) === COSEKTY.OKP) {
@@ -228,12 +212,19 @@ const verifyPackedAttestation = async (response, userVerification = false) => {
   return true;
 };
 
-class PublicKeyCredential {
-  constructor(creds) {
+class MyPublicKeyCredential {
+  type: "public-key";
+  clientExtensionResults: any;
+  id!: string;
+  rawId!: Buffer;
+  response!: AuthenticatorAttestationResponse;
+  constructor(creds: PublicKeyCredential) {
     this.type = "public-key";
     this.clientExtensionResults = {};
     const keys = ["id", "rawId", "response"];
-    keys.forEach((key) => (this[key] = creds[key]));
+    this.id = creds.id;
+    this.rawId = Buffer.from(creds.rawId);
+    this.response = creds.response as AuthenticatorAttestationResponse;
   }
 
   getClientExtensionResults() {
@@ -241,16 +232,31 @@ class PublicKeyCredential {
   }
 }
 
-const verifyECDSA = (data, publicKey, signature) => {
+const verifyECDSA = (data: Buffer, publicKey: Buffer, signature: Buffer) => {
   return p256.verify(p256.Signature.fromDER(signature).toCompactHex(), data, publicKey);
 };
 
-const verifyEdDSA = (data, publicKey, signature) => {
+const verifyEdDSA = (data: Buffer, publicKey: Buffer, signature: Buffer) => {
   return ed25519.verify(signature, data, publicKey);
 };
 
+type SoftKeyPair = {
+  privateKey: Uint8Array;
+  publicKey: Uint8Array;
+};
 // Webauthn Partial Implementation for testing
 export default class SoftCredentials {
+  signCount: number;
+  rawId: Buffer;
+  aaguid: Buffer;
+  challenge!: Buffer;
+  options!: PublicKeyCredentialCreationOptions;
+  rpId!: string;
+  userHandle!: Buffer;
+  alg!: number;
+  keyPair!: SoftKeyPair;
+  coseKey!: Map<number, number | Uint8Array>;
+
   constructor() {
     this.signCount = 0;
     this.rawId = randomBytes(32);
@@ -258,11 +264,8 @@ export default class SoftCredentials {
   }
 
   // credentials request payload
-  static createRequest(alg, onlyStrings = false) {
-    let challenge = randomBytes(32);
-    if (onlyStrings) {
-      challenge = Buffer.from(challenge).toString("base64");
-    }
+  static createRequest(alg: string) {
+    let challenge = Buffer.from(randomBytes(32).toString("base64"));
     return {
       publicKey: {
         challenge,
@@ -285,8 +288,8 @@ export default class SoftCredentials {
     };
   }
 
-  static getCertificateInfo(response) {
-    const attestationBuffer = Buffer.from(response.attestationObject, "base64");
+  static getCertificateInfo(response: AuthenticatorAttestationResponse) {
+    const attestationBuffer = Buffer.from(response.attestationObject);
     const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
     if (attestationStruct.attStmt.x5c) {
       return getCertificateInfo(attestationStruct.attStmt.x5c[0]);
@@ -295,19 +298,19 @@ export default class SoftCredentials {
     }
   }
 
-  static async create(data, origin = "test") {
-    const options = data.publicKey;
+  static async create({ publicKey }: { publicKey: PublicKeyCredentialCreationOptions }, origin = "test") : Promise<PublicKeyCredential> {
     const credential = new SoftCredentials();
-    credential.options = options;
-    credential.rpId = options.rp.id;
-    credential.userHandle = Buffer.from(options.user.id, "utf-8");
+    credential.options = publicKey;
+    credential.rpId = publicKey.rp.id!;
+    credential.userHandle = Buffer.from(publicKey.user.id as ArrayBuffer);
     credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
-    credential.alg = options.pubKeyCredParams[0].alg;
+    credential.alg = publicKey.pubKeyCredParams[0].alg;
     if (credential.alg === -8) {
-      credential.keyPair = { privateKey: ed25519.utils.randomPrivateKey() };
-      credential.keyPair.publicKey = ed25519.getPublicKey(
-        credential.keyPair.privateKey,
-      );
+      const random = ed25519.utils.randomPrivateKey();
+      credential.keyPair = {
+        privateKey: random,
+        publicKey: ed25519.getPublicKey(random),
+      };
       credential.coseKey = new Map();
       credential.coseKey.set(1, 1);
       credential.coseKey.set(3, -8);
@@ -315,11 +318,11 @@ export default class SoftCredentials {
       const x = credential.keyPair.publicKey.slice(0, 32);
       credential.coseKey.set(-2, x);
     } else if (credential.alg === -7) {
-      credential.keyPair = { privateKey: p256.utils.randomPrivateKey() };
-      credential.keyPair.publicKey = p256.getPublicKey(
-        credential.keyPair.privateKey,
-        false
-      );
+      const random = p256.utils.randomPrivateKey();
+      credential.keyPair = {
+        privateKey: random,
+        publicKey: p256.getPublicKey(random, false),
+      };
       credential.coseKey = new Map();
       credential.coseKey.set(1, 2);
       credential.coseKey.set(3, -7);
@@ -332,7 +335,7 @@ export default class SoftCredentials {
     }
     const clientData = {
       type: "webauthn.create",
-      challenge: Buffer.from(options.challenge).toString("base64"),
+      challenge: publicKey.challenge,
       origin,
     };
 
@@ -344,39 +347,37 @@ export default class SoftCredentials {
     rawIdLength.writeUInt16BE(credential.rawId.length);
     const coseKey = cbor.encode(credential.coseKey);
     const attestationObject = {
-      authData: Buffer.concat([
-        rpIdHash,
-        flags,
-        signCount,
-        credential.aaguid,
-        rawIdLength,
-        credential.rawId,
-        coseKey,
-      ]),
+      authData: Buffer.concat([rpIdHash, flags, signCount, credential.aaguid, rawIdLength, credential.rawId, coseKey]),
       fmt: "none",
       attStmt: {},
     };
 
-    return new PublicKeyCredential({
+    const pkCredentials: PublicKeyCredential = {
       id: credential.rawId.toString("base64"),
       rawId: credential.rawId,
+      authenticatorAttachment: null,
+      type: "public-key",
+      getClientExtensionResults: () => { return {} },
       response: {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         attestationObject: cbor.encode(attestationObject),
         getTransports: () => ["usb", "hybrid"],
-      },
-    });
+        getAuthenticatorData: () => attestationObject.authData,
+        getPublicKey: () => coseKey,
+        getPublicKeyAlgorithm: () => -7
+      } as AuthenticatorAttestationResponse,
+    };
+
+    return pkCredentials
   }
 
-  static simpleVerify(COSEPublicKey, response, userVerification = false) {
+  static simpleVerify(COSEPublicKey: Buffer, response: AuthenticatorAssertionResponse, userVerification = false) {
     const ckey = cbor.decode(COSEPublicKey);
     const rpIdHash = response.authenticatorData.slice(0, 32);
-    const flagsInt = response.authenticatorData[32];
+    const flagsInt = Buffer.from(response.authenticatorData)[32];
     const counter = response.authenticatorData.slice(33, 37);
 
-    const goodflags = userVerification
-      ? !!(flagsInt & 0x04)
-      : !!(flagsInt & 0x01);
+    const goodflags = userVerification ? !!(flagsInt & 0x04) : !!(flagsInt & 0x01);
     if (!goodflags) return false;
 
     const hash = myhash("sha256", Buffer.from(response.clientDataJSON));
@@ -393,30 +394,33 @@ export default class SoftCredentials {
       const x = ckey.get(-2);
       const y = ckey.get(-3);
       const pubKey = Buffer.concat([Buffer.from("04", "hex"), x, y]);
-      return verifyECDSA(data, pubKey, response.signature);
+      return verifyECDSA(data, pubKey, Buffer.from(response.signature));
     }
     return false;
   }
 
-  static getCOSEPublicKey(attestation) {
-    const ato = cbor.decode(attestation.response.attestationObject);
+  static getCOSEPublicKey(attestation: PublicKeyCredential) {
+    const response = attestation.response as AuthenticatorAttestationResponse
+    const ato = cbor.decode(response.attestationObject);
     return parseAuthData(ato.authData).COSEPublicKey;
   }
 
-  static verifyPackedAttestation(attestation, userVerification = false) {
+  static verifyPackedAttestation(attestation: AuthenticatorAttestationResponse, userVerification = false) {
     return verifyPackedAttestation(attestation, userVerification);
   }
 
-  static verify(attestation, assertion, userVerifiation = false) {
-    if (assertion.id !== attestation.id) return false;
-    const hash = myhash("sha256", assertion.response.clientDataJSON);
-    let data = Buffer.concat([assertion.response.authenticatorData, hash]);
-    const ato = cbor.decode(attestation.response.attestationObject);
+  static verify(attestation: PublicKeyCredential, assertion: PublicKeyCredential, userVerifiation = false) {
+    //if (assertion.id !== attestation.id) return false;
+    const hash = myhash("sha256", Buffer.from(assertion.response.clientDataJSON));
+    const ass = assertion.response  as AuthenticatorAssertionResponse;
+    const att = attestation.response as AuthenticatorAttestationResponse;
+    let data = Buffer.concat([Buffer.from(ass.authenticatorData), hash]);
+    const ato = cbor.decode(att.attestationObject);
     const authData = parseAuthData(ato.authData);
     // check if user has actually touched the device
     if (!authData.flags.up) return false;
     // check if the user has entered his PIN code or used biometric sensor
-    if (userVerifiation && !authData.flags.uv) return false;
+    if (userVerifiation && !authData.flags.uv || !authData.COSEPublicKey) return false;
     const ckey = cbor.decode(authData.COSEPublicKey);
     if (ckey.get(3) == -7) {
       data = myhash("sha256", data);
@@ -424,38 +428,18 @@ export default class SoftCredentials {
     if (ckey.get(1) == 1) {
       // EdDSA
       const x = ckey.get(-2);
-      return verifyEdDSA(data, x, assertion.response.signature);
+      return verifyEdDSA(data, x, Buffer.from(ass.signature));
     } else if (ckey.get(1) == 2) {
       // ECDSA
       const x = ckey.get(-2);
       const y = ckey.get(-3);
       const pubKey = Buffer.concat([Buffer.from("04", "hex"), x, y]);
-      return verifyECDSA(data, pubKey, assertion.response.signature);
+      return verifyECDSA(data, pubKey, Buffer.from(ass.signature));
     }
   }
 
-  static verifySafe(attestation, assertion, userVerifiation = false) {
-    const parsedAttestation = {
-      id: attestation.id,
-      response: {
-        attestationObject: fromBase64(attestation.response.attestationObject),
-      },
-    };
-    const parsedAssertion = {
-      id: assertion.id,
-      response: {
-        clientDataJSON: fromBase64(assertion.response.clientDataJSON),
-        authenticatorData: fromBase64(assertion.response.authenticatorData),
-        signature: fromBase64(assertion.response.signature),
-      },
-    };
-    return this.verify(parsedAttestation, parsedAssertion, userVerifiation);
-  }
-
-  static extractChallenge(clientDataJSON) {
-    const clientData = JSON.parse(
-      Buffer.from(clientDataJSON, "base64").toString(),
-    );
+  static extractChallenge(clientDataJSON: Buffer) {
+    const clientData = JSON.parse(clientDataJSON.toString());
     const m = clientData.challenge.length % 4;
     return clientData.challenge
       .replace(/-/g, "+")
@@ -463,48 +447,45 @@ export default class SoftCredentials {
       .padEnd(clientData.challenge.length + (m === 0 ? 0 : 4 - m), "=");
   }
 
-  static async get(data, origin = "test") {
-    const options = data.publicKey;
-    let credential = credentials[options.allowCredentials[0].id];
-    if (!credential) {
-      credential =
-        credentials[
-          Buffer.from(options.allowCredentials[0].id).toString("base64")
-        ];
-    }
+  static async get({ publicKey }: { publicKey: PublicKeyCredentialRequestOptions }, origin = "test"): Promise<PublicKeyCredential> {
+    if (!publicKey.allowCredentials) throw new Error()
+    const id = Buffer.from(publicKey.allowCredentials[0].id as ArrayBuffer).toString("base64")
+    let credential = credentials[id];
     credential.signCount += 1;
     // prepare signature
     const clientData = {
       type: "webauthn.get",
-      challenge: Buffer.from(options.challenge).toString("base64"),
+      challenge: Buffer.from(publicKey.challenge as ArrayBuffer).toString("base64"),
       origin,
     };
-    const clientDataHash = myhash(
-      "sha256",
-      fromUTF8(JSON.stringify(clientData)),
-    );
-    const rpIdHash = myhash("sha256", credential.rpId);
-    const flags = Buffer.from("01", "hex");
+    const clientDataHash = myhash("sha256", fromUTF8(JSON.stringify(clientData)));
+    const rpIdHash = myhash("sha256", Buffer.from(credential.rpId, "utf-8"));
+    const flags = Buffer.from("05", "hex"); // user verification
     const signCount = Buffer.allocUnsafe(4);
     signCount.writeUInt32BE(credential.signCount);
     const authenticatorData = Buffer.concat([rpIdHash, flags, signCount]);
     let toSign = Buffer.concat([authenticatorData, clientDataHash]);
-    let signature;
+    let signature: Uint8Array = new Uint8Array();
     if (credential.alg === -7) {
-      signature = p256.sign(toSign, credential.keyPair.privateKey, {prehash: true}).toDERRawBytes();
+      signature = p256.sign(toSign, credential.keyPair.privateKey, { prehash: true }).toDERRawBytes();
     } else if (credential.alg === -8) {
       signature = ed25519.sign(toSign, credential.keyPair.privateKey);
     }
-    //generate assertion
-    return new PublicKeyCredential({
-      id: credential.rawId.toString("base64"),
-      rawId: credential.rawId,
+
+    const pkCredentials: PublicKeyCredential = {
+      id,
+      rawId: Buffer.from(id, "base64"),
+      type: "public-key",
+      authenticatorAttachment: null,
+      getClientExtensionResults: () => {return {}},
       response: {
         authenticatorData,
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         signature: signature,
         userHandle: credential.userHandle,
-      },
-    });
+      } as AuthenticatorAssertionResponse
+    };
+
+    return pkCredentials
   }
 }

@@ -3,10 +3,19 @@ const path = require('path')
 
 module.exports = {
   mode: 'production',
-  entry: './index.js',
+  entry: './index.ts',
   devtool: 'source-map',
+module: {
+    rules: [
+      {
+        test: /\.ts?$/,
+        use: 'ts-loader',
+        exclude: /node_modules/,
+      },
+    ],
+  },
   output: {
-    path: path.resolve(__dirname, 'dist'),
+    path: path.resolve(__dirname, 'web'),
     filename: 'vaultysid.min.js',
     library: 'Vaultys',
     libraryTarget: 'umd'
@@ -15,12 +24,15 @@ module.exports = {
 		"vaultys": "Vaultys",
 	},
   resolve: {
+extensions: ['.ts', '.js', '...'],
     alias: {
       crypto: "crypto-browserify",
       stream: "stream-browserify",
+vm: "vm-browserify"
     },
     fallback: {
       buffer: require.resolve('buffer/'),
+util: require.resolve("util/")
     },
   },
   optimization: {
@@ -28,8 +40,13 @@ module.exports = {
   },
   plugins: [
     new webpack.ProvidePlugin({
-        Buffer: ['buffer', 'Buffer'],
         process: 'process/browser'
     }),
+    new webpack.NormalModuleReplacementPlugin(
+      /node:crypto/,
+      (resource) => {
+        resource.request = resource.request.replace(/^node:/, '');
+      }
+    )
   ]
 };

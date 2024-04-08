@@ -1,15 +1,14 @@
 import assert from "assert";
-import KeyManager, { derivePath } from "../src/KeyManager.js";
 import { randomBytes } from "crypto";
-
+import KeyManager, { publicDerivePath, privateDerivePath } from "../src/KeyManager"
 import bip32ed25519 from '@stricahq/bip32ed25519';
 const { Bip32PrivateKey } = bip32ed25519;
 
-const writeVector = km => {
+const writeVector = (km) => {
   return;
   console.log("## NOT Published");
-  console.log("### proof sk:\n", km.proofSigner.toPrivateKey().toBytes().toString("hex"));
-  console.log("### proof pk:\n", km.proofSigner.toBip32PublicKey().toPublicKey().toBytes().toString("hex"));
+  console.log("### proof sk:\n", (new Bip32PrivateKey(km.proofKey.secretKey)).toPrivateKey().toBytes().toString("hex"));
+  console.log("### proof pk:\n", (new Bip32PrivateKey(km.proofKey.publicKey)).toBip32PublicKey().toPublicKey().toBytes().toString("hex"));
   console.log("### sk = derive(proof sk, m/0'):\n", new Bip32PrivateKey(km.signer.secretKey).toPrivateKey().toBytes().toString("hex"));
   
   console.log("## Published");
@@ -17,7 +16,7 @@ const writeVector = km => {
   console.log("### pk:", km.signer.publicKey.toString("hex"));
 }
 
-const writeCertificate = hiscp => {
+const writeCertificate = (hiscp) => {
   return;
   const hiscpDisplay = {
     newId: hiscp.newId.toString("hex"),
@@ -26,7 +25,7 @@ const writeCertificate = hiscp => {
   }
   console.log("## HISCP Certificate");
   console.log("### hiscp data:\n", JSON.stringify(hiscpDisplay, null, 2));
-  console.log("### Signature of hiscp = [newID || proofKey || timestamp] by proof sk\n", hiscp.signature.toString("hex"));
+  console.log("### Signature of hiscp = [newID || proofKey || timestamp] by proof sk\n", hiscp.signature.toString("hex"));
 }
 
 describe("KeyManager tests", () => {
@@ -34,8 +33,8 @@ describe("KeyManager tests", () => {
   it("derive correctly keys (strica)", async () => {
     const node = await Bip32PrivateKey.fromEntropy(randomBytes(32));
     const publicNode = node.toBip32PublicKey();
-    const derivedNode = derivePath(node, "m/1/2/3");
-    const publicDerivedNode = derivePath(publicNode, "1/2/3");
+    const derivedNode = privateDerivePath(node, "m/1/2/3");
+    const publicDerivedNode = publicDerivePath(publicNode, "m/1/2/3");
     assert.equal(derivedNode.toBip32PublicKey().toBytes().toString("hex"), publicDerivedNode.toBytes().toString("hex"));
   });
 
@@ -70,7 +69,8 @@ describe("KeyManager tests", () => {
       "this is a message to be verified man",
       "utf-8",
     );
-    const signature = signer.sign(message);
+    const signature = await signer.sign(message);
+    assert.notEqual(signature, null);
     assert.ok(await verifier.verify(message, signature));
   });
 
@@ -104,7 +104,7 @@ describe("KeyManager tests", () => {
 
     // create the new Keymanager iterating on the index
     const newkm = await KeyManager.create_Id25519_fromEntropy(km.entropy, 1);
-    assert.equal(newkm.id.toString("hex"), hiscp.newId.toString("hex"));
+    assert.equal(newkm.id.toString("hex"), hiscp?.newId.toString("hex"));
   });
 
   it("encrypt and decrypt messages", async () => {
@@ -115,7 +115,7 @@ describe("KeyManager tests", () => {
     const recipients = [bob.id, eve.id, alice.id];
     const encrypted = await alice.encrypt(plaintext, recipients);
     assert.equal(
-      encrypted.substring(0, 33),
+      encrypted?.substring(0, 33),
       "BEGIN SALTPACK ENCRYPTED MESSAGE.",
     );
     const decryptedBob = await bob.decrypt(encrypted, alice.id);
@@ -134,7 +134,7 @@ describe("KeyManager tests", () => {
     const recipients = [bob.id, eve.id, alice.id];
     const encrypted = await alice.encrypt(plaintext, recipients);
     assert.equal(
-      encrypted.substring(0, 33),
+      encrypted?.substring(0, 33),
       "BEGIN SALTPACK ENCRYPTED MESSAGE.",
     );
     const decryptedBob = await bob.decrypt(encrypted);

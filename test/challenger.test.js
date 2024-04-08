@@ -1,7 +1,8 @@
+
+import Challenger from "../src/Challenger";
+import SoftCredentials from "../src/SoftCredentials";
+import VaultysId from "../src/VaultysId";
 import assert from "assert";
-import Challenger from "../src/Challenger.js";
-import SoftCredentials from "../src/SoftCredentials.js";
-import VaultysId from "../src/VaultysId.js";
 
 // nodejs polyfill
 global.navigator = {

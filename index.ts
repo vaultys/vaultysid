@@ -11,7 +11,7 @@ import CryptoChannel from "./src/cryptoChannel.js";
 import * as crypto from "./src/crypto.js";
 
 export {
-  crypto,
+  crypto, 
   VaultysId,
   Challenger,
   MemoryChannel,
@@ -20,4 +20,34 @@ export {
   KeyManager,
   GameOfLifeIcon,
   CryptoChannel
+}
+
+export type ChallengeType = {
+  protocol: string
+  service: string
+  timestamp: number
+  pk1?: Buffer
+  pk2?: Buffer
+  nonce?: Buffer
+  sign1?: Buffer
+  sign2?: Buffer
+  metadata?: Buffer
+  state:number
+  error: string
+}
+
+
+export interface FilePayload { 
+  challenge: Buffer;
+  signature?: Buffer;
+  name?: string;
+  hash?: string | null;
+  timestamp?: number | null,
+}
+
+export type IdMetadata = {
+  name?: string
+  firstname?: string
+  email?: string
+  phone?: string
 }

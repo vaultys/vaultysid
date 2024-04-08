@@ -1,11 +1,13 @@
-import Challenger from "./Challenger.js";
-import Fido2Manager from "./Fido2Manager.js";
-import KeyManager from "./KeyManager.js";
-import SoftCredentials from "./SoftCredentials.js";
-import VaultysId from "./VaultysId.js";
-import { randomBytes } from "./crypto.js";
+import Challenger from "./Challenger";
+import Fido2Manager from "./Fido2Manager";
+import KeyManager from "./KeyManager";
+import { Channel } from "./MemoryChannel";
+import { Store } from "./MemoryStorage";
+import SoftCredentials from "./SoftCredentials";
+import VaultysId from "./VaultysId";
+import { randomBytes } from "./crypto";
 
-const getSignatureType = (challenge) => {
+const getSignatureType = (challenge: string) => {
   if (challenge.startsWith("vaultys://login?")) {
     return "LOGIN";
   } else if (challenge.startsWith("vaultys://docsign?")) {
@@ -16,7 +18,9 @@ const getSignatureType = (challenge) => {
 };
 
 export default class IdManager {
-  constructor(vaultysId, store) {
+  vaultysId: VaultysId
+  store: Store
+  constructor(vaultysId: VaultysId, store: Store) {
     this.vaultysId = vaultysId;
     this.store = store;
     if (!this.store.get("metadata")) {
@@ -28,12 +32,12 @@ export default class IdManager {
     this.store.save();
   }
 
-  static async fromStore(store) {
+  static async fromStore(store: Store) {
     const entropy = store.get("entropy");
     const secret = store.get("secret");
     if (secret) {
       if (entropy) {
-        const secretBuffer = Buffer.from(secret, encoding);
+        const secretBuffer = Buffer.from(secret, "base64");
         const type = secretBuffer[0];
         const vaultysId = await VaultysId.fromEntropy(entropy, type);
         return new IdManager(vaultysId, store);
@@ -50,12 +54,12 @@ export default class IdManager {
     }
   }
 
-  merge(otherStore, master = true) {
+  merge(otherStore: Store, master = true) {
     // TODO: check if same profile ?
     // TODO: revamp contact metadata and sync
     const master_store = master ? otherStore : this.store;
     const slave_store = master ? this.store : otherStore
-    this.store.set("metadata", {...slave_store.get("metadata"), ...master_store.get("metadata")});
+    this.store.set("metadata", { ...slave_store.get("metadata"), ...master_store.get("metadata") });
     ["signatures", "wot"].forEach((table) => {
       let other = otherStore.substore(table);
       let me = this.store.substore(table);
@@ -65,7 +69,7 @@ export default class IdManager {
         }
       });
     });
-    
+
     let other = otherStore.substore("contacts");
     let me = this.store.substore("contacts");
     const m = master ? other : me;
@@ -75,7 +79,7 @@ export default class IdManager {
         me.set(did, other.get(did));
       } else {
         const contact = me.get(did);
-        contact.metadata = {...s.get(did).metadata, ...m.get(did).metadata};
+        contact.metadata = { ...s.get(did).metadata, ...m.get(did).metadata };
         me.set(did, contact);
       }
     });
@@ -91,27 +95,28 @@ export default class IdManager {
     if (!this.vaultysId.isHardware()) return true;
     await window.CredentialUserInteractionRequest();
     const challenge = randomBytes(32);
+    const keyManager = this.vaultysId.keyManager as Fido2Manager;
     const creds = await navigator.credentials.get({
       publicKey: {
         challenge,
         allowCredentials: [
           {
             type: "public-key",
-            id: Buffer.from(this.vaultysId.keyManager.fid, "base64"),
-            transports: this.vaultysId.keyManager.transports,
+            id: keyManager.fid,
+            transports: keyManager.transports,
           },
         ],
         userVerification: "discouraged",
       },
-    });
+    }) as PublicKeyCredential;
+    if (creds == null) return false;
+    const response = creds.response as AuthenticatorAssertionResponse;
+    const extractedChallenge = SoftCredentials.extractChallenge(Buffer.from(response.clientDataJSON));
 
-    const extractedChallenge = SoftCredentials.extractChallenge(
-      creds.response.clientDataJSON,
-    );
     if (challenge.toString("base64") !== extractedChallenge) {
       return false;
     }
-    return this.vaultysId.keyManager.verifyCredentials(creds);
+    return keyManager.verifyCredentials(creds);
   }
 
   get contacts() {
@@ -136,7 +141,7 @@ export default class IdManager {
       });
   }
 
-  getContact(did) {
+  getContact(did: string) {
     const c = this.store.substore("contacts").get(did);
     if (c.type === 3) {
       return new VaultysId(
@@ -153,7 +158,7 @@ export default class IdManager {
     }
   }
 
-  setContactMetadata(did, name, value) {
+  setContactMetadata(did: string, name: string, value: any) {
     const c = this.store.substore("contacts").get(did);
     if (c) {
       if (!c.metadata) {
@@ -163,7 +168,7 @@ export default class IdManager {
     }
   }
 
-  getContactMetadata(did, name) {
+  getContactMetadata(did: string, name: string) {
     const c = this.store.substore("contacts").get(did);
     if (c && c.metadata) {
       return c.metadata[name];
@@ -171,7 +176,7 @@ export default class IdManager {
     return null;
   }
 
-  getContactMetadatas(did) {
+  getContactMetadatas(did: string) {
     const c = this.store.substore("contacts").get(did);
     if (c && c.metadata) {
       return c.metadata;
@@ -179,7 +184,7 @@ export default class IdManager {
     return null;
   }
 
-  async verifyRelationshipCertificate(did) {
+  async verifyRelationshipCertificate(did: string) {
     const c = this.store.substore("contacts").get(did);
     return Challenger.verifyCertificate(c.certificate);
   }
@@ -194,7 +199,7 @@ export default class IdManager {
 
   get displayName() {
     const metadata = this.store.get("metadata");
-    return metadata.firstname ? (metadata.firstname + " " +(metadata.name??"")) : (metadata.name??("Anonymous "+this.vaultysId.fingerprint.slice(-4)));
+    return metadata.firstname ? (metadata.firstname + " " + (metadata.name ?? "")) : (metadata.name ?? ("Anonymous " + this.vaultysId.fingerprint?.slice(-4)));
   }
 
   set phone(n) {
@@ -213,25 +218,25 @@ export default class IdManager {
     return this.store.get("metadata").email;
   }
 
-  set avatar(n) {
-    this.store.get("metadata").avatar = {
-      data: Buffer.from(n.data).toString("base64"),
-      type: n.type,
-    };
-  }
+  // set avatar(n) {
+  //   this.store.get("metadata").avatar = {
+  //     data: Buffer.from(n.data).toString("base64"),
+  //     type: n.type,
+  //   };
+  // }
 
-  get avatar() {
-    const temp = this.store.get("metadata").avatar;
-    if (!temp) return null;
-    return {
-      data: Buffer.from(temp.data, "base64"),
-      type: temp.type,
-    };
-  }
+  // get avatar() {
+  //   const temp = this.store.get("metadata").avatar;
+  //   if (!temp) return null;
+  //   return {
+  //     data: Buffer.from(temp.data, "base64"),
+  //     type: temp.type,
+  //   };
+  // }
 
-  async signChallenge(challenge) {
+  async signChallenge(challenge: Buffer) {
     const signature = await this.vaultysId.signChallenge(challenge);
-    this.store.substore("signatures").set(Date.now(), {
+    this.store.substore("signatures").set("" + Date.now(), {
       signature,
       challenge,
     });
@@ -239,36 +244,29 @@ export default class IdManager {
     return signature;
   }
 
-  async signFile(hash) {
+  async signFile(hash: Buffer) {
+    const challenge = Buffer.from(`vaultys://docsign?hash=${hash.toString("hex")}&timestamp=${Date.now()}`, "utf-8")
     const payload = {
-      challenge: Buffer.from(
-        `vaultys://docsign?hash=${hash.toString(
-          "hex",
-        )}&timestamp=${Date.now()}`,
-        "utf-8",
-      ),
+      challenge,
+      signature: await this.vaultysId.signChallenge(challenge)
     };
-    payload.signature = await this.vaultysId.signChallenge(payload.challenge);
-    this.store.substore("signatures").set(Date.now(), payload);
+    this.store.substore("signatures").set(Date.now() + "", payload);
     this.store.save();
     return payload;
   }
 
-  async verifyFile(challenge, signature, userVerifiation = true) {
-    if (!challenge.startsWith("vaultys://docsign?")) {
+  async verifyFile(challenge: Buffer, signature: Buffer, userVerifiation = true) {
+    const data = challenge.toString("utf8");
+    if (!data.startsWith("vaultys://docsign?")) {
       return false;
     }
-    const url = new URL(challenge);
+    const url = new URL(data);
     if (
-      url.search.match(/[a-z\d]+=[a-z\d]+/gi).length === 2 &&
+      url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 &&
       url.searchParams.get("hash") &&
       url.searchParams.get("timestamp")
     ) {
-      return await this.vaultysId.verifyChallenge(
-        Buffer.from(challenge, "utf-8"),
-        signature,
-        userVerifiation,
-      );
+      return await this.vaultysId.verifyChallenge(challenge, signature, userVerifiation);
     }
 
     return false;
@@ -291,25 +289,25 @@ export default class IdManager {
       });
   }
 
-  async verifyChallenge(challenge, signature) {
-    return this.vaultysId.verifyChallenge(challenge, signature);
+  async verifyChallenge(challenge: Buffer, signature: Buffer) {
+    return this.vaultysId.verifyChallenge(challenge, signature, true);
   }
 
-  async sync(channel, initiator = false) {
-    if(initiator) {
+  async sync(channel: Channel, initiator = false) {
+    if (initiator) {
       const challenger = await this.startSRP(channel, "p2p", "selfauth");
-      
-      if(challenger.isSelfAuth() && challenger.isComplete()) {
-        const data = this.store.fromString(await channel.receive());
-        channel.send(this.store.toString());
+
+      if (challenger.isSelfAuth() && challenger.isComplete()) {
+        const data = this.store.fromString((await channel.receive()).toString("utf-8"));
+        channel.send(Buffer.from(this.store.toString(), "utf-8"));
         this.merge(data, !initiator)
       };
     } else {
       const challenger = await this.acceptSRP(channel, "p2p", "selfauth", true);
-      
-      if(challenger.isSelfAuth() && challenger.isComplete()) {
-        channel.send(this.store.toString());
-        const data = this.store.fromString(await channel.receive());
+
+      if (challenger.isSelfAuth() && challenger.isComplete()) {
+        channel.send(Buffer.from(this.store.toString(), "utf-8"));
+        const data = this.store.fromString((await channel.receive()).toString("utf-8"));
         this.merge(data, !initiator);
       };
       channel.close();
@@ -325,7 +323,7 @@ export default class IdManager {
     const wot = this.store.substore("wot");
     return wot.list().map((timestamp) => {
       const c = wot.get(timestamp);
-      if(c.timestamp) {
+      if (c.timestamp) {
         return c;
       } else {
         const result = {
@@ -335,56 +333,95 @@ export default class IdManager {
         wot.set(timestamp, result);
         return result;
       }
-      
+
     });
   }
 
-  async startSRP(channel, protocol, service) {
+  async startSRP(channel: Channel, protocol: string, service: string) {
     const challenger = new Challenger(this.vaultysId);
     challenger.createChallenge(protocol, service);
-    channel.send(challenger.getCertificate());
-    const message = await channel.receive();
-    await challenger.update(message);
+    const cert = challenger.getCertificate();
+    if (!cert) {
+      channel.close();
+      channel.send(Buffer.from([0]));
+      throw new Error("Error processing challenge");
+    }
+
+    channel.send(cert);
+  
+    try {
+      const message = await channel.receive();
+      // console.log(message)
+      await challenger.update(message);
+    } catch (error) {
+      channel.send(Buffer.from([0]));
+      throw new Error(error as string);
+    }
     if (challenger.isComplete()) {
       const certificate = challenger.getCertificate();
+      if (!certificate) {
+        channel.close();
+        channel.send(Buffer.from([0]));
+        throw new Error("Error processing challenge");
+      }
       // there is a caveat here, we are not sure that thhe last bit of information has been received
       channel.send(certificate);
-      this.store.substore("wot").set(Date.now(), certificate);
+      this.store.substore("wot").set(Date.now() + "", certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
-    } else
-      throw new Error(
-        "Can't add a new contact if the protocol is not complete",
-      );
+    } else {
+      channel.send(Buffer.from([0]));
+      throw new Error("Can't add a new contact if the protocol is not complete");
+    }
   }
 
-  async acceptSRP(channel, protocol, service, keepChannel=false) {
+  async acceptSRP(channel: Channel, protocol: string, service: string, keepChannel = false) {
     const challenger = new Challenger(this.vaultysId);
-    let message = await channel.receive();
-    await challenger.update(message);
+    try {
+      let message = await channel.receive();
+      await challenger.update(message);
+    } catch (error) {
+      channel.send(Buffer.from([0]));
+      throw new Error(error as string);
+    }
+
     const context = challenger.getContext();
     if (context.protocol != protocol || context.service != service) {
-      throw new Error(
-        `The challenge was expecting protocol '${protocol}' and service '${service}', received '${context.protocol}' and '${context.service}'`,
-      );
+      channel.send(Buffer.from([0]));
+      throw new Error(`The challenge was expecting protocol '${protocol}' and service '${service}', received '${context.protocol}' and '${context.service}'`);
     }
-    channel.send(challenger.getCertificate());
-    message = await channel.receive();
-    await challenger.update(message);
+
+    const cert = challenger.getCertificate();
+    if (!cert) {
+      channel.close();
+      channel.send(Buffer.from([0]));
+      throw new Error("Error processing challenge");
+    }
+
+    channel.send(cert);
+    
+    try {
+      let message = await channel.receive();
+      await challenger.update(message);
+    } catch (error) {
+      channel.close();
+      throw new Error(error as string);
+    }
     if (challenger.isComplete()) {
       const certificate = challenger.getCertificate();
-      if(!keepChannel) channel.close();
-      this.store.substore("wot").set(Date.now(), certificate);
+      if (!keepChannel) channel.close();
+      this.store.substore("wot").set(Date.now() + "", certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
-    } else
-      throw new Error(
-        "Can't add a new contact if the protocol is not complete",
-      );
+    } else {
+      channel.close();
+      throw new Error("Can't add a new contact if the protocol is not complete");
+    }
+
   }
 
   // We assume the we have sent contact information to create a *SECURE* communicationChannel so he is the only one listenning to it
-  async askContact(channel) {
+  async askContact(channel: Channel) {
     const challenger = await this.startSRP(channel, "p2p", "auth");
     const contactId = challenger.getContactId();
     this.store.substore("contacts").set(contactId.did, contactId);
@@ -393,7 +430,7 @@ export default class IdManager {
   }
 
   // We assume the contact has sent information to create a *SECURE* communicationChannel so he is the only one listenning to it
-  async acceptContact(channel) {
+  async acceptContact(channel: Channel) {
     const challenger = await this.acceptSRP(channel, "p2p", "auth");
     const contactId = challenger.getContactId();
     this.store.substore("contacts").set(contactId.did, contactId);
@@ -402,15 +439,15 @@ export default class IdManager {
   }
 
   // Connecting to itself on 2 different devices, checking this is same vaultysId on both ends
-  async askMyself(channel) {
+  async askMyself(channel: Channel) {
     const challenger = await this.startSRP(channel, "p2p", "selfauth");
     this.store.save();
     return challenger.isSelfAuth() && challenger.isComplete();
   }
 
-  async acceptMyself(channel) {
+  async acceptMyself(channel: Channel) {
     const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
-    console.log(challenger)
+    // console.log(challenger)
     this.store.save();
     return challenger.isSelfAuth() && challenger.isComplete();
   }

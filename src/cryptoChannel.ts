@@ -1,8 +1,10 @@
-import { secretbox, toBase64, fromBase64, randomBytes } from "./crypto.js";
+import { Channel } from "./MemoryChannel";
+import { secretbox, toBase64, fromBase64, randomBytes } from "./crypto";
 
 const newNonce = () => randomBytes(secretbox.nonceLength);
 
-export const encrypt = (buffer, key) => {
+export const encrypt = (buffer: Buffer, key: Buffer) => {
+  //console.log("encrypting: ", buffer, key)
   const keyUint8Array = key;
   const nonce = newNonce();
   const box = secretbox(Uint8Array.from(buffer), nonce, keyUint8Array);
@@ -11,13 +13,13 @@ export const encrypt = (buffer, key) => {
   fullMessage.set(nonce);
   fullMessage.set(box, nonce.length);
 
-  const base64FullMessage = toBase64(fullMessage);
-  return base64FullMessage;
+  return Buffer.from(fullMessage);
 };
 
-export const decrypt = (messageWithNonce, key) => {
+export const decrypt = (messageWithNonce: Buffer, key: Buffer) => {
+  //console.log("decrypting: ", messageWithNonce, key)
   const keyUint8Array = key;
-  const messageWithNonceAsUint8Array = fromBase64(messageWithNonce);
+  const messageWithNonceAsUint8Array = messageWithNonce;
   const nonce = messageWithNonceAsUint8Array.slice(0, secretbox.nonceLength);
   const message = messageWithNonceAsUint8Array.slice(
     secretbox.nonceLength,
@@ -36,14 +38,14 @@ export const decrypt = (messageWithNonce, key) => {
 // - send(Buffer):null
 // - async receive():Buffer
 
-const encryptChannel = (channel, key) => {
+const encryptChannel = (channel: Channel, key: Buffer) => {
   const sendHandler = {
-    apply(target, that, args) {
+    apply(target: (data: Buffer) => void, that:any, args: any) {
       return target.call(that, encrypt(args[0], key));
     },
   };
   const receiveHandler = {
-    async apply(target, that, args) {
+    async apply(target: () => Promise<Buffer>, that: any, args: any) {
       const result = await target.call(that);
       return decrypt(result, key);
     },
