@@ -338,8 +338,8 @@ export default class IdManager {
   }
 
   async startSRP(channel: Channel, protocol: string, service: string) {
-    const challenger = new Challenger(this.vaultysId);
-    challenger.createChallenge(protocol, service);
+    const challenger = new Challenger(this.vaultysId.toVersion(0));
+    challenger.createChallenge(protocol, service, 0);
     const cert = challenger.getCertificate();
     if (!cert) {
       channel.close();
@@ -376,7 +376,7 @@ export default class IdManager {
   }
 
   async acceptSRP(channel: Channel, protocol: string, service: string, keepChannel = false) {
-    const challenger = new Challenger(this.vaultysId);
+    const challenger = new Challenger(this.vaultysId.toVersion(0));
     try {
       let message = await channel.receive();
       await challenger.update(message);

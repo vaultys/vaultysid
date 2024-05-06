@@ -12,6 +12,8 @@ const getAlgorithm = (alg: string) => {
   return sha256.create();
 } 
 
+const _randomBytes = (size: number) =>  Buffer.from(randomBytes ? randomBytes(size) : crypto.getRandomValues(new Uint8Array(size)));
+
 const hash = (alg: string, buffer: Buffer) => Buffer.from(getAlgorithm(alg).update(buffer).digest());
 const secretbox = nacl.secretbox;
 const toBase64 = (bufferLike: Buffer) => Buffer.from(bufferLike).toString("base64");
@@ -21,4 +23,4 @@ const fromBase64 = (string: string) => Buffer.from(string, "base64");
 const fromHex = (string: string) => Buffer.from(string, "hex");
 const fromUTF8 = (string: string) => Buffer.from(string, "utf-8");
 
-export { Buffer, hash, randomBytes, secretbox, toBase64, toHex, toUTF8, fromBase64, fromHex, fromUTF8 };
+export { Buffer, hash, _randomBytes as randomBytes, secretbox, toBase64, toHex, toUTF8, fromBase64, fromHex, fromUTF8 };
