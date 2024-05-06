@@ -1,14 +1,14 @@
-import Challenger from "./src/Challenger.js";
-import IdManager from "./src/IdManager.js";
-import KeyManager from "./src/KeyManager.js";
-import VaultysId from "./src/VaultysId.js";
-import { MemoryChannel } from "./src/MemoryChannel.js";
-import { MemoryStorage } from "./src/MemoryStorage.js";
-import GameOfLifeIcon from "./src/GameOfLifeIcon.js";
-import CryptoChannel from "./src/cryptoChannel.js";
+import Challenger from "./src/Challenger";
+import IdManager from "./src/IdManager";
+import KeyManager from "./src/KeyManager";
+import VaultysId from "./src/VaultysId";
+import { MemoryChannel } from "./src/MemoryChannel";
+import { MemoryStorage } from "./src/MemoryStorage";
+import GameOfLifeIcon from "./src/GameOfLifeIcon";
+import CryptoChannel from "./src/cryptoChannel";
 
 //utils
-import * as crypto from "./src/crypto.js";
+import * as crypto from "./src/crypto";
 
 export {
   crypto, 

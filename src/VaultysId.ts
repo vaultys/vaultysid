@@ -188,6 +188,14 @@ export default class VaultysId {
     return this.type === TYPE_FIDO2;
   }
 
+  isMachine() {
+    return this.type === TYPE_MACHINE;
+  }
+
+  isPerson() {
+    return this.type === TYPE_PERSON;
+  }
+
   getOTPHmac(timelock = 1 * 3600000) {
     const otp = Math.floor(new Date().getTime() / timelock);
     return this.keyManager.getSecretHash(Buffer.from(`OTP-${otp}`)).toString("hex");

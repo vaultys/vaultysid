@@ -3,8 +3,7 @@ import { hash, randomBytes } from "./crypto";
 import { Buffer } from "buffer";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
-import pkg from '@stricahq/bip32ed25519';
-const { Bip32PublicKey, Bip32PrivateKey } = pkg;
+import { Bip32PublicKey, Bip32PrivateKey } from '@stricahq/bip32ed25519';
 
 const LEVEL_ROOT = 1;
 const LEVEL_DERIVED = 2;

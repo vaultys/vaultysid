@@ -420,35 +420,42 @@ export default class IdManager {
 
   }
 
-  // We assume the we have sent contact information to create a *SECURE* communicationChannel so he is the only one listenning to it
-  async askContact(channel: Channel) {
-    const challenger = await this.startSRP(channel, "p2p", "auth");
-    const contactId = challenger.getContactId();
-    this.store.substore("contacts").set(contactId.did, contactId);
+  saveContact(contact: VaultysId) {
+    if(contact.isMachine()) {
+      this.store.substore("registrations").set(contact.did, {
+        site: contact.did,
+        serverId: contact?.id.toString("base64"),
+        certificate: contact.certificate,
+      })
+    } else {
+      this.store.substore("contacts").set(contact.did, contact);
+    }
+    
     this.store.save();
-    return contactId;
   }
 
-  // We assume the contact has sent information to create a *SECURE* communicationChannel so he is the only one listenning to it
+  async askContact(channel: Channel) {
+    const challenger = await this.startSRP(channel, "p2p", "auth");
+    const contact = challenger.getContactId();
+    this.saveContact(contact);
+    return contact;
+  }
+
   async acceptContact(channel: Channel) {
     const challenger = await this.acceptSRP(channel, "p2p", "auth");
-    const contactId = challenger.getContactId();
-    this.store.substore("contacts").set(contactId.did, contactId);
-    this.store.save();
-    return contactId;
+    const contact = challenger.getContactId();
+    this.saveContact(contact);
+    return contact;
   }
 
   // Connecting to itself on 2 different devices, checking this is same vaultysId on both ends
   async askMyself(channel: Channel) {
     const challenger = await this.startSRP(channel, "p2p", "selfauth");
-    this.store.save();
     return challenger.isSelfAuth() && challenger.isComplete();
   }
 
   async acceptMyself(channel: Channel) {
     const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
-    // console.log(challenger)
-    this.store.save();
     return challenger.isSelfAuth() && challenger.isComplete();
   }
 }
