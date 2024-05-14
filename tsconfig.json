@@ -8,7 +8,7 @@
     "strict": true,
     "allowJs": true,
     "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
   },
   "include": [
     "index.ts",

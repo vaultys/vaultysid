@@ -21,8 +21,8 @@ importers:
         specifier: ^1.9.7
         version: 1.9.7
       '@samuelthomas2774/saltpack':
-        specifier: ^0.4.0
-        version: 0.4.0
+        specifier: ^0.3.2
+        version: 0.3.2
       '@stricahq/bip32ed25519':
         specifier: ^1.0.4
         version: 1.0.4
@@ -394,8 +394,8 @@ packages:
     resolution: {integrity: sha512-cq8o4cWH0ibXh9VGi5P20Tu9XF/0fFXl9EUinr9QfTM7a7p0oTA4iJRCQWppXR1Pg8dSM0UCItCkPwsk9qWWYA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@samuelthomas2774/saltpack@0.4.0':
-    resolution: {integrity: sha512-QmG4/hHBefj4ph5HBfK5ZMzRM0lPFLozltQjddy58XaFupPBSgydHWKwut5bVmxcyRNRqefSvRoLrcnqObYbKQ==}
+  '@samuelthomas2774/saltpack@0.3.2':
+    resolution: {integrity: sha512-uXw3t5FzcIfqUz3dADEPKwBDLuKThkS6UNnshVrbCBtyFICVLn+m/U1kMCTByc7NkCPYK+MtSr7D6aVof+mKjg==}
     engines: {node: ^12.0.0 || >=14.0.0}
 
   '@stricahq/bip32ed25519@1.0.4':
@@ -2171,7 +2171,7 @@ snapshots:
 
   '@pkgr/core@0.1.1': {}
 
-  '@samuelthomas2774/saltpack@0.4.0':
+  '@samuelthomas2774/saltpack@0.3.2':
     dependencies:
       '@msgpack/msgpack': 1.12.2
       lodash.chunk: 4.2.0

@@ -449,11 +449,13 @@ export default class IdManager {
   }
 
   // Connecting to itself on 2 different devices, checking this is same vaultysId on both ends
+  // deprecated
   async askMyself(channel: Channel) {
     const challenger = await this.startSRP(channel, "p2p", "selfauth");
     return challenger.isSelfAuth() && challenger.isComplete();
   }
-
+  
+  // deprecated
   async acceptMyself(channel: Channel) {
     const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
     return challenger.isSelfAuth() && challenger.isComplete();
