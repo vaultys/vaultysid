@@ -315,6 +315,18 @@ export default class IdManager {
     this.store.save();
   }
 
+  migrate(version: 0 | 1) {
+    if(this.vaultysId.version == version) return;
+    this.vaultysId.toVersion(version);
+    const contactstore = this.store.substore("contacts")
+    contactstore.list().forEach(did => {
+      const c = contactstore.get(did).toVersion(version);
+      contactstore.set(c.did, c);
+      contactstore.set(did, null);
+    });
+    contactstore.save();
+  }
+
   /***************************/
   /*   SIGNING PARTY HERE!   */
   /***************************/

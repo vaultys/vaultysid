@@ -2,7 +2,7 @@
   "name": "@vaultyshq/id",
   "version": "2.1.0",
   "description": "",
-  "main": "index.js",
+  "main": "index.ts",
   "type": "module",
   "scripts": {
     "build_web": "webpack --config webpack.config.web.cjs",
