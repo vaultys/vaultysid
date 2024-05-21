@@ -112,7 +112,7 @@ export default class KeyManager {
   }
 
   get id() {
-    if(this.version == 0) return this.id_v0
+    if(this.version == 0) return serializeID_v0(this);
     else return Buffer.from(
       encode({
         v: this.version,
@@ -122,11 +122,7 @@ export default class KeyManager {
       }),
     );
   }
-
-  get id_v0() {
-    return serializeID_v0(this);
-  }
-
+  
   getSecret() {
     return Buffer.from(
       encode({

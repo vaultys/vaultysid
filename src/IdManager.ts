@@ -143,6 +143,7 @@ export default class IdManager {
 
   getContact(did: string) {
     const c = this.store.substore("contacts").get(did);
+    if(!c) return null;
     if (c.type === 3) {
       return new VaultysId(
         Fido2Manager.instantiate(c.keyManager),
@@ -287,6 +288,10 @@ export default class IdManager {
           type: getSignatureType(challenge),
         };
       });
+  }
+
+  migrate(version: 0 | 1) {
+
   }
 
   async verifyChallenge(challenge: Buffer, signature: Buffer) {
@@ -438,7 +443,7 @@ export default class IdManager {
         site: contact.did,
         serverId: contact?.id.toString("base64"),
         certificate: contact.certificate,
-      })
+      });
     } else {
       this.store.substore("contacts").set(contact.did, contact);
     }
