@@ -75,10 +75,11 @@ export type Store = {
   listSubstores(): string[]
   deleteSubstore(key: string): void
   list(): string[]
+  delete(prop: string): void
   get(prop: string): any
   set(prop: string, value: any): void
   save(): void
   destroy(): void
   toString(): string
-  fromString(string: string, save?:  () => void, destroy?: () => void): Store 
+  fromString(string: string, save?:  () => void, destroy?: () => void): Store
 }
