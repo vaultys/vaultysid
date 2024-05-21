@@ -290,10 +290,6 @@ export default class IdManager {
       });
   }
 
-  migrate(version: 0 | 1) {
-
-  }
-
   async verifyChallenge(challenge: Buffer, signature: Buffer) {
     return this.vaultysId.verifyChallenge(challenge, signature, true);
   }
