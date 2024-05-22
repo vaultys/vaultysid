@@ -1,4 +1,3 @@
-"use client";
 import { hash, randomBytes } from "./crypto";
 import cbor from "cbor";
 import nacl from "tweetnacl";
@@ -11,7 +10,7 @@ const sha256 = (data: Buffer) => hash("sha256", data);
 
 declare global {
   interface Window {
-    CredentialUserInteractionRequest: () => Promise<void>
+    CredentialUserInteractionRequest: () => Promise<void>;
   }
 }
 
@@ -32,24 +31,22 @@ type ExportFIDO2Data = {
 type LookupType = "usb" | "nfc" | "ble" | "internal" | "hybrid" | "smart-card";
 
 const lookup: Record<LookupType, number> = {
-  "usb": 1,
-  "nfc": 2,
-  "ble": 4,
-  "internal": 8,
-  "hybrid": 16,
+  usb: 1,
+  nfc: 2,
+  ble: 4,
+  internal: 8,
+  hybrid: 16,
   "smart-card": 32,
 };
 
-
-
 const serializeID_v0 = (km: Fido2Manager) => {
   const version = Buffer.from([0x83, 0xa1, 0x76, km.version]);
-  const ckey = Buffer.concat([Buffer.from([0xa1,0x63, 0xc5, 0x00, km.ckey.length]),km.ckey]);
-  const cypher = Buffer.concat([Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length]),km.cypher.publicKey]);
+  const ckey = Buffer.concat([Buffer.from([0xa1, 0x63, 0xc5, 0x00, km.ckey.length]), km.ckey]);
+  const cypher = Buffer.concat([Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length]), km.cypher.publicKey]);
   return Buffer.concat([version, ckey, cypher]);
-}
+};
 
-const getTransports = (num: number) => Object.keys(lookup).filter(i => num && lookup[i as LookupType]);
+const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]);
 const fromTransports = (transports: string[]): number => transports.reduceRight((memo, i) => memo + (lookup[i as LookupType] ? lookup[i as LookupType] : 0), 0);
 
 const getAuthTypeFromCkey = (ckey: Buffer) => {
@@ -79,7 +76,6 @@ export default class Fido2Manager extends KeyManager {
     this.level = 1; // ROOT, no Proof Management
     this.encType = "X25519KeyAgreementKey2019";
   }
-
 
   get transports(): AuthenticatorTransport[] {
     return getTransports(this._transports) as AuthenticatorTransport[];
@@ -113,13 +109,15 @@ export default class Fido2Manager extends KeyManager {
   }
 
   get id() {
-    if(this.version == 0) return serializeID_v0(this);
-    else return Buffer.from(encode({
-        v: this.version,
-        c: this.ckey,
-        e: this.cypher.publicKey,
-      }),
-    );
+    if (this.version == 0) return serializeID_v0(this);
+    else
+      return Buffer.from(
+        encode({
+          v: this.version,
+          c: this.ckey,
+          e: this.cypher.publicKey,
+        }),
+      );
   }
 
   get id_v0() {
@@ -223,7 +221,7 @@ export default class Fido2Manager extends KeyManager {
       signature: decoded.s,
       clientDataJSON: decoded.c,
       authenticatorData: decoded.a,
-      userHandle: Buffer.from([])
+      userHandle: Buffer.from([]),
     };
     const challenge = hash("sha256", data).toString("base64");
     const extractedChallenge = SoftCredentials.extractChallenge(response.clientDataJSON as Buffer);
