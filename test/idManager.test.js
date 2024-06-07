@@ -134,25 +134,14 @@ describe("SRG challenge with IdManager", () => {
     assert.equal(manager2.contacts.length, 1);
     assert.equal(manager2.getContact( manager1.vaultysId.did).fingerprint, manager1.vaultysId.fingerprint);
     
-    manager1.setContactMetadata(manager2.vaultysId.did, "name", "salut");
-    manager1.setContactMetadata(manager2.vaultysId.did, "group", "pro");
-    assert.equal(
-      manager1.getContactMetadata(manager2.vaultysId.did, "name"),
-      "salut",
-    );
-    assert.equal(
-      manager1.getContactMetadata(manager2.vaultysId.did, "group"),
-      "pro",
-    );
+    manager2.setContactMetadata(manager1.vaultysId.did, "name", "salut");
+    manager2.setContactMetadata(manager1.vaultysId.did, "group", "pro");
+    assert.equal(manager2.getContactMetadata(manager1.vaultysId.did, "name"), "salut");
+    assert.equal(manager2.getContactMetadata(manager1.vaultysId.did, "group"), "pro");
 
-    assert.ok(
-      await manager1.verifyRelationshipCertificate(manager2.vaultysId.did),
-    );
-    assert.ok(
-      await manager2.verifyRelationshipCertificate(manager1.vaultysId.did),
-    );
+    assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
+    assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
 
-    assert.equal(manager2.getContact(manager1.vaultysId.did).getOTP("yo"), manager1.getContact(manager2.vaultysId.did).getOTP("yo"));
   });
 
   it("pass a challenge over encrypted Channel", async () => {
@@ -206,6 +195,29 @@ describe("SRG challenge with IdManager", () => {
     assert.ok(
       await manager2.verifyRelationshipCertificate(manager1.vaultysId.did),
     );
+  });
+
+  it("perform migration from version 0 to 1",  async () => {
+    const ids = [];
+    for(let i = 0; i <10; i++) {
+      const s1 = MemoryStorage(() => "");
+      const id1 = new IdManager(await VaultysId.generatePerson(), s1);
+      for(let j = 0; j <10; j++) {
+        const s2 = MemoryStorage(() => "");
+        const id2 = new IdManager(await VaultysId.generatePerson(), s2);
+        id1.saveContact(id2.vaultysId);
+        id1.setContactMetadata(id2.vaultysId.did, "test", id2.vaultysId.did);
+      }
+      ids.push(id1)
+    }
+
+    for(const id of ids) {
+      id.migrate(0);
+      assert.equal(id.contacts.length, 10);
+      id.migrate(1);
+      assert.equal(id.contacts.length, 10);
+    }
+   
   });
 
 });

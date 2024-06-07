@@ -186,7 +186,7 @@ export default class IdManager {
   }
 
   async verifyRelationshipCertificate(did: string) {
-    const c = this.store.substore("contacts").get(did);
+    const c = this.store.substore("contacts").get(did) ||  this.store.substore("registrations").get(did);
     return Challenger.verifyCertificate(c.certificate);
   }
 
@@ -291,6 +291,18 @@ export default class IdManager {
   }
 
   migrate(version: 0 | 1) {
+    if(version == this.vaultysId.version) return;
+    else {
+      const s = this.store.substore("contacts");
+      for(const did of s.list()) {
+        const contact = this.getContact(did);
+        if(contact) {
+          const newContact = contact?.toVersion(version) as any;
+          s.set(newContact.did, {...contact, ...newContact});
+          s.delete(did);
+        }
+      }
+    }
 
   }
 
@@ -426,6 +438,7 @@ export default class IdManager {
   }
 
   saveContact(contact: VaultysId) {
+    contact.toVersion(this.vaultysId.version)
     if(contact.isMachine()) {
       this.store.substore("registrations").set(contact.did, {
         site: contact.did,
@@ -435,7 +448,6 @@ export default class IdManager {
     } else {
       this.store.substore("contacts").set(contact.did, contact);
     }
-    
     this.store.save();
   }
 
