@@ -332,9 +332,9 @@ export default class IdManager {
     });
   }
 
-  async startSRP(channel: Channel, protocol: string, service: string) {
+  async startSRP(channel: Channel, protocol: string, service: string, metadata: any = {}) {
     const challenger = new Challenger(this.vaultysId.toVersion(0));
-    challenger.createChallenge(protocol, service, 0);
+    challenger.createChallenge(protocol, service, 0, metadata);
     const cert = challenger.getCertificate();
     if (!cert) {
       channel.close();
@@ -428,14 +428,14 @@ export default class IdManager {
     this.store.save();
   }
 
-  async askContact(channel: Channel) {
+  async askContact(channel: Channel, metadata: any = {}) {
     const challenger = await this.startSRP(channel, "p2p", "auth");
     const contact = challenger.getContactId();
     this.saveContact(contact);
     return contact;
   }
 
-  async acceptContact(channel: Channel) {
+  async acceptContact(channel: Channel, metadata: any = {}) {
     const challenger = await this.acceptSRP(channel, "p2p", "auth");
     const contact = challenger.getContactId();
     this.saveContact(contact);

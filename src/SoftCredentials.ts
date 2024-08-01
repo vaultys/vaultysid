@@ -44,7 +44,7 @@ const COSECRV = {
   3: p521,
 };
 
-type HashOptions = "-257" | "-258" | "-259" | "-65535" | "-39" | "-38" | "-37" | "-260" | "-261" | "-7" | "-36"
+type HashOptions = "-257" | "-258" | "-259" | "-65535" | "-39" | "-38" | "-37" | "-260" | "-261" | "-7" | "-36";
 
 const COSEALGHASH = {
   "-257": "SHA-256",
@@ -264,7 +264,7 @@ export default class SoftCredentials {
   }
 
   // credentials request payload
-  static createRequest(alg: string) {
+  static createRequest(alg: number) {
     let challenge = Buffer.from(randomBytes(32).toString("base64"));
     return {
       publicKey: {
@@ -274,13 +274,13 @@ export default class SoftCredentials {
           id: "Vaultys ID",
         },
         user: {
-          id: "Vaultys Wallet ID",
+          id: Buffer.from("Vaultys Wallet ID", "utf8"),
           name: "Vaultys Wallet ID",
           displayName: "Vaultys Wallet ID",
         },
         pubKeyCredParams: [
           {
-            type: "public-key",
+            type: "public-key" as "public-key",
             alg,
           },
         ],
@@ -298,7 +298,7 @@ export default class SoftCredentials {
     }
   }
 
-  static async create({ publicKey }: { publicKey: PublicKeyCredentialCreationOptions }, origin = "test") : Promise<PublicKeyCredential> {
+  static async create({ publicKey }: { publicKey: PublicKeyCredentialCreationOptions }, origin = "test"): Promise<PublicKeyCredential> {
     const credential = new SoftCredentials();
     credential.options = publicKey;
     credential.rpId = publicKey.rp.id!;
@@ -357,18 +357,20 @@ export default class SoftCredentials {
       rawId: credential.rawId,
       authenticatorAttachment: null,
       type: "public-key",
-      getClientExtensionResults: () => { return {} },
+      getClientExtensionResults: () => {
+        return {};
+      },
       response: {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         attestationObject: cbor.encode(attestationObject),
         getTransports: () => ["usb", "hybrid"],
         getAuthenticatorData: () => attestationObject.authData,
         getPublicKey: () => coseKey,
-        getPublicKeyAlgorithm: () => -7
+        getPublicKeyAlgorithm: () => -7,
       } as AuthenticatorAttestationResponse,
     };
 
-    return pkCredentials
+    return pkCredentials;
   }
 
   static simpleVerify(COSEPublicKey: Buffer, response: AuthenticatorAssertionResponse, userVerification = false) {
@@ -400,7 +402,7 @@ export default class SoftCredentials {
   }
 
   static getCOSEPublicKey(attestation: PublicKeyCredential) {
-    const response = attestation.response as AuthenticatorAttestationResponse
+    const response = attestation.response as AuthenticatorAttestationResponse;
     const ato = cbor.decode(response.attestationObject);
     return parseAuthData(ato.authData).COSEPublicKey;
   }
@@ -412,7 +414,7 @@ export default class SoftCredentials {
   static verify(attestation: PublicKeyCredential, assertion: PublicKeyCredential, userVerifiation = false) {
     //if (assertion.id !== attestation.id) return false;
     const hash = myhash("sha256", Buffer.from(assertion.response.clientDataJSON));
-    const ass = assertion.response  as AuthenticatorAssertionResponse;
+    const ass = assertion.response as AuthenticatorAssertionResponse;
     const att = attestation.response as AuthenticatorAttestationResponse;
     let data = Buffer.concat([Buffer.from(ass.authenticatorData), hash]);
     const ato = cbor.decode(att.attestationObject);
@@ -420,7 +422,7 @@ export default class SoftCredentials {
     // check if user has actually touched the device
     if (!authData.flags.up) return false;
     // check if the user has entered his PIN code or used biometric sensor
-    if (userVerifiation && !authData.flags.uv || !authData.COSEPublicKey) return false;
+    if ((userVerifiation && !authData.flags.uv) || !authData.COSEPublicKey) return false;
     const ckey = cbor.decode(authData.COSEPublicKey);
     if (ckey.get(3) == -7) {
       data = myhash("sha256", data);
@@ -448,8 +450,8 @@ export default class SoftCredentials {
   }
 
   static async get({ publicKey }: { publicKey: PublicKeyCredentialRequestOptions }, origin = "test"): Promise<PublicKeyCredential> {
-    if (!publicKey.allowCredentials) throw new Error()
-    const id = Buffer.from(publicKey.allowCredentials[0].id as ArrayBuffer).toString("base64")
+    if (!publicKey.allowCredentials) throw new Error();
+    const id = Buffer.from(publicKey.allowCredentials[0].id as ArrayBuffer).toString("base64");
     let credential = credentials[id];
     credential.signCount += 1;
     // prepare signature
@@ -477,15 +479,17 @@ export default class SoftCredentials {
       rawId: Buffer.from(id, "base64"),
       type: "public-key",
       authenticatorAttachment: null,
-      getClientExtensionResults: () => {return {}},
+      getClientExtensionResults: () => {
+        return {};
+      },
       response: {
         authenticatorData,
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         signature: signature,
         userHandle: credential.userHandle,
-      } as AuthenticatorAssertionResponse
+      } as AuthenticatorAssertionResponse,
     };
 
-    return pkCredentials
+    return pkCredentials;
   }
 }

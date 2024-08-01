@@ -215,7 +215,7 @@ export default class Fido2Manager extends KeyManager {
     return Buffer.from(encode(output));
   }
 
-  verify(data: Buffer, signature: Buffer, userVerification: boolean) {
+  verify(data: Buffer, signature: Buffer, userVerification: boolean = false) {
     const decoded = decode(signature) as Fido2Signature;
     const response: AuthenticatorAssertionResponse = {
       signature: decoded.s,

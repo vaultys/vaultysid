@@ -5,15 +5,7 @@ import { MemoryStorage } from "../src/MemoryStorage";
 import SoftCredentials from "../src/SoftCredentials";
 import VaultysId from "../src/VaultysId";
 import assert from "assert";
-
-// nodejs polyfill
-global.navigator = {
-  credentials: SoftCredentials,
-};
-global.atob = (str) => Buffer.from(str, "base64").toString("latin1");
-global.btoa = (str) => Buffer.from(str, "latin1").toString("base64");
-
-global.CredentialUserInteractionRequest = () => global.CredentialUserInteractionRequested++;
+import "./utils";
 
 const generateWot = async (max = 10) => {
   const result = [];
@@ -26,7 +18,7 @@ const generateWot = async (max = 10) => {
   return result;
 };
 
-const testCertificate = (rogueCert) => {
+const testCertificate = (rogueCert: Buffer) => {
   try {
     const result = Challenger.deserializeCertificate(rogueCert);
     return result;
@@ -57,6 +49,7 @@ describe("VaultysId Migration", () => {
     await Promise.all(
       wot.map(async (jeanjacques) => {
         const channel = MemoryChannel.createBidirectionnal();
+        if (!channel.otherend) assert.fail();
         const contacts = await Promise.all([jeanjacques.askContact(channel), bob.acceptContact(channel.otherend)]);
       }),
     );
@@ -106,10 +99,12 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
 
   it("Perform Protocol with Fido2Manager", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-ignore
     const vaultysId1 = (await VaultysId.fido2FromAttestation(attestation1)).toVersion(0);
     const challenger1 = new Challenger(vaultysId1);
 
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
+    // @ts-ignore
     const vaultysId2 = (await VaultysId.fido2FromAttestation(attestation2)).toVersion(0);
     const challenger2 = new Challenger(vaultysId2);
 
@@ -131,6 +126,7 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
 
   it("Fail for different vaultysId versions", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1.toVersion(0));
     const vaultysId2 = await VaultysId.generatePerson();
@@ -143,8 +139,8 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
 
     try {
       await challenger2.update(challenger1.getCertificate());
-    } catch (err) {
-      assert(err.message === "The challenge is in an expected state. Received state = '-2', expected state = '2'");
+    } catch (err: any) {
+      assert(err?.message === "The challenge is in an expected state. Received state = '-2', expected state = '2'");
       return;
     }
     assert.fail("The protocol should have failed");
@@ -173,10 +169,12 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 
   it("Perform Protocol with Fido2Manager", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1);
 
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
+    // @ts-ignore
     const vaultysId2 = await VaultysId.fido2FromAttestation(attestation2);
     const challenger2 = new Challenger(vaultysId2);
 
@@ -198,6 +196,7 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 
   it("Succeed for different vaultysId versions", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1.toVersion(0));
     const vaultysId2 = await VaultysId.generatePerson();

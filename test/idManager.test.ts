@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import IdManager from "../src/IdManager";
 import VaultysId from "../src/VaultysId";
 import { MemoryChannel } from "../src/MemoryChannel";
-import { MemoryStorage }  from "../src/MemoryStorage";
+import { MemoryStorage } from "../src/MemoryStorage";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
@@ -43,13 +43,13 @@ describe("IdManager", () => {
 
   it("serder to public Idmanager as hex string", async () => {
     const id1 = await VaultysId.generateMachine();
-    const id2 = VaultysId.fromId(id1.id.toString('hex'));
+    const id2 = VaultysId.fromId(id1.id.toString("hex"));
     assert.equal(id2.fingerprint, id1.fingerprint);
   });
 
   it("serder to public Idmanager as base64 string", async () => {
     const id1 = await VaultysId.generateMachine();
-    const id2 = VaultysId.fromId(id1.id.toString('base64'), null, "base64");
+    const id2 = VaultysId.fromId(id1.id.toString("base64"), undefined, "base64");
     assert.equal(id2.fingerprint, id1.fingerprint);
     assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
     assert.deepStrictEqual(id2.didDocument, id1.didDocument);
@@ -59,11 +59,12 @@ describe("IdManager", () => {
     const s = MemoryStorage(() => "");
     const manager = new IdManager(await VaultysId.generatePerson(), s);
     const signature = await manager.signChallenge(manager.vaultysId.id);
+    if (signature == null) assert.fail();
     const signatures = manager.getSignatures();
     assert.equal(signatures.length, 1);
     assert.equal(signatures[0].payload.challenge.toString("hex"), manager.vaultysId.id.toString("hex"));
     assert.equal(signatures[0].payload.signature.toString("hex"), signature.toString("hex"));
-    assert.equal(signatures[0].type, 'UNKNOWN');
+    assert.equal(signatures[0].type, "UNKNOWN");
   });
 
   it("sign random document hash and log it in the store", async () => {
@@ -73,12 +74,13 @@ describe("IdManager", () => {
     const payload = await manager.signFile(fileHashMock);
     const signatures = manager.getSignatures();
     assert.equal(signatures.length, 1);
-    const challenge = new URL(signatures[0].challenge)
-    assert.equal(challenge.searchParams.get('hash'), fileHashMock.toString("hex"));
+    const challenge = new URL(signatures[0].challenge);
+    assert.equal(challenge.searchParams.get("hash"), fileHashMock.toString("hex"));
     assert.ok(manager.verifyFile(signatures[0].payload.challenge.toString("hex"), signatures[0].payload.signature));
+    if (payload.signature == null) assert.fail();
     assert.equal(signatures[0].payload.signature.toString("hex"), payload.signature.toString("hex"));
     //console.log(signatures[0]);
-    assert.equal(signatures[0].type, 'DOCUMENT');
+    assert.equal(signatures[0].type, "DOCUMENT");
   });
 
   // it("sign login and log it in the store", async () => {
@@ -100,6 +102,7 @@ describe("IdManager", () => {
 describe("SRG challenge with IdManager", () => {
   it("pass a challenge", async () => {
     const channel = MemoryChannel.createBidirectionnal();
+    if (!channel.otherend) assert.fail();
     const s1 = MemoryStorage(() => "");
     const s2 = MemoryStorage(() => "");
     const manager1 = new IdManager(await VaultysId.generatePerson(), s1);
@@ -107,33 +110,30 @@ describe("SRG challenge with IdManager", () => {
     const metadata1 = {
       name: "a",
       email: "b",
-      phone: "c"
+      phone: "c",
     };
     const metadata2 = {
       name: "d",
       email: "e",
-      phone: "f"
+      phone: "f",
     };
 
-    const contacts = await Promise.all([
-      manager1.askContact(channel, metadata1),
-      manager2.acceptContact(channel.otherend, metadata2),
-    ]);
+    const contacts = await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2)]);
 
     assert.equal(contacts[0].did, manager2.vaultysId.did);
     assert.equal(contacts[1].did, manager1.vaultysId.did);
 
     // console.log(s2.substore("contacts"))
-    
+
     // assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
     // assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);
 
-    assert.equal(Object.values(s1.substore("wot")._raw).length, 1);
-    assert.equal(Object.values(s2.substore("wot")._raw).length, 1);
-    
+    assert.equal(s1.substore("wot").list().length, 1);
+    assert.equal(s2.substore("wot").list().length, 1);
+
     assert.equal(manager2.contacts.length, 1);
-    assert.equal(manager2.getContact( manager1.vaultysId.did).fingerprint, manager1.vaultysId.fingerprint);
-    
+    assert.equal(manager2.getContact(manager1.vaultysId.did)?.fingerprint, manager1.vaultysId.fingerprint);
+
     manager2.setContactMetadata(manager1.vaultysId.did, "name", "salut");
     manager2.setContactMetadata(manager1.vaultysId.did, "group", "pro");
     assert.equal(manager2.getContactMetadata(manager1.vaultysId.did, "name"), "salut");
@@ -141,29 +141,25 @@ describe("SRG challenge with IdManager", () => {
 
     assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
     assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
-
   });
 
   it("pass a challenge over encrypted Channel", async () => {
     const channel = MemoryChannel.createBidirectionnal();
-
+    if (!channel.otherend) assert.fail();
     const s1 = MemoryStorage(() => "");
     const s2 = MemoryStorage(() => "");
     const manager1 = new IdManager(await VaultysId.generatePerson(), s1);
     const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
     const metadata1 = {
       name: "a",
-      email: "b"
+      email: "b",
     };
     const metadata2 = {
       name: "d",
-      phone: "f"
+      phone: "f",
     };
 
-    const contacts = await Promise.all([
-      manager1.askContact(channel, metadata1),
-      manager2.acceptContact(channel.otherend, metadata2),
-    ]);
+    const contacts = await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2)]);
 
     assert.equal(contacts[0].did, manager2.vaultysId.did);
     assert.equal(contacts[1].did, manager1.vaultysId.did);
@@ -171,8 +167,8 @@ describe("SRG challenge with IdManager", () => {
     // assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
     // assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);
 
-    assert.equal(Object.values(s1.substore("wot")._raw).length, 1);
-    assert.equal(Object.values(s2.substore("wot")._raw).length, 1);
+    assert.equal(s1.substore("wot").list().length, 1);
+    assert.equal(s2.substore("wot").list().length, 1);
 
     manager1.setContactMetadata(manager2.vaultysId.did, "name", "salut");
     manager1.setContactMetadata(manager2.vaultysId.did, "group", "pro");
@@ -189,35 +185,29 @@ describe("SRG challenge with IdManager", () => {
     //   }
     // );
 
-    assert.ok(
-      await manager1.verifyRelationshipCertificate(manager2.vaultysId.did),
-    );
-    assert.ok(
-      await manager2.verifyRelationshipCertificate(manager1.vaultysId.did),
-    );
+    assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
+    assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
   });
 
-  it("perform migration from version 0 to 1",  async () => {
+  it("perform migration from version 0 to 1", async () => {
     const ids = [];
-    for(let i = 0; i <10; i++) {
+    for (let i = 0; i < 10; i++) {
       const s1 = MemoryStorage(() => "");
       const id1 = new IdManager(await VaultysId.generatePerson(), s1);
-      for(let j = 0; j <10; j++) {
+      for (let j = 0; j < 10; j++) {
         const s2 = MemoryStorage(() => "");
         const id2 = new IdManager(await VaultysId.generatePerson(), s2);
         id1.saveContact(id2.vaultysId);
         id1.setContactMetadata(id2.vaultysId.did, "test", id2.vaultysId.did);
       }
-      ids.push(id1)
+      ids.push(id1);
     }
 
-    for(const id of ids) {
+    for (const id of ids) {
       id.migrate(0);
       assert.equal(id.contacts.length, 10);
       id.migrate(1);
       assert.equal(id.contacts.length, 10);
     }
-   
   });
-
 });

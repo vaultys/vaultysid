@@ -9,10 +9,8 @@ describe("Saltpack", () => {
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id.toString("hex")];
     const encrypted = await alice.encrypt(plaintext, recipients);
-    assert.equal(
-      encrypted.substring(0, 33),
-      "BEGIN SALTPACK ENCRYPTED MESSAGE.",
-    );
+    if (!encrypted) assert.fail();
+    assert.equal(encrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
     const decryptedBob = await bob.decrypt(encrypted, alice.id);
     const decryptedEve = await eve.decrypt(encrypted);
     const decryptedAlice = await alice.decrypt(encrypted, alice.id);

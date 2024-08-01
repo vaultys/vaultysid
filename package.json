@@ -8,7 +8,7 @@
     "build_web": "webpack --config webpack.config.web.cjs",
     "build": "rm -fr dist && tsc --build",
     "prettier": "find src -name \"*.ts\" | xargs prettier --write",
-    "test": "mocha"
+    "test": "mocha ./**/*.test.[jt]s"
   },
   "keywords": [],
   "author": "",
@@ -49,7 +49,7 @@
     "@noble/hashes": "^1.4.0",
     "@peculiar/x509": "^1.9.7",
     "@samuelthomas2774/saltpack": "^0.3.2",
-    "@stricahq/bip32ed25519": "^1.0.4",
+    "@stricahq/bip32ed25519": "^1.1.0",
     "buffer": "^6.0.3",
     "cbor": "^9.0.2",
     "tweetnacl": "^1.0.3"
