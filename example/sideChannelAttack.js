@@ -1,32 +1,32 @@
-import IdManager from "../src/IdManager.js"
+import IdManager from "../src/IdManager.js";
 import { MemoryChannel } from "../src/MemoryChannel.js";
 import { MemoryStorage } from "../src/MemoryStorage.js";
-import VaultysId from "../src/VaultysId.js"
+import VaultysId from "../src/VaultysId.js";
 import cryptoChannel, { decrypt, encrypt } from "../src/cryptoChannel.js";
-import msgpack from "@ygoe/msgpack";
+import msgpack from "@msgpack/msgpack";
 
 const createIdManager = async () => {
   const vaultysId = await VaultysId.generateMachine();
   const storage = MemoryStorage();
-  return new IdManager(vaultysId, storage)
-}
+  return new IdManager(vaultysId, storage);
+};
 
 const deserializeData = (data, key) => {
-  const decrypted = decrypt(data, key)
+  const decrypted = decrypt(data, key);
   const unpacked = msgpack.decode(decrypted);
   return unpacked;
-}
+};
 
 const serializeData = (data, key) => {
   const packed = msgpack.encode(data);
   const encrypted = encrypt(packed, key);
   return encrypted;
-}
+};
 
 const logger = (prefix, key) => (data) => {
   const unpacked = deserializeData(data, key);
   console.log(prefix, unpacked);
-}
+};
 
 // TODO: Perform some sidechannel attack here.
 const injector = (key) => (data) => {
@@ -43,7 +43,7 @@ const injector = (key) => (data) => {
   //   unpacked.pk2 = temp;
   // }
   return serializeData(unpacked, key);
-}
+};
 
 const start = async () => {
   // create 2 ids that will communicate and exchange keys
@@ -57,14 +57,9 @@ const start = async () => {
   channel.setLogger(logger("id1 -> ", key));
   channel.otherend.setLogger(logger("id2 -> ", key));
 
-
   channel.otherend.setInjector(injector(key));
 
-  const contacts = await Promise.all([
-    id1.askContact(channel),
-    id2.acceptContact(channel.otherend),
-  ]);
-
-}
+  const contacts = await Promise.all([id1.askContact(channel), id2.acceptContact(channel.otherend)]);
+};
 
 start();

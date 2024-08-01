@@ -3,7 +3,8 @@ import { hash, randomBytes } from "./crypto";
 import { Buffer } from "buffer";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
-import { Bip32PublicKey, Bip32PrivateKey } from '@stricahq/bip32ed25519';
+import pkg from "@stricahq/bip32ed25519";
+const { Bip32PublicKey, Bip32PrivateKey } = pkg;
 
 const LEVEL_ROOT = 1;
 const LEVEL_DERIVED = 2;
@@ -12,13 +13,12 @@ const sha512 = (data: Buffer) => hash("sha512", data);
 const sha256 = (data: Buffer) => hash("sha256", data);
 
 const serializeID_v0 = (km: KeyManager) => {
-  const version = Buffer.from([0x84, 0xa1, 0x76, 0])
-  const proof = Buffer.from([0xa1, 0x70, 0xc5, 0x00, km.proof.length,...km.proof])
-  const sign = Buffer.from([0xa1, 0x78, 0xc5, 0x00, km.signer.publicKey.length,...km.signer.publicKey])
-  const cypher = Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length,...km.cypher.publicKey])
+  const version = Buffer.from([0x84, 0xa1, 0x76, 0]);
+  const proof = Buffer.from([0xa1, 0x70, 0xc5, 0x00, km.proof.length, ...km.proof]);
+  const sign = Buffer.from([0xa1, 0x78, 0xc5, 0x00, km.signer.publicKey.length, ...km.signer.publicKey]);
+  const cypher = Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length, ...km.cypher.publicKey]);
   return Buffer.concat([version, proof, sign, cypher]);
-}
-
+};
 
 export const publicDerivePath = (node: InstanceType<typeof Bip32PublicKey>, path: string) => {
   let result = node;
@@ -46,12 +46,11 @@ export type KeyPair = {
 };
 
 type HISCP = {
-  newId: Buffer
-  proofKey: Buffer
-  timestamp: number
-  signature: Buffer
+  newId: Buffer;
+  proofKey: Buffer;
+  timestamp: number;
+  signature: Buffer;
 };
-
 
 type DataExport = {
   v: 0; // version
@@ -112,17 +111,18 @@ export default class KeyManager {
   }
 
   get id() {
-    if(this.version == 0) return serializeID_v0(this);
-    else return Buffer.from(
-      encode({
-        v: this.version,
-        p: this.proof,
-        x: this.signer.publicKey,
-        e: this.cypher.publicKey,
-      }),
-    );
+    if (this.version == 0) return serializeID_v0(this);
+    else
+      return Buffer.from(
+        encode({
+          v: this.version,
+          p: this.proof,
+          x: this.signer.publicKey,
+          e: this.cypher.publicKey,
+        }),
+      );
   }
-  
+
   getSecret() {
     return Buffer.from(
       encode({
@@ -212,7 +212,6 @@ export default class KeyManager {
   //     } else return null;
   //   } else return null;
   // }
-
 
   async createSwapingCertificate() {
     if (this.level === LEVEL_ROOT) {
