@@ -45,6 +45,32 @@ const injector = (key) => (data) => {
   return serializeData(unpacked, key);
 };
 
+const unpacker = (key) => (data, inject) => {
+  const unpacked = deserializeData(data, key);
+  inject(unpacked);
+  return serializeData(unpacked, key);
+};
+
+const injectors = (key) => [
+  (data) => unpacker(key)(data, (unpacked) => unpacked.nonce[0]++),
+  (data) =>
+    unpacker(key)(data, (unpacked) => {
+      unpacked.timestamp++;
+    }),
+  (data) =>
+    unpacker(key)(data, (unpacked) => {
+      unpacked.service = "hack";
+    }),
+  (data) =>
+    unpacker(key)(data, (unpacked) => {
+      unpacked.protocol = "p2pp";
+    }),
+  // (data) =>
+  //   unpacker(key)(data, async (unpacked) => {
+  //     await new Promise((resolve) => setTimeout(resolve, 1000));
+  //   }),
+];
+
 const start = async () => {
   // create 2 ids that will communicate and exchange keys
   const id1 = await createIdManager();
@@ -52,14 +78,18 @@ const start = async () => {
 
   // create an encrypted channel using key
   const key = cryptoChannel.generateKey();
-  const channel = MemoryChannel.createEncryptedBidirectionnal(key);
 
-  channel.setLogger(logger("id1 -> ", key));
-  channel.otherend.setLogger(logger("id2 -> ", key));
+  //channel.setLogger(logger("id1 -> ", key));
+  //channel.otherend.setLogger(logger("id2 -> ", key));
 
-  channel.otherend.setInjector(injector(key));
-
-  const contacts = await Promise.all([id1.askContact(channel), id2.acceptContact(channel.otherend)]);
+  const results = await Promise.allSettled(
+    injectors(key).map(async (injector) => {
+      const channel = MemoryChannel.createEncryptedBidirectionnal(key);
+      channel.otherend.setInjector(injector);
+      await Promise.all([id1.askContact(channel), id2.acceptContact(channel.otherend)]);
+    }),
+  );
+  console.log(results.find((result) => result.status !== "rejected") ? "Attack succesful" : "Attack failed");
 };
 
 start();

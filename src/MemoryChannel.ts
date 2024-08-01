@@ -16,7 +16,7 @@ export class MemoryChannel {
   otherend?: MemoryChannel;
   resolver?: (data: Buffer) => void;
   logger?: (data: Buffer) => void;
-  injector?: (data: Buffer) => Buffer;
+  injector?: (data: Buffer) => Promise<Buffer> | Buffer;
 
   setChannel(chan: MemoryChannel, name?: string) {
     this.name = name;
@@ -67,7 +67,7 @@ export class MemoryChannel {
     }
     if (this.logger) this.logger(data);
     if (this.injector) {
-      this.otherend?.resolver(this.injector(data));
+      this.otherend?.resolver(await this.injector(data));
     } else {
       this.otherend?.resolver(data);
     }

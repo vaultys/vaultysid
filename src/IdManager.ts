@@ -18,16 +18,15 @@ const getSignatureType = (challenge: string) => {
 };
 
 export default class IdManager {
-  vaultysId: VaultysId
-  store: Store
+  vaultysId: VaultysId;
+  store: Store;
   constructor(vaultysId: VaultysId, store: Store) {
     this.vaultysId = vaultysId;
     this.store = store;
     if (!this.store.get("metadata")) {
       this.store.set("metadata", {});
     }
-    if (this.vaultysId.keyManager.entropy)
-      this.store.set("entropy", this.vaultysId.keyManager.entropy);
+    if (this.vaultysId.keyManager.entropy) this.store.set("entropy", this.vaultysId.keyManager.entropy);
     else this.store.set("secret", this.vaultysId.getSecret());
     this.store.save();
   }
@@ -58,7 +57,7 @@ export default class IdManager {
     // TODO: check if same profile ?
     // TODO: revamp contact metadata and sync
     const master_store = master ? otherStore : this.store;
-    const slave_store = master ? this.store : otherStore
+    const slave_store = master ? this.store : otherStore;
     this.store.set("metadata", { ...slave_store.get("metadata"), ...master_store.get("metadata") });
     ["signatures", "wot"].forEach((table) => {
       let other = otherStore.substore(table);
@@ -96,7 +95,7 @@ export default class IdManager {
     await window.CredentialUserInteractionRequest();
     const challenge = randomBytes(32);
     const keyManager = this.vaultysId.keyManager as Fido2Manager;
-    const creds = await navigator.credentials.get({
+    const creds = (await navigator.credentials.get({
       publicKey: {
         challenge,
         allowCredentials: [
@@ -108,7 +107,7 @@ export default class IdManager {
         ],
         userVerification: "discouraged",
       },
-    }) as PublicKeyCredential;
+    })) as PublicKeyCredential;
     if (creds == null) return false;
     const response = creds.response as AuthenticatorAssertionResponse;
     const extractedChallenge = SoftCredentials.extractChallenge(Buffer.from(response.clientDataJSON));
@@ -126,36 +125,20 @@ export default class IdManager {
       .map((c) => s.get(c))
       .map((vid) => {
         if (vid.type === 3) {
-          return new VaultysId(
-            Fido2Manager.instantiate(vid.keyManager),
-            vid.certificate,
-            vid.type,
-          );
+          return new VaultysId(Fido2Manager.instantiate(vid.keyManager), vid.certificate, vid.type);
         } else {
-          return new VaultysId(
-            KeyManager.instantiate(vid.keyManager),
-            vid.certificate,
-            vid.type,
-          );
+          return new VaultysId(KeyManager.instantiate(vid.keyManager), vid.certificate, vid.type);
         }
       });
   }
 
   getContact(did: string) {
     const c = this.store.substore("contacts").get(did);
-    if(!c) return null;
+    if (!c) return null;
     if (c.type === 3) {
-      return new VaultysId(
-        Fido2Manager.instantiate(c.keyManager),
-        c.certificate,
-        c.type,
-      );
+      return new VaultysId(Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
     } else {
-      return new VaultysId(
-        KeyManager.instantiate(c.keyManager),
-        c.certificate,
-        c.type,
-      );
+      return new VaultysId(KeyManager.instantiate(c.keyManager), c.certificate, c.type);
     }
   }
 
@@ -186,7 +169,7 @@ export default class IdManager {
   }
 
   async verifyRelationshipCertificate(did: string) {
-    const c = this.store.substore("contacts").get(did) ||  this.store.substore("registrations").get(did);
+    const c = this.store.substore("contacts").get(did) || this.store.substore("registrations").get(did);
     return Challenger.verifyCertificate(c.certificate);
   }
 
@@ -200,7 +183,7 @@ export default class IdManager {
 
   get displayName() {
     const metadata = this.store.get("metadata");
-    return metadata.firstname ? (metadata.firstname + " " + (metadata.name ?? "")) : (metadata.name ?? ("Anonymous " + this.vaultysId.fingerprint?.slice(-4)));
+    return metadata.firstname ? metadata.firstname + " " + (metadata.name ?? "") : metadata.name ?? "Anonymous " + this.vaultysId.fingerprint?.slice(-4);
   }
 
   set phone(n) {
@@ -246,10 +229,10 @@ export default class IdManager {
   }
 
   async signFile(hash: Buffer) {
-    const challenge = Buffer.from(`vaultys://docsign?hash=${hash.toString("hex")}&timestamp=${Date.now()}`, "utf-8")
+    const challenge = Buffer.from(`vaultys://docsign?hash=${hash.toString("hex")}&timestamp=${Date.now()}`, "utf-8");
     const payload = {
       challenge,
-      signature: await this.vaultysId.signChallenge(challenge)
+      signature: await this.vaultysId.signChallenge(challenge),
     };
     this.store.substore("signatures").set(Date.now() + "", payload);
     this.store.save();
@@ -262,11 +245,7 @@ export default class IdManager {
       return false;
     }
     const url = new URL(data);
-    if (
-      url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 &&
-      url.searchParams.get("hash") &&
-      url.searchParams.get("timestamp")
-    ) {
+    if (url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 && url.searchParams.get("hash") && url.searchParams.get("timestamp")) {
       return await this.vaultysId.verifyChallenge(challenge, signature, userVerifiation);
     }
 
@@ -291,19 +270,19 @@ export default class IdManager {
   }
 
   migrate(version: 0 | 1) {
-    if(version == this.vaultysId.version) return;
+    if (version == this.vaultysId.version) return;
     else {
+      this.vaultysId.toVersion(version);
       const s = this.store.substore("contacts");
-      for(const did of s.list()) {
+      for (const did of s.list()) {
         const contact = this.getContact(did);
-        if(contact) {
+        if (contact) {
           const newContact = contact?.toVersion(version) as any;
-          s.set(newContact.did, {...contact, ...newContact});
+          s.set(newContact.did, { ...contact, ...newContact });
           s.delete(did);
         }
       }
     }
-
   }
 
   async verifyChallenge(challenge: Buffer, signature: Buffer) {
@@ -317,8 +296,8 @@ export default class IdManager {
       if (challenger.isSelfAuth() && challenger.isComplete()) {
         const data = this.store.fromString((await channel.receive()).toString("utf-8"));
         channel.send(Buffer.from(this.store.toString(), "utf-8"));
-        this.merge(data, !initiator)
-      };
+        this.merge(data, !initiator);
+      }
     } else {
       const challenger = await this.acceptSRP(channel, "p2p", "selfauth", true);
 
@@ -326,7 +305,7 @@ export default class IdManager {
         channel.send(Buffer.from(this.store.toString(), "utf-8"));
         const data = this.store.fromString((await channel.receive()).toString("utf-8"));
         this.merge(data, !initiator);
-      };
+      }
       channel.close();
     }
     this.store.save();
@@ -346,11 +325,10 @@ export default class IdManager {
         const result = {
           ...Challenger.deserializeCertificate(wot.get(timestamp)),
           raw: c,
-        }
+        };
         wot.set(timestamp, result);
         return result;
       }
-
     });
   }
 
@@ -365,7 +343,7 @@ export default class IdManager {
     }
 
     channel.send(cert);
-  
+
     try {
       const message = await channel.receive();
       // console.log(message)
@@ -416,7 +394,7 @@ export default class IdManager {
     }
 
     channel.send(cert);
-    
+
     try {
       let message = await channel.receive();
       await challenger.update(message);
@@ -434,12 +412,11 @@ export default class IdManager {
       channel.close();
       throw new Error("Can't add a new contact if the protocol is not complete");
     }
-
   }
 
   saveContact(contact: VaultysId) {
-    contact.toVersion(this.vaultysId.version)
-    if(contact.isMachine()) {
+    contact.toVersion(this.vaultysId.version);
+    if (contact.isMachine()) {
       this.store.substore("registrations").set(contact.did, {
         site: contact.did,
         serverId: contact?.id.toString("base64"),
@@ -471,7 +448,7 @@ export default class IdManager {
     const challenger = await this.startSRP(channel, "p2p", "selfauth");
     return challenger.isSelfAuth() && challenger.isComplete();
   }
-  
+
   // deprecated
   async acceptMyself(channel: Channel) {
     const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
