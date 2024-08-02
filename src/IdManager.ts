@@ -17,6 +17,20 @@ const getSignatureType = (challenge: string) => {
   }
 };
 
+const instanciateContact = (c: any) => {
+  let vaultysId: VaultysId;
+  if (c.type === 3) {
+    vaultysId = new VaultysId(Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
+  } else {
+    vaultysId = new VaultysId(KeyManager.instantiate(c.keyManager), c.certificate, c.type);
+  }
+  return vaultysId;
+};
+
+const instanciateApp = (a: any) => {
+  return VaultysId.fromId(Buffer.from(a.serverId, "base64"), a.certificate);
+};
+
 export default class IdManager {
   vaultysId: VaultysId;
   store: Store;
@@ -123,23 +137,20 @@ export default class IdManager {
     return s
       .list()
       .map((c) => s.get(c))
-      .map((vid) => {
-        if (vid.type === 3) {
-          return new VaultysId(Fido2Manager.instantiate(vid.keyManager), vid.certificate, vid.type);
-        } else {
-          return new VaultysId(KeyManager.instantiate(vid.keyManager), vid.certificate, vid.type);
-        }
-      });
+      .map(instanciateContact);
   }
 
   getContact(did: string) {
     const c = this.store.substore("contacts").get(did);
     if (!c) return null;
-    if (c.type === 3) {
-      return new VaultysId(Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
-    } else {
-      return new VaultysId(KeyManager.instantiate(c.keyManager), c.certificate, c.type);
+    let vaultysId = instanciateContact(c);
+    if (vaultysId.version !== this.vaultysId.version) {
+      const forceVersion = this.vaultysId.version;
+      this.vaultysId.toVersion(vaultysId.version);
+      this.migrate(forceVersion);
+      this.store.save();
     }
+    return vaultysId.toVersion(this.vaultysId.version);
   }
 
   setContactMetadata(did: string, name: string, value: any) {
@@ -270,19 +281,34 @@ export default class IdManager {
   }
 
   migrate(version: 0 | 1) {
-    if (version == this.vaultysId.version) return;
-    else {
-      this.vaultysId.toVersion(version);
-      const s = this.store.substore("contacts");
-      for (const did of s.list()) {
-        const contact = this.getContact(did);
-        if (contact) {
-          const newContact = contact?.toVersion(version) as any;
-          s.set(newContact.did, { ...contact, ...newContact });
-          s.delete(did);
+    this.vaultysId.toVersion(version);
+    const s = this.store.substore("contacts");
+    for (const did of s.list()) {
+      const data = s.get(did);
+      const contact = instanciateContact(data);
+      const newContact = contact.toVersion(version);
+      if (newContact.did !== did) {
+        s.set(newContact.did, { ...contact, ...newContact, metadata: data.metadata, oldDid: did });
+        s.delete(did);
+        //console.log(did, "->", newContact.did);
+      }
+    }
+
+    const apps = this.store.substore("registrations");
+    for (const did of apps.list()) {
+      const data = apps.get(did);
+      const site = instanciateApp(data);
+      if (site) {
+        const newSite = site.toVersion(version);
+        if (newSite.did !== did) {
+          const name = data.site === did ? newSite.did : data.site;
+          apps.set(newSite.did, { site: name, oldDid: did, serverId: newSite.id.toString("base64"), certificate: data.certificate, timestamp: data.timestamp });
+          apps.delete(did);
+          // console.log(did, "->", newSite.did);
         }
       }
     }
+    this.store.save();
   }
 
   async verifyChallenge(challenge: Buffer, signature: Buffer) {

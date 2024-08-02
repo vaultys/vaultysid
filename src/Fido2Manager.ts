@@ -139,7 +139,7 @@ export default class Fido2Manager extends KeyManager {
   static fromSecret(secret: Buffer) {
     const data = decode(secret) as ExportFIDO2Data;
     const f2m = new Fido2Manager();
-    f2m.version = data.v;
+    f2m.version = data.v ?? 0;
     f2m.capability = "private";
     f2m.fid = data.f;
     f2m._transports = data.t ? data.t : 15;
@@ -173,7 +173,7 @@ export default class Fido2Manager extends KeyManager {
   static fromId(id: Buffer) {
     const data = decode(id) as ExportFIDO2Data;
     const f2m = new Fido2Manager();
-    f2m.version = data.v;
+    f2m.version = data.v ?? 0;
     f2m.capability = "public";
     f2m.fid = data.f;
     f2m.ckey = data.c;

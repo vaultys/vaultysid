@@ -8,7 +8,7 @@ import assert from "assert";
 import "./utils";
 
 const generateWot = async (max = 10) => {
-  const result = [];
+  const result: IdManager[] = [];
   for (let i = 0; i < max; i++) {
     const vaultysId = await VaultysId.generatePerson();
     const s = MemoryStorage(() => "");
@@ -46,18 +46,17 @@ describe("VaultysId Migration", () => {
     const bob = new IdManager(vaultysId, s);
     const wot = await generateWot();
 
-    await Promise.all(
-      wot.map(async (jeanjacques) => {
-        const channel = MemoryChannel.createBidirectionnal();
-        if (!channel.otherend) assert.fail();
-        const contacts = await Promise.all([jeanjacques.askContact(channel), bob.acceptContact(channel.otherend)]);
-      }),
-    );
+    for (let i = 0; i < wot.length; i++) {
+      const jeanjacques = wot[i];
+      const channel = MemoryChannel.createBidirectionnal();
+      if (!channel.otherend) assert.fail();
+      await Promise.all([jeanjacques.askContact(channel), bob.acceptContact(channel.otherend)]);
+    }
 
     bob.migrate(0);
     wot.forEach((jeanjacques) => {
       jeanjacques.migrate(0);
-      //console.log(jeanjacques);
+      // console.log(jeanjacques);
       assert.notEqual(bob.getContact(jeanjacques.vaultysId.did), null);
     });
 

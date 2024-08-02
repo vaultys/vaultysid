@@ -87,6 +87,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.equal(challenger1.state, 0);
     assert.equal(challenger2.state, -1);
     await challengerattack.setChallenge(challenger1.getCertificate());
+    await delay(2); //new timestamp might be the same!
     challengerattack.challenge!.timestamp = Date.now();
     delete challengerattack.challenge?.pk2;
     delete challengerattack.challenge?.sign2;

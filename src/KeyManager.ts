@@ -139,7 +139,7 @@ export default class KeyManager {
   static fromSecret(secret: Buffer) {
     const data = decode(secret) as DataExport;
     const km = new KeyManager();
-    km.version = data.v;
+    km.version = data.v ?? 0;
     km.level = LEVEL_DERIVED;
     km.capability = "private";
     km.proof = data.p;
@@ -172,7 +172,7 @@ export default class KeyManager {
   static fromId(id: Buffer) {
     const data = decode(id) as DataExport;
     const km = new KeyManager();
-    km.version = data.v;
+    km.version = data.v ?? 0;
     km.level = LEVEL_DERIVED;
     km.capability = "public";
     km.proof = data.p;

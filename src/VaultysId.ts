@@ -9,9 +9,9 @@ const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
 
 type StringifiedBuffer = {
-  data: number[],
-  type: "Buffer"
-}
+  data: number[];
+  type: "Buffer";
+};
 
 export default class VaultysId {
   type: number;
@@ -23,8 +23,6 @@ export default class VaultysId {
     this.keyManager = keyManager;
     this.certificate = certificate;
   }
-
-  
 
   // // Set the index of the proof in case of previous key for this protocol/service have been compromised
   // setProofIndex(protocol, service, index) {
@@ -80,6 +78,7 @@ export default class VaultysId {
   static async fromEntropy(entropy: Buffer, type: number) {
     const cleanedEntropy = entropy as Buffer;
     const km = await KeyManager.create_Id25519_fromEntropy(cleanedEntropy);
+
     return new VaultysId(km, undefined, type);
   }
 
@@ -139,7 +138,11 @@ export default class VaultysId {
   get fingerprint() {
     const t = Buffer.from([this.type]).toString("hex");
     const fp = t + hash("SHA224", this.keyManager.id).toString("hex");
-    return fp.slice(0, 40).toUpperCase().match(/.{1,4}/g)!.join(" ");
+    return fp
+      .slice(0, 40)
+      .toUpperCase()
+      .match(/.{1,4}/g)!
+      .join(" ");
   }
 
   get did() {
