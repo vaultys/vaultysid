@@ -124,7 +124,7 @@ const deserialize = (challenge: Buffer): ChallengeType => {
       if (id2.verifyChallenge(challenge, result.sign2, true)) {
         result.state = STEP1;
       } else {
-        console.log(result);
+        // console.log(result);
         result.state = ERROR;
         result.error = "STEP1 failed to verification of pk2";
       }
