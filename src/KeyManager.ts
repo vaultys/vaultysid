@@ -3,7 +3,10 @@ import { hash, randomBytes } from "./crypto";
 import { Buffer } from "buffer";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
-import { Bip32PublicKey, Bip32PrivateKey } from '@stricahq/bip32ed25519';
+import * as bip32fix from "@stricahq/bip32ed25519";
+
+//@ts-ignore
+const bip32 = bip32fix.default ?? bip32fix;
 
 const LEVEL_ROOT = 1;
 const LEVEL_DERIVED = 2;
@@ -12,15 +15,14 @@ const sha512 = (data: Buffer) => hash("sha512", data);
 const sha256 = (data: Buffer) => hash("sha256", data);
 
 const serializeID_v0 = (km: KeyManager) => {
-  const version = Buffer.from([0x84, 0xa1, 0x76, 0])
-  const proof = Buffer.from([0xa1, 0x70, 0xc5, 0x00, km.proof.length,...km.proof])
-  const sign = Buffer.from([0xa1, 0x78, 0xc5, 0x00, km.signer.publicKey.length,...km.signer.publicKey])
-  const cypher = Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length,...km.cypher.publicKey])
+  const version = Buffer.from([0x84, 0xa1, 0x76, 0]);
+  const proof = Buffer.from([0xa1, 0x70, 0xc5, 0x00, km.proof.length, ...km.proof]);
+  const sign = Buffer.from([0xa1, 0x78, 0xc5, 0x00, km.signer.publicKey.length, ...km.signer.publicKey]);
+  const cypher = Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length, ...km.cypher.publicKey]);
   return Buffer.concat([version, proof, sign, cypher]);
-}
+};
 
-
-export const publicDerivePath = (node: InstanceType<typeof Bip32PublicKey>, path: string) => {
+export const publicDerivePath = (node: InstanceType<typeof bip32.Bip32PublicKey>, path: string) => {
   let result = node;
   if (path.startsWith("m/")) path = path.slice(2);
   path.split("/").forEach((d) => {
@@ -30,7 +32,7 @@ export const publicDerivePath = (node: InstanceType<typeof Bip32PublicKey>, path
   return result;
 };
 
-export const privateDerivePath = (node: InstanceType<typeof Bip32PrivateKey>, path: string) => {
+export const privateDerivePath = (node: InstanceType<typeof bip32.Bip32PrivateKey>, path: string) => {
   let result = node;
   if (path.startsWith("m/")) path = path.slice(2);
   path.split("/").forEach((d) => {
@@ -45,13 +47,12 @@ export type KeyPair = {
   secretKey?: Buffer;
 };
 
-type HISCP = {
-  newId: Buffer
-  proofKey: Buffer
-  timestamp: number
-  signature: Buffer
+export type HISCP = {
+  newId: Buffer;
+  proofKey: Buffer;
+  timestamp: number;
+  signature: Buffer;
 };
-
 
 type DataExport = {
   v: 0; // version
@@ -84,7 +85,7 @@ export default class KeyManager {
     km.level = LEVEL_ROOT;
     km.capability = "private";
     const seed = sha512(entropy);
-    const derivedKey = privateDerivePath(await Bip32PrivateKey.fromEntropy(seed.slice(0, 32)), `m/1'/0'/${swapIndex}'`);
+    const derivedKey = privateDerivePath(await bip32.Bip32PrivateKey.fromEntropy(seed.slice(0, 32)), `m/1'/0'/${swapIndex}'`);
     km.proofKey = {
       publicKey: derivedKey.toBip32PublicKey().toPublicKey().toBytes(),
       secretKey: derivedKey.toBytes(),
@@ -112,17 +113,18 @@ export default class KeyManager {
   }
 
   get id() {
-    if(this.version == 0) return serializeID_v0(this);
-    else return Buffer.from(
-      encode({
-        v: this.version,
-        p: this.proof,
-        x: this.signer.publicKey,
-        e: this.cypher.publicKey,
-      }),
-    );
+    if (this.version == 0) return serializeID_v0(this);
+    else
+      return Buffer.from(
+        encode({
+          v: this.version,
+          p: this.proof,
+          x: this.signer.publicKey,
+          e: this.cypher.publicKey,
+        }),
+      );
   }
-  
+
   getSecret() {
     return Buffer.from(
       encode({
@@ -143,7 +145,7 @@ export default class KeyManager {
     km.proof = data.p;
     km.signer = {
       secretKey: data.x,
-      publicKey: new Bip32PrivateKey(data.x).toBip32PublicKey().toPublicKey().toBytes(),
+      publicKey: new bip32.Bip32PrivateKey(data.x).toBip32PublicKey().toPublicKey().toBytes(),
     };
     const cypher = nacl.box.keyPair.fromSecretKey(data.e);
     km.cypher = {
@@ -186,11 +188,11 @@ export default class KeyManager {
 
   async sign(data: Buffer) {
     if (this.capability == "public") return null;
-    return new Bip32PrivateKey(this.signer.secretKey!).toPrivateKey().sign(data);
+    return new bip32.Bip32PrivateKey(this.signer.secretKey!).toPrivateKey().sign(data);
   }
 
   verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean) {
-    return Bip32PublicKey.fromBytes(this.signer.publicKey).toPublicKey().verify(signature, data);
+    return bip32.Bip32PublicKey.fromBytes(this.signer.publicKey).toPublicKey().verify(signature, data);
   }
 
   // async createRevocationCertificate(newId) {
@@ -213,7 +215,6 @@ export default class KeyManager {
   //   } else return null;
   // }
 
-
   async createSwapingCertificate() {
     if (this.level === LEVEL_ROOT) {
       const newKey = await KeyManager.create_Id25519_fromEntropy(this.entropy, this.swapIndex + 1);
@@ -227,7 +228,7 @@ export default class KeyManager {
       const timestampBuffer = Buffer.alloc(8);
       timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp));
       const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
-      hiscp.signature = new Bip32PrivateKey(this.proofKey.secretKey!).toPrivateKey().sign(hiscpBuffer);
+      hiscp.signature = new bip32.Bip32PrivateKey(this.proofKey.secretKey!).toPrivateKey().sign(hiscpBuffer);
       return hiscp;
     }
     return null;
@@ -240,7 +241,7 @@ export default class KeyManager {
       timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp));
       const newKey = KeyManager.fromId(hiscp.newId);
       const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
-      const proofVerifier = Bip32PublicKey.fromBytes(hiscp.proofKey);
+      const proofVerifier = bip32.Bip32PublicKey.fromBytes(hiscp.proofKey);
       return proofVerifier.toPublicKey().verify(hiscpBuffer, hiscp.signature);
     } else {
       return false;

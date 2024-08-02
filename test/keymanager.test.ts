@@ -1,37 +1,39 @@
 import assert from "assert";
 import { randomBytes } from "crypto";
-import KeyManager, { publicDerivePath, privateDerivePath } from "../src/KeyManager"
-import bip32ed25519 from '@stricahq/bip32ed25519';
-const { Bip32PrivateKey } = bip32ed25519;
+import KeyManager, { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
+import * as bip32 from "@stricahq/bip32ed25519";
 
-const writeVector = (km) => {
+//@ts-ignore
+const bip32fix = bip32.default ?? bip32;
+
+const writeVector = (km: KeyManager) => {
   return;
+
   console.log("## NOT Published");
-  console.log("### proof sk:\n", (new Bip32PrivateKey(km.proofKey.secretKey)).toPrivateKey().toBytes().toString("hex"));
-  console.log("### proof pk:\n", (new Bip32PrivateKey(km.proofKey.publicKey)).toBip32PublicKey().toPublicKey().toBytes().toString("hex"));
-  console.log("### sk = derive(proof sk, m/0'):\n", new Bip32PrivateKey(km.signer.secretKey).toPrivateKey().toBytes().toString("hex"));
-  
+  console.log("### proof sk:\n", new bip32fix.Bip32PrivateKey(km.proofKey.secretKey!).toPrivateKey().toBytes().toString("hex"));
+  console.log("### proof pk:\n", new bip32fix.Bip32PrivateKey(km.proofKey.publicKey).toBip32PublicKey().toPublicKey().toBytes().toString("hex"));
+  console.log("### sk = derive(proof sk, m/0'):\n", new bip32fix.Bip32PrivateKey(km.signer.secretKey!).toPrivateKey().toBytes().toString("hex"));
+
   console.log("## Published");
   console.log("### proof = sha256(proof pk):\n", km.proof.toString("hex"));
   console.log("### pk:", km.signer.publicKey.toString("hex"));
-}
+};
 
-const writeCertificate = (hiscp) => {
+const writeCertificate = (hiscp: HISCP) => {
   return;
   const hiscpDisplay = {
     newId: hiscp.newId.toString("hex"),
     proofKey: hiscp.proofKey.toString("hex"),
-    timestamp: hiscp.timestamp
-  }
+    timestamp: hiscp.timestamp,
+  };
   console.log("## HISCP Certificate");
   console.log("### hiscp data:\n", JSON.stringify(hiscpDisplay, null, 2));
   console.log("### Signature of hiscp = [newID || proofKey || timestamp] by proof sk\n", hiscp.signature.toString("hex"));
-}
+};
 
 describe("KeyManager tests", () => {
-
   it("derive correctly keys (strica)", async () => {
-    const node = await Bip32PrivateKey.fromEntropy(randomBytes(32));
+    const node = await bip32fix.Bip32PrivateKey.fromEntropy(randomBytes(32));
     const publicNode = node.toBip32PublicKey();
     const derivedNode = privateDerivePath(node, "m/1/2/3");
     const publicDerivedNode = publicDerivePath(publicNode, "m/1/2/3");
@@ -65,11 +67,9 @@ describe("KeyManager tests", () => {
     const signer = await KeyManager.generate_Id25519();
     const id = signer.id;
     const verifier = KeyManager.fromId(id);
-    const message = Buffer.from(
-      "this is a message to be verified man",
-      "utf-8",
-    );
+    const message = Buffer.from("this is a message to be verified man", "utf-8");
     const signature = await signer.sign(message);
+    if (!signature) assert.fail();
     assert.notEqual(signature, null);
     assert.ok(await verifier.verify(message, signature));
   });
@@ -77,16 +77,17 @@ describe("KeyManager tests", () => {
   it("create and verify a HISCP Certificate", async () => {
     const km = await KeyManager.generate_Id25519();
     const hiscp = await km.createSwapingCertificate();
+    if (!hiscp) assert.fail();
     const publicKM = KeyManager.fromId(km.id);
     publicKM.verifySwapingCertificate(hiscp);
     assert.ok(publicKM.verifySwapingCertificate(hiscp));
   });
 
-
   it("create vector for HISCP", async () => {
     const km = await KeyManager.generate_Id25519();
     writeVector(km);
     const hiscp = await km.createSwapingCertificate();
+    if (!hiscp) assert.fail();
     writeCertificate(hiscp);
     const publicKM = KeyManager.fromId(km.id);
     publicKM.verifySwapingCertificate(hiscp);
@@ -97,6 +98,7 @@ describe("KeyManager tests", () => {
     const km = await KeyManager.generate_Id25519();
     writeVector(km);
     const hiscp = await km.createSwapingCertificate();
+    if (!hiscp) assert.fail();
     writeCertificate(hiscp);
     const publicKM = KeyManager.fromId(km.id);
     publicKM.verifySwapingCertificate(hiscp);
@@ -114,10 +116,9 @@ describe("KeyManager tests", () => {
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
     const encrypted = await alice.encrypt(plaintext, recipients);
-    assert.equal(
-      encrypted?.substring(0, 33),
-      "BEGIN SALTPACK ENCRYPTED MESSAGE.",
-    );
+    if (!encrypted) assert.fail();
+    assert.equal(encrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    if (!encrypted) assert.fail();
     const decryptedBob = await bob.decrypt(encrypted, alice.id);
     const decryptedEve = await eve.decrypt(encrypted, alice.id);
     const decryptedAlice = await alice.decrypt(encrypted, alice.id);
@@ -133,10 +134,8 @@ describe("KeyManager tests", () => {
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
     const encrypted = await alice.encrypt(plaintext, recipients);
-    assert.equal(
-      encrypted?.substring(0, 33),
-      "BEGIN SALTPACK ENCRYPTED MESSAGE.",
-    );
+    if (!encrypted) assert.fail();
+    assert.equal(encrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
     const decryptedBob = await bob.decrypt(encrypted);
     const decryptedEve = await eve.decrypt(encrypted);
     const decryptedAlice = await alice.decrypt(encrypted);

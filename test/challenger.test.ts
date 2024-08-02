@@ -1,29 +1,22 @@
-
 import Challenger from "../src/Challenger";
 import SoftCredentials from "../src/SoftCredentials";
 import VaultysId from "../src/VaultysId";
 import assert from "assert";
+import "./utils";
+import { randomBytes } from "../src/crypto";
 
-// nodejs polyfill
-global.navigator = {
-  credentials: SoftCredentials,
-};
-global.atob = (str) => Buffer.from(str, "base64").toString("latin1");
-global.btoa = (str) => Buffer.from(str, "latin1").toString("base64");
-
-global.CredentialUserInteractionRequest = () => global.CredentialUserInteractionRequested++
-
-
-const testCertificate = (rogueCert) => {
+const testCertificate = (rogueCert: Buffer) => {
   try {
     const result = Challenger.deserializeCertificate(rogueCert);
     return result;
   } catch (error) {
     return {
-      state: -2
-    }
+      state: -2,
+    };
   }
-}
+};
+
+const delay = (ms: number = 1000) => new Promise((resolve) => setTimeout(resolve, ms));
 
 describe("Symetric Proof of Relationship - SRG", () => {
   it("Perform Protocol with KeyManager", async () => {
@@ -34,27 +27,90 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.equal(challenger1.isComplete(), false);
     assert.equal(challenger1.hasFailed(), false);
     challenger1.createChallenge("p2p", "auth");
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
     await challenger2.update(challenger1.getCertificate());
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
     await challenger1.update(challenger2.getCertificate());
+    assert.equal(challenger1.state, 2);
+    assert.equal(challenger2.state, 1);
     assert.ok(challenger1.isComplete());
     assert.ok(!challenger2.isComplete());
     await challenger2.update(challenger1.getCertificate());
+    assert.equal(challenger1.state, 2);
+    assert.equal(challenger2.state, 2);
     // SYMETRIC PROOF
     assert.ok(challenger1.isComplete());
     assert.ok(challenger2.isComplete());
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
+  it("Perform Protocol with KeyManager attacking nonce", async () => {
+    const vaultysId1 = await VaultysId.generateMachine();
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const challenger2 = new Challenger(vaultysId2);
+    const challengerattack = new Challenger(vaultysId2);
+    assert.equal(challenger1.isComplete(), false);
+    assert.equal(challenger1.hasFailed(), false);
+    challenger1.createChallenge("p2p", "auth");
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
+    await challengerattack.setChallenge(challenger1.getCertificate());
+    challengerattack.challenge!.nonce = randomBytes(16);
+    delete challengerattack.challenge?.pk2;
+    delete challengerattack.challenge?.sign2;
+    // console.log(challengerattack.challenge);
+    // console.log("boom");
+    await challenger2.update(challengerattack.getCertificate());
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
+    try {
+      await challenger1.update(challenger2.getCertificate());
+    } catch (err: any) {
+      assert.equal(err?.message, "Nonce has been tampered with");
+      return;
+    }
+    assert.fail("The protocol with tampered nonce should have failed");
+  });
+
+  it("Perform Protocol with KeyManager attacking timestamp", async () => {
+    const vaultysId1 = await VaultysId.generateMachine();
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const challenger2 = new Challenger(vaultysId2);
+    const challengerattack = new Challenger(vaultysId2);
+    assert.equal(challenger1.isComplete(), false);
+    assert.equal(challenger1.hasFailed(), false);
+    challenger1.createChallenge("p2p", "auth");
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
+    await challengerattack.setChallenge(challenger1.getCertificate());
+    challengerattack.challenge!.timestamp = Date.now();
+    delete challengerattack.challenge?.pk2;
+    delete challengerattack.challenge?.sign2;
+    challengerattack.challenge!.nonce = challengerattack.challenge!.nonce?.subarray(0, 16);
+    await challenger2.update(challengerattack.getCertificate());
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
+    try {
+      await challenger1.update(challenger2.getCertificate());
+    } catch (err: any) {
+      assert.equal(err?.message, "Timestamp has been tampered with");
+      return;
+    }
+    assert.fail("The protocol with tampered timestamp should have failed");
+  });
+
   it("Perform Protocol with Fido2Manager", async () => {
-    const attestation1 = await navigator.credentials.create(
-      SoftCredentials.createRequest(-7),
-    );
+    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1);
 
-    const attestation2 = await navigator.credentials.create(
-      SoftCredentials.createRequest(-8),
-    );
+    const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
+    // @ts-ignore
     const vaultysId2 = await VaultysId.fido2FromAttestation(attestation2);
     const challenger2 = new Challenger(vaultysId2);
 
@@ -73,9 +129,8 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Fail for liveliness at first round", async () => {
-    const attestation1 = await navigator.credentials.create(
-      SoftCredentials.createRequest(-7),
-    );
+    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1, 50);
     const vaultysId2 = await VaultysId.generatePerson();
@@ -83,20 +138,16 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    await assert.rejects(
-      challenger2.update(challenger1.getCertificate()),
-      {
-        name: "Error",
-        message: "challenge timestamp failed the liveliness at first signature"
-      }
-    );
+    await delay(100);
+    await assert.rejects(challenger2.update(challenger1.getCertificate()), {
+      name: "Error",
+      message: "challenge timestamp failed the liveliness at first signature",
+    });
   });
 
   it("Fail for liveliness at second round", async () => {
-    const attestation1 = await navigator.credentials.create(
-      SoftCredentials.createRequest(-8),
-    );
+    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1, 50);
     const vaultysId2 = await VaultysId.generateMachine();
@@ -105,20 +156,16 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    await assert.rejects(
-      challenger1.update(challenger2.getCertificate()),
-      {
-        name: "Error",
-        message: "challenge timestamp failed the liveliness at 2nd signature"
-      }
-    );
+    await delay(100);
+    await assert.rejects(challenger1.update(challenger2.getCertificate()), {
+      name: "Error",
+      message: "challenge timestamp failed the liveliness at 2nd signature",
+    });
   });
 
   it("Pass for liveliness at third round", async () => {
-    const attestation1 = await navigator.credentials.create(
-      SoftCredentials.createRequest(-7),
-    );
+    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1, 50);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -128,19 +175,18 @@ describe("Symetric Proof of Relationship - SRG", () => {
     challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await delay(100);
     await challenger2.update(challenger1.getCertificate());
 
     assert.ok(challenger1.isComplete());
     assert.ok(challenger2.isComplete());
-    assert.ok(!challenger1.hasFailed())
+    assert.ok(!challenger1.hasFailed());
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
   it("Pass with time deviation of 5s in the future", async () => {
-    const attestation1 = await navigator.credentials.create(
-      SoftCredentials.createRequest(-7),
-    );
+    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generatePerson();
@@ -148,6 +194,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
+    if (!challenger1.challenge) assert.fail();
     challenger1.challenge.timestamp = challenger1.challenge.timestamp + 5000;
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
@@ -161,9 +208,8 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Fail with time deviation of 15s in the future", async () => {
-    const attestation1 = await navigator.credentials.create(
-      SoftCredentials.createRequest(-8),
-    );
+    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
+    // @ts-ignore
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -171,16 +217,13 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
-    challenger1.challenge.timestamp = challenger1.challenge.timestamp + 15000;
-    await assert.rejects(
-      challenger2.update(challenger1.getCertificate()),
-      {
-        name: "Error",
-        message: "challenge timestamp failed the liveliness at first signature"
-      }
-    );
+    challenger1.challenge!.timestamp = challenger1.challenge!.timestamp + 15000;
+    await assert.rejects(challenger2.update(challenger1.getCertificate()), {
+      name: "Error",
+      message: "challenge timestamp failed the liveliness at first signature",
+    });
   });
-/* 
+  /*
   it("Fail with tampered certificate (FIDO2)", async () => {
     const attestation1 = await navigator.credentials.create(
       SoftCredentials.createRequest(-7),
