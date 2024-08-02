@@ -1,5 +1,5 @@
 # Vaultys ID
-This is the main library to handle Vaultys DID and ahndcheck protocol
+This is the main library to handle Vaultys DID and handcheck protocol
 
 ## Getting Started
 - install nodejs (20.x recommended) and pnpm (https://pnpm.io/fr/installation)

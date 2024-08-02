@@ -113,6 +113,7 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
     challenger1.createChallenge("p2p", "auth", 0);
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
+
     assert.ok(challenger1.isComplete());
     assert.ok(!challenger2.isComplete());
     await challenger2.update(challenger1.getCertificate());
@@ -136,11 +137,10 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
     challenger1.createChallenge("p2p", "auth", 0);
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
-
     try {
       await challenger2.update(challenger1.getCertificate());
     } catch (err: any) {
-      assert(err?.message === "The challenge is in an expected state. Received state = '-2', expected state = '2'");
+      assert.equal(err?.message, "The challenge is in an expected state. Received state = '-2', expected state = '2'");
       return;
     }
     assert.fail("The protocol should have failed");

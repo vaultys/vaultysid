@@ -52,7 +52,10 @@ const unpacker = (key) => (data, inject) => {
 };
 
 const injectors = (key) => [
-  (data) => unpacker(key)(data, (unpacked) => unpacked.nonce[0]++),
+  (data) =>
+    unpacker(key)(data, (unpacked) => {
+      unpacked.nonce[0]++;
+    }),
   (data) =>
     unpacker(key)(data, (unpacked) => {
       unpacked.timestamp++;

@@ -116,21 +116,22 @@ const deserialize = (challenge: Buffer): ChallengeType => {
   };
 
   try {
-    if (!result.pk2 && !result.sign1 && !result.sign2 && result.nonce?.length == 16 && result.pk1?.length && result.pk1.length > 0) {
+    if (!result.pk2 && !result.sign1 && !result.sign2 && result.nonce?.length === 16 && result.pk1?.length && result.pk1.length > 0) {
       result.state = INIT;
-    } else if (!result.sign1 && result.nonce?.length == 32 && result.pk1?.length && result.pk2?.length && result.sign2?.length && result.pk1.length > 0 && result.pk2.length > 0 && result.sign2.length > 0) {
+    } else if (!result.sign1 && result.nonce?.length === 32 && result.pk1?.length && result.pk2?.length && result.sign2?.length && result.pk1.length > 0 && result.pk2.length > 0 && result.sign2.length > 0) {
       const id2 = VaultysId.fromId(result.pk2!);
       const challenge = serializeUnsigned(result, id2.version);
       if (id2.verifyChallenge(challenge, result.sign2, true)) {
         result.state = STEP1;
       } else {
+        console.log(result);
         result.state = ERROR;
         result.error = "STEP1 failed to verification of pk2";
       }
-    } else if (result.sign1?.length && result.sign1.length > 0 && result.nonce?.length == 32 && result.pk1?.length && result.pk2?.length && result.sign2?.length && result.pk1.length > 0 && result.pk2.length > 0 && result.sign2.length > 0) {
+    } else if (result.sign1?.length && result.sign1.length > 0 && result.nonce?.length === 32 && result.pk1?.length && result.pk2?.length && result.sign2?.length && result.pk1.length > 0 && result.pk2.length > 0 && result.sign2.length > 0) {
       const id1 = VaultysId.fromId(result.pk1!);
       const id2 = VaultysId.fromId(result.pk2!);
-      if (id1.version != id2.version) {
+      if (id1.version !== id2.version) {
         result.state = ERROR;
         result.error = "pk1 and pk2 are using different serialization version, this is not allowed";
       } else {
@@ -199,17 +200,6 @@ const serialize = (data: ChallengeType) => {
 const serializeUnsigned = (challenge: ChallengeType, version: 0 | 1 = 0): Buffer => {
   const { protocol, service, timestamp, pk1, pk2, nonce, metadata } = challenge;
   const picked = { protocol, service, timestamp, pk1, pk2, nonce, metadata };
-  // const encoded = encode({
-  //   protocol,
-  //   service,
-  //   timestamp,
-  //   pk1,
-  //   pk2,
-  //   nonce,
-  //   metadata,
-  // });
-  // return Buffer.from(encoded);
-
   return version === 0 ? encode_v0(picked) : Buffer.from(encode(picked));
 };
 
@@ -245,21 +235,18 @@ export default class Challenger {
   async setChallenge(challengeString: Buffer) {
     if (this.state !== UNITIALISED) throw new Error("Challenger already initialised, can't reset the state");
     this.challenge = deserialize(challengeString);
-    // console.log(challengeString);
+
     if (!isLive(this.challenge, this.liveliness)) {
       this.state = ERROR;
       this.challenge.error = "challenge timestamp failed the liveliness at first signature";
       throw new Error(this.challenge.error);
     }
-    if (this.challenge.state == ERROR) {
+
+    if (this.challenge.state === ERROR) {
       this.state = ERROR;
       console.error(this.challenge);
       throw new Error(this.challenge.error);
-    } else if (this.challenge.state == INIT) {
-      const context = {
-        protocol: this.challenge.protocol,
-        service: this.challenge.service,
-      };
+    } else if (this.challenge.state === INIT) {
       this.mykey = this.vaultysId.id;
       this.challenge.pk2 = this.mykey;
       this.hisKey = this.challenge.pk1;
@@ -268,12 +255,9 @@ export default class Challenger {
       if (!serialized) throw new Error("Error processing Challenge");
       this.challenge.sign2 = (await this.vaultysId.signChallenge(serialized)) || undefined;
       this.challenge.state = this.state = STEP1;
-    } else if (this.challenge.state == COMPLETE) {
-      // const context = {
-      //   protocol: this.challenge.protocol,
-      //   service: this.challenge.service,
-      // };
-      if (this.challenge.pk1 != this.mykey && this.challenge.pk2 != this.mykey) {
+    } else if (this.challenge.state === COMPLETE) {
+      this.mykey = this.vaultysId.id;
+      if (!this.challenge.pk1?.equals(this.mykey) && !this.challenge.pk1?.equals(this.mykey)) {
         this.state = ERROR;
         throw new Error("Can't link the vaultys id to this challenge");
       } else {
@@ -353,39 +337,54 @@ export default class Challenger {
   }
 
   async update(challengeString: Buffer, metadata = {}) {
-    if (this.state == UNITIALISED) await this.setChallenge(challengeString);
-    else if (this.state == INIT) {
-      this.challenge = deserialize(challengeString);
-      if (!isLive(this.challenge, this.liveliness)) {
+    if (this.state === UNITIALISED) await this.setChallenge(challengeString);
+    else if (this.state === INIT) {
+      const tempchallenge = deserialize(challengeString);
+      if (!tempchallenge) {
         this.state = ERROR;
-        this.challenge.error = "challenge timestamp failed the liveliness at 2nd signature";
-        throw new Error(this.challenge.error);
+        throw new Error("Can't read the new incoming challenge");
       }
-      if (this.challenge.state == STEP1) {
+      if (!tempchallenge.nonce?.subarray(0, 16).equals(this.challenge!.nonce!.subarray(0, 16))) {
+        this.state = ERROR;
+        throw new Error("Nonce has been tampered with");
+      }
+      if (tempchallenge.timestamp !== this.challenge?.timestamp) {
+        this.state = ERROR;
+        throw new Error("Timestamp has been tampered with");
+      }
+      if (!isLive(tempchallenge, this.liveliness)) {
+        this.state = ERROR;
+        throw new Error("challenge timestamp failed the liveliness at 2nd signature");
+      }
+      if (tempchallenge.state === STEP1) {
         this.state = STEP1;
-        if (!this.mykey || !this.challenge.pk1 || Buffer.compare(this.mykey, this.challenge.pk1) != 0) {
-          throw new Error(`The challenge has been tampered with. Received pk1 = '${this.challenge.pk1}', expected pk1 = '${this.mykey}'`);
+        if (!this.mykey || !tempchallenge.pk1 || !this.mykey.equals(tempchallenge.pk1)) {
+          throw new Error(`The challenge has been tampered with. Received pk1 = '${tempchallenge.pk1}', expected pk1 = '${this.mykey}'`);
         }
-        this.hisKey = this.challenge.pk2;
-        const serialized = this.getUnsignedChallenge();
-
+        this.hisKey = tempchallenge.pk2;
+        const serialized = serializeUnsigned(tempchallenge, this.vaultysId.version);
         if (!serialized) throw new Error("Error processing Challenge");
-        this.challenge.sign1 = (await this.vaultysId.signChallenge(serialized)) || undefined;
+        tempchallenge.sign1 = await this.vaultysId.signChallenge(serialized);
+        this.challenge = tempchallenge;
         this.state = this.challenge.state = COMPLETE;
       } else {
         this.state = ERROR;
         // console.error(this.challenge);
-        throw new Error(`The challenge is in an expected state. Received state = '${this.challenge.state}', expected state = '${STEP1}'`);
+        throw new Error(`The challenge is in an expected state. Received state = '${tempchallenge.state}', expected state = '${STEP1}'`);
       }
-    } else if (this.state == STEP1) {
-      this.challenge = deserialize(challengeString);
-      this.mykey = this.challenge.pk2;
-      if (this.challenge.state == COMPLETE) {
+    } else if (this.state === STEP1) {
+      const tempchallenge = deserialize(challengeString);
+      if (!this.mykey!.equals(tempchallenge.pk2!)) {
+        this.state = ERROR;
+        throw new Error(`The challenge pk2 has been tampered with`);
+      }
+      if (tempchallenge.state === COMPLETE) {
+        this.challenge = tempchallenge;
         this.state = COMPLETE;
       } else {
         // console.error(this.challenge);
         this.state = ERROR;
-        throw new Error(`The challenge is in an expected state. Received state = '${this.challenge.state}', expected state = '${COMPLETE}'`);
+        throw new Error(`The challenge is in an expected state. Received state = '${tempchallenge.state}', expected state = '${COMPLETE}'`);
       }
     } else {
       this.state = ERROR;

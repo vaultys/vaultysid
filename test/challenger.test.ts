@@ -3,6 +3,7 @@ import SoftCredentials from "../src/SoftCredentials";
 import VaultysId from "../src/VaultysId";
 import assert from "assert";
 import "./utils";
+import { randomBytes } from "../src/crypto";
 
 const testCertificate = (rogueCert: Buffer) => {
   try {
@@ -15,6 +16,8 @@ const testCertificate = (rogueCert: Buffer) => {
   }
 };
 
+const delay = (ms: number = 1000) => new Promise((resolve) => setTimeout(resolve, ms));
+
 describe("Symetric Proof of Relationship - SRG", () => {
   it("Perform Protocol with KeyManager", async () => {
     const vaultysId1 = await VaultysId.generateMachine();
@@ -24,15 +27,80 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.equal(challenger1.isComplete(), false);
     assert.equal(challenger1.hasFailed(), false);
     challenger1.createChallenge("p2p", "auth");
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
     await challenger2.update(challenger1.getCertificate());
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
     await challenger1.update(challenger2.getCertificate());
+    assert.equal(challenger1.state, 2);
+    assert.equal(challenger2.state, 1);
     assert.ok(challenger1.isComplete());
     assert.ok(!challenger2.isComplete());
     await challenger2.update(challenger1.getCertificate());
+    assert.equal(challenger1.state, 2);
+    assert.equal(challenger2.state, 2);
     // SYMETRIC PROOF
     assert.ok(challenger1.isComplete());
     assert.ok(challenger2.isComplete());
     assert.equal(challenger1.toString(), challenger2.toString());
+  });
+
+  it("Perform Protocol with KeyManager attacking nonce", async () => {
+    const vaultysId1 = await VaultysId.generateMachine();
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const challenger2 = new Challenger(vaultysId2);
+    const challengerattack = new Challenger(vaultysId2);
+    assert.equal(challenger1.isComplete(), false);
+    assert.equal(challenger1.hasFailed(), false);
+    challenger1.createChallenge("p2p", "auth");
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
+    await challengerattack.setChallenge(challenger1.getCertificate());
+    challengerattack.challenge!.nonce = randomBytes(16);
+    delete challengerattack.challenge?.pk2;
+    delete challengerattack.challenge?.sign2;
+    // console.log(challengerattack.challenge);
+    // console.log("boom");
+    await challenger2.update(challengerattack.getCertificate());
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
+    try {
+      await challenger1.update(challenger2.getCertificate());
+    } catch (err: any) {
+      assert.equal(err?.message, "Nonce has been tampered with");
+      return;
+    }
+    assert.fail("The protocol with tampered nonce should have failed");
+  });
+
+  it("Perform Protocol with KeyManager attacking timestamp", async () => {
+    const vaultysId1 = await VaultysId.generateMachine();
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const challenger2 = new Challenger(vaultysId2);
+    const challengerattack = new Challenger(vaultysId2);
+    assert.equal(challenger1.isComplete(), false);
+    assert.equal(challenger1.hasFailed(), false);
+    challenger1.createChallenge("p2p", "auth");
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
+    await challengerattack.setChallenge(challenger1.getCertificate());
+    challengerattack.challenge!.timestamp = Date.now();
+    delete challengerattack.challenge?.pk2;
+    delete challengerattack.challenge?.sign2;
+    challengerattack.challenge!.nonce = challengerattack.challenge!.nonce?.subarray(0, 16);
+    await challenger2.update(challengerattack.getCertificate());
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
+    try {
+      await challenger1.update(challenger2.getCertificate());
+    } catch (err: any) {
+      assert.equal(err?.message, "Timestamp has been tampered with");
+      return;
+    }
+    assert.fail("The protocol with tampered timestamp should have failed");
   });
 
   it("Perform Protocol with Fido2Manager", async () => {
@@ -70,7 +138,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await delay(100);
     await assert.rejects(challenger2.update(challenger1.getCertificate()), {
       name: "Error",
       message: "challenge timestamp failed the liveliness at first signature",
@@ -88,7 +156,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await delay(100);
     await assert.rejects(challenger1.update(challenger2.getCertificate()), {
       name: "Error",
       message: "challenge timestamp failed the liveliness at 2nd signature",
@@ -107,7 +175,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await delay(100);
     await challenger2.update(challenger1.getCertificate());
 
     assert.ok(challenger1.isComplete());
