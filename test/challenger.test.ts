@@ -46,6 +46,64 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
+  it("Perform Protocol with KeyManager attacking protocol", async () => {
+    const vaultysId1 = await VaultysId.generateMachine();
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const challenger2 = new Challenger(vaultysId2);
+    const challengerattack = new Challenger(vaultysId2);
+    assert.equal(challenger1.isComplete(), false);
+    assert.equal(challenger1.hasFailed(), false);
+    challenger1.createChallenge("p2p", "auth");
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
+    await challengerattack.setChallenge(challenger1.getCertificate());
+    challengerattack.challenge!.protocol = "hack";
+    delete challengerattack.challenge?.pk2;
+    delete challengerattack.challenge?.sign2;
+    challengerattack.challenge!.nonce = challengerattack.challenge!.nonce?.subarray(0, 16);
+    await challenger2.update(challengerattack.getCertificate());
+    // console.log(challengerattack.challenge);
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
+    try {
+      await challenger1.update(challenger2.getCertificate());
+    } catch (err: any) {
+      assert.equal(err?.message, "The challenge was expecting protocol 'p2p' and service 'auth', received 'hack' and 'auth'");
+      return;
+    }
+    assert.fail("The protocol with tampered nonce should have failed");
+  });
+
+  it("Perform Protocol with KeyManager attacking service", async () => {
+    const vaultysId1 = await VaultysId.generateMachine();
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const challenger2 = new Challenger(vaultysId2);
+    const challengerattack = new Challenger(vaultysId2);
+    assert.equal(challenger1.isComplete(), false);
+    assert.equal(challenger1.hasFailed(), false);
+    challenger1.createChallenge("p2p", "auth");
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
+    await challengerattack.setChallenge(challenger1.getCertificate());
+    challengerattack.challenge!.service = "hack";
+    delete challengerattack.challenge?.pk2;
+    delete challengerattack.challenge?.sign2;
+    challengerattack.challenge!.nonce = challengerattack.challenge!.nonce?.subarray(0, 16);
+    await challenger2.update(challengerattack.getCertificate());
+    // console.log(challengerattack.challenge);
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
+    try {
+      await challenger1.update(challenger2.getCertificate());
+    } catch (err: any) {
+      assert.equal(err?.message, "The challenge was expecting protocol 'p2p' and service 'auth', received 'p2p' and 'hack'");
+      return;
+    }
+    assert.fail("The protocol with tampered nonce should have failed");
+  });
+
   it("Perform Protocol with KeyManager attacking nonce", async () => {
     const vaultysId1 = await VaultysId.generateMachine();
     const challenger1 = new Challenger(vaultysId1);

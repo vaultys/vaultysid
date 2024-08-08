@@ -2,13 +2,13 @@
   "name": "@vaultyshq/id",
   "version": "2.1.0",
   "description": "",
-  "main": "index.ts",
   "type": "module",
   "scripts": {
     "build_web": "webpack --config webpack.config.web.cjs",
     "build": "rm -fr dist && tsc --build",
     "prettier": "find src -name \"*.ts\" | xargs prettier --write",
-    "test": "mocha ./**/*.test.[jt]s"
+    "test": "mocha ./**/*.test.[jt]s",
+    "visualize": "webpack --config webpack.config.web.cjs --json > stats.json"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +23,7 @@
     "@types/pumpify": "^1.4.4",
     "@typescript-eslint/eslint-plugin": "^7.1.1",
     "@typescript-eslint/parser": "^7.1.1",
+    "buffer": "^6.0.3",
     "chai": "^5.1.0",
     "crypto-browserify": "^3.12.0",
     "eslint": "^8.57.0",
@@ -33,7 +34,6 @@
     "process": "^0.11.10",
     "stream-browserify": "^3.0.0",
     "ts-loader": "^9.5.1",
-    "ts-mocha": "^10.0.0",
     "ts-node": "^10.9.2",
     "tslib": "^2.6.2",
     "tsx": "^4.7.1",
@@ -50,12 +50,8 @@
     "@peculiar/x509": "^1.9.7",
     "@samuelthomas2774/saltpack": "^0.3.2",
     "@stricahq/bip32ed25519": "^1.1.0",
-    "buffer": "^6.0.3",
     "cbor": "^9.0.2",
     "tweetnacl": "^1.0.3"
-  },
-  "browser": {
-    "crypto": false
   },
   "packageManager": "pnpm@9.1.1+sha256.22e36fba7f4880ecf749a5ca128b8435da085ecd49575e7fb9e64d6bf4fad394"
 }

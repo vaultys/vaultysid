@@ -406,12 +406,6 @@ export default class IdManager {
       throw new Error(error as string);
     }
 
-    const context = challenger.getContext();
-    if (context.protocol != protocol || context.service != service) {
-      channel.send(Buffer.from([0]));
-      throw new Error(`The challenge was expecting protocol '${protocol}' and service '${service}', received '${context.protocol}' and '${context.service}'`);
-    }
-
     const cert = challenger.getCertificate();
     if (!cert) {
       channel.close();

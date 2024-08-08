@@ -1,38 +1,36 @@
-const webpack = require('webpack');
-const path = require('path')
+const webpack = require("webpack");
+const path = require("path");
 
 module.exports = {
-  mode: 'production',
-  entry: './index.ts',
-  devtool: 'source-map',
+  mode: "production",
+  entry: "./index.ts",
+  devtool: "source-map",
   module: {
     rules: [
       {
         test: /\.ts?$/,
-        use: 'ts-loader',
+        use: "ts-loader",
         exclude: /node_modules/,
       },
     ],
   },
   output: {
-    path: path.resolve(__dirname, 'web'),
-    filename: 'vaultysid.min.js',
-    library: 'Vaultys',
-    libraryTarget: 'umd'
+    path: path.resolve(__dirname, "web"),
+    filename: "vaultysid.min.js",
+    library: "Vaultys",
+    libraryTarget: "umd",
   },
   externals: {
-    "vaultys": "Vaultys",
+    vaultys: "Vaultys",
   },
   resolve: {
-    extensions: ['.ts', '.js', '...'],
+    extensions: [".ts", ".js", "..."],
     alias: {
       crypto: "crypto-browserify",
       stream: "stream-browserify",
-      vm: "vm-browserify"
     },
     fallback: {
-      buffer: require.resolve('buffer/'),
-      util: require.resolve("util/")
+      buffer: require.resolve("buffer/"),
     },
   },
   optimization: {
@@ -40,13 +38,10 @@ module.exports = {
   },
   plugins: [
     new webpack.ProvidePlugin({
-      process: 'process/browser'
+      process: "process/browser",
     }),
-    new webpack.NormalModuleReplacementPlugin(
-      /node:crypto/,
-      (resource) => {
-        resource.request = resource.request.replace(/^node:/, '');
-      }
-    )
-  ]
+    new webpack.NormalModuleReplacementPlugin(/node:crypto/, (resource) => {
+      resource.request = resource.request.replace(/^node:/, "");
+    }),
+  ],
 };
