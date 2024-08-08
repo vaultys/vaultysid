@@ -21,7 +21,7 @@ type Fido2Signature = {
 };
 
 type ExportFIDO2Data = {
-  v: 0 | 1;
+  v?: 0 | 1;
   f: Buffer;
   t: number;
   c: Buffer;

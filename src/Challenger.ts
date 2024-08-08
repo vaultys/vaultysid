@@ -124,7 +124,6 @@ const deserialize = (challenge: Buffer): ChallengeType => {
       if (id2.verifyChallenge(challenge, result.sign2, true)) {
         result.state = STEP1;
       } else {
-        // console.log(result);
         result.state = ERROR;
         result.error = "STEP1 failed to verification of pk2";
       }
@@ -233,7 +232,11 @@ export default class Challenger {
   static serializeCertificate = serializeUnsigned;
 
   async setChallenge(challengeString: Buffer) {
-    if (this.state !== UNITIALISED) throw new Error("Challenger already initialised, can't reset the state");
+    if (this.state !== UNITIALISED) {
+      this.state = ERROR;
+      throw new Error("Challenger already initialised, can't reset the state");
+    }
+
     this.challenge = deserialize(challengeString);
 
     if (!isLive(this.challenge, this.liveliness)) {
@@ -244,7 +247,7 @@ export default class Challenger {
 
     if (this.challenge.state === ERROR) {
       this.state = ERROR;
-      console.error(this.challenge);
+      // console.error(this.challenge);
       throw new Error(this.challenge.error);
     } else if (this.challenge.state === INIT) {
       this.mykey = this.vaultysId.id;
@@ -344,6 +347,10 @@ export default class Challenger {
         this.state = ERROR;
         throw new Error("Can't read the new incoming challenge");
       }
+      if (tempchallenge.protocol !== this.challenge!.protocol || tempchallenge.service !== this.challenge!.service) {
+        this.state = ERROR;
+        throw new Error(`The challenge was expecting protocol '${this.challenge!.protocol}' and service '${this.challenge!.service}', received '${tempchallenge.protocol}' and '${tempchallenge.service}'`);
+      }
       if (!tempchallenge.nonce?.subarray(0, 16).equals(this.challenge!.nonce!.subarray(0, 16))) {
         this.state = ERROR;
         throw new Error("Nonce has been tampered with");
@@ -359,11 +366,15 @@ export default class Challenger {
       if (tempchallenge.state === STEP1) {
         this.state = STEP1;
         if (!this.mykey || !tempchallenge.pk1 || !this.mykey.equals(tempchallenge.pk1)) {
+          this.state = ERROR;
           throw new Error(`The challenge has been tampered with. Received pk1 = '${tempchallenge.pk1}', expected pk1 = '${this.mykey}'`);
         }
         this.hisKey = tempchallenge.pk2;
         const serialized = serializeUnsigned(tempchallenge, this.vaultysId.version);
-        if (!serialized) throw new Error("Error processing Challenge");
+        if (!serialized) {
+          this.state = ERROR;
+          throw new Error("Error processing Challenge");
+        }
         tempchallenge.sign1 = await this.vaultysId.signChallenge(serialized);
         this.challenge = tempchallenge;
         this.state = this.challenge.state = COMPLETE;
