@@ -194,7 +194,8 @@ export default class IdManager {
 
   get displayName() {
     const metadata = this.store.get("metadata");
-    return metadata.firstname ? metadata.firstname + " " + (metadata.name ?? "") : metadata.name ?? "Anonymous " + this.vaultysId.fingerprint?.slice(-4);
+    const result = metadata.firstname ? metadata.firstname + " " + (metadata.name ?? "") : metadata.name;
+    return result?.length > 0 ? result : "Anonymous " + this.vaultysId.fingerprint?.slice(-4);
   }
 
   set phone(n) {
@@ -359,7 +360,8 @@ export default class IdManager {
   }
 
   async startSRP(channel: Channel, protocol: string, service: string, metadata: any = {}) {
-    const challenger = new Challenger(this.vaultysId.toVersion(0));
+    const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
+    const challenger = new Challenger(idV0);
     challenger.createChallenge(protocol, service, 0, metadata);
     const cert = challenger.getCertificate();
     if (!cert) {
@@ -397,7 +399,8 @@ export default class IdManager {
   }
 
   async acceptSRP(channel: Channel, protocol: string, service: string, keepChannel = false) {
-    const challenger = new Challenger(this.vaultysId.toVersion(0));
+    const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
+    const challenger = new Challenger(idV0);
     try {
       let message = await channel.receive();
       await challenger.update(message);
@@ -435,6 +438,7 @@ export default class IdManager {
   }
 
   saveContact(contact: VaultysId) {
+    console.log(this.vaultysId.version);
     contact.toVersion(this.vaultysId.version);
     if (contact.isMachine()) {
       this.store.substore("registrations").set(contact.did, {
