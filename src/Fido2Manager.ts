@@ -22,7 +22,7 @@ type Fido2Signature = {
 
 type ExportFIDO2Data = {
   v?: 0 | 1;
-  f: Buffer;
+  f: Buffer | string;
   t: number;
   c: Buffer;
   e: Buffer;
@@ -141,7 +141,7 @@ export default class Fido2Manager extends KeyManager {
     const f2m = new Fido2Manager();
     f2m.version = data.v ?? 0;
     f2m.capability = "private";
-    f2m.fid = data.f;
+    f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : data.f;
     f2m._transports = data.t ? data.t : 15;
     f2m.ckey = data.c;
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
@@ -159,7 +159,7 @@ export default class Fido2Manager extends KeyManager {
     const f2m = new Fido2Manager();
     f2m.version = obj.version ?? 0;
     f2m.level = obj.level;
-    f2m.fid = obj.fid;
+    f2m.fid = typeof obj.fid === "string" ? Buffer.from(obj.fid, "base64") : obj.fid;
     f2m._transports = obj.t ? obj.t : 15;
     f2m.ckey = obj.ckey.data ? Buffer.from(obj.ckey.data) : Buffer.from(obj.ckey);
     f2m.signer = getSignerFromCkey(f2m.ckey);
@@ -175,7 +175,7 @@ export default class Fido2Manager extends KeyManager {
     const f2m = new Fido2Manager();
     f2m.version = data.v ?? 0;
     f2m.capability = "public";
-    f2m.fid = data.f;
+    f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : data.f;
     f2m.ckey = data.c;
     f2m.signer = getSignerFromCkey(data.c);
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
