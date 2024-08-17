@@ -136,21 +136,30 @@ export default class IdManager {
     const s = this.store.substore("contacts");
     return s
       .list()
-      .map((c) => s.get(c))
-      .map(instanciateContact);
+      .map((did) => s.get(did))
+      .map(instanciateContact)
+      .map((contact) => contact.toVersion(this.vaultysId.version));
+  }
+
+  get apps() {
+    const s = this.store.substore("registrations");
+    return s
+      .list()
+      .map((did) => s.get(did))
+      .map(instanciateApp)
+      .map((app) => app.toVersion(this.vaultysId.version));
   }
 
   getContact(did: string) {
     const c = this.store.substore("contacts").get(did);
     if (!c) return null;
-    let vaultysId = instanciateContact(c);
-    if (vaultysId.version !== this.vaultysId.version) {
-      const forceVersion = this.vaultysId.version;
-      this.vaultysId.toVersion(vaultysId.version);
-      this.migrate(forceVersion);
-      this.store.save();
-    }
-    return vaultysId.toVersion(this.vaultysId.version);
+    return instanciateContact(c).toVersion(this.vaultysId.version);
+  }
+
+  getApp(did: string) {
+    const app = this.store.substore("registrations").get(did);
+    if (!app) return null;
+    return instanciateContact(app).toVersion(this.vaultysId.version);
   }
 
   setContactMetadata(did: string, name: string, value: any) {
@@ -439,13 +448,17 @@ export default class IdManager {
 
   saveApp(app: VaultysId, name?: string) {
     app.toVersion(this.vaultysId.version);
-    const appstore = this.store.substore("registrations");
-    if (!appstore.get(app.did)) {
-      appstore.set(app.did, {
-        site: name ?? app.did,
-        serverId: app?.id.toString("base64"),
-        certificate: app.certificate,
-      });
+    if (!app.isMachine()) {
+      this.saveContact(app);
+    } else {
+      const appstore = this.store.substore("registrations");
+      if (!appstore.get(app.did)) {
+        appstore.set(app.did, {
+          site: name ?? app.did,
+          serverId: app.id.toString("base64"),
+          certificate: app.certificate,
+        });
+      }
     }
   }
 
@@ -453,10 +466,13 @@ export default class IdManager {
     contact.toVersion(this.vaultysId.version);
     if (contact.isMachine()) {
       this.saveApp(contact);
-    } else if (!this.store.substore("contacts").get(contact.did)) {
-      this.store.substore("contacts").set(contact.did, contact);
+    } else {
+      const contactstore = this.store.substore("contacts");
+      if (!contactstore.get(contact.did)) {
+        contactstore.set(contact.did, contact);
+        this.store.save();
+      }
     }
-    this.store.save();
   }
 
   async askContact(channel: Channel, metadata: any = {}) {
