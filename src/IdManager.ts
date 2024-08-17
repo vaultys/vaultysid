@@ -437,16 +437,23 @@ export default class IdManager {
     }
   }
 
+  saveApp(app: VaultysId, name?: string) {
+    app.toVersion(this.vaultysId.version);
+    const appstore = this.store.substore("registrations");
+    if (!appstore.get(app.did)) {
+      appstore.set(app.did, {
+        site: name ?? app.did,
+        serverId: app?.id.toString("base64"),
+        certificate: app.certificate,
+      });
+    }
+  }
+
   saveContact(contact: VaultysId) {
-    console.log(this.vaultysId.version);
     contact.toVersion(this.vaultysId.version);
     if (contact.isMachine()) {
-      this.store.substore("registrations").set(contact.did, {
-        site: contact.did,
-        serverId: contact?.id.toString("base64"),
-        certificate: contact.certificate,
-      });
-    } else {
+      this.saveApp(contact);
+    } else if (!this.store.substore("contacts").get(contact.did)) {
       this.store.substore("contacts").set(contact.did, contact);
     }
     this.store.save();
