@@ -15,6 +15,7 @@ module.exports = {
     ],
   },
   output: {
+    globalObject: "this",
     path: path.resolve(__dirname, "web"),
     filename: "vaultysid.min.js",
     library: "Vaultys",
