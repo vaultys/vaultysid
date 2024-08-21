@@ -1,12 +1,19 @@
 // nodejs polyfill
-
 import SoftCredentials from "../src/SoftCredentials";
 
-// @ts-ignore
-global.navigator = {
+if (global.navigator) {
+  // node > 20
   // @ts-ignore
-  credentials: SoftCredentials,
-};
+  global.navigator.credentials = SoftCredentials;
+} else {
+  // node <= 20
+  // @ts-ignore
+  global.navigator = {
+    // @ts-ignore
+    credentials: SoftCredentials,
+  };
+}
+
 global.atob = (str: string) => Buffer.from(str, "base64").toString("latin1");
 global.btoa = (str: string) => Buffer.from(str, "latin1").toString("base64");
 

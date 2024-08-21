@@ -423,7 +423,7 @@ export default class IdManager {
         throw new Error("Error processing challenge");
       }
       // there is a caveat here, we are not sure that thhe last bit of information has been received
-      channel.send(certificate);
+      await channel.send(certificate);
       this.store.substore("wot").set(Date.now() + "", certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
