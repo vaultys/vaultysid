@@ -28,6 +28,7 @@ module.exports = {
     alias: {
       crypto: "crypto-browserify",
       stream: "stream-browserify",
+      vm: "vm-browserify",
     },
     fallback: {
       buffer: require.resolve("buffer/"),

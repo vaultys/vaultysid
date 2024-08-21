@@ -1,9 +1,17 @@
 import assert from "assert";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import IdManager from "../src/IdManager";
 import VaultysId from "../src/VaultysId";
 import { MemoryChannel } from "../src/MemoryChannel";
 import { MemoryStorage } from "../src/MemoryStorage";
+import { createReadStream, createWriteStream, readFileSync, rmSync } from "fs";
+
+const hashFile = (name: string) => {
+  const fileBuffer = readFileSync(name);
+  const hashSum = createHash("sha256");
+  hashSum.update(fileBuffer);
+  return hashSum.digest("hex");
+};
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
@@ -187,6 +195,43 @@ describe("SRG challenge with IdManager", () => {
 
     assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
     assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
+  });
+
+  it("Transfer data over encrypted Channel", async () => {
+    const channel = MemoryChannel.createEncryptedBidirectionnal();
+    //channel.setLogger((data) => console.log(data.toString("utf-8")));
+    if (!channel.otherend) assert.fail();
+    const s1 = MemoryStorage(() => "");
+    const s2 = MemoryStorage(() => "");
+    const manager1 = new IdManager(await VaultysId.generatePerson(), s1);
+    const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
+
+    const input = createReadStream("./test/assets/testfile.png", {
+      highWaterMark: 1 * 1024,
+    });
+    const output = createWriteStream("./test/assets/streamed_file_encrypted.png", {
+      highWaterMark: 1 * 1024,
+    });
+    await Promise.all([manager2.download(channel, output), manager1.upload(channel.otherend, input)]);
+    const hash1 = hashFile("./test/assets/testfile.png");
+    const hash2 = hashFile("./test/assets/streamed_file_encrypted.png");
+    assert.equal(hash1, hash2);
+    rmSync("./test/assets/streamed_file_encrypted.png");
+  });
+
+  it("Decrypt data over Channel", async () => {
+    const channel = MemoryChannel.createEncryptedBidirectionnal();
+    if (!channel.otherend) assert.fail();
+    // channel.setLogger((data) => console.log(data.toString("utf-8")));
+    const s1 = MemoryStorage(() => "");
+    const s2 = MemoryStorage(() => "");
+    const manager1 = new IdManager(await VaultysId.generatePerson(), s1);
+    const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
+
+    const encrypted = await manager2.vaultysId.encrypt("hello world", [manager1.vaultysId.id]);
+    if (!encrypted) assert.fail();
+    const [result] = await Promise.all([manager2.requestDecrypt(channel.otherend, Buffer.from(encrypted, "utf8")), manager1.acceptDecrypt(channel)]);
+    assert.equal(result?.toString("utf-8"), "hello world");
   });
 
   it("perform migration from version 0 to 1", async () => {

@@ -1,7 +1,8 @@
+import { Readable, Writable } from "stream";
 import Challenger from "./Challenger";
 import Fido2Manager from "./Fido2Manager";
 import KeyManager from "./KeyManager";
-import { Channel } from "./MemoryChannel";
+import { Channel, StreamChannel } from "./MemoryChannel";
 import { Store } from "./MemoryStorage";
 import SoftCredentials from "./SoftCredentials";
 import VaultysId from "./VaultysId";
@@ -337,6 +338,42 @@ export default class IdManager {
     this.store.save();
   }
 
+  async upload(channel: Channel, stream: Readable) {
+    const challenger = await this.startSRP(channel, "p2p", "transfer");
+    if (challenger.isComplete()) {
+      const { upload } = StreamChannel(channel);
+      await upload(stream);
+    }
+  }
+
+  async download(channel: Channel, stream: Writable) {
+    const challenger = await this.acceptSRP(channel, "p2p", "transfer");
+    if (challenger.isComplete()) {
+      const { download } = StreamChannel(channel);
+      await download(stream);
+    }
+  }
+
+  async requestDecrypt(channel: Channel, toDecrypt: Buffer) {
+    const challenger = await this.startSRP(channel, "p2p", "decrypt");
+    if (challenger.isComplete()) {
+      channel.send(toDecrypt);
+      return await channel.receive();
+    }
+  }
+
+  async acceptDecrypt(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) {
+    const challenger = await this.acceptSRP(channel, "p2p", "decrypt");
+    if (challenger.isComplete()) {
+      if (!accept || (await accept(challenger.getContactId()))) {
+        const toDecrypt = await channel.receive();
+        const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
+        if (decrypted) channel.send(Buffer.from(decrypted, "utf-8"));
+        else channel.send(Buffer.from([0]));
+      }
+    }
+  }
+
   /***************************/
   /*   SIGNING PARTY HERE!   */
   /***************************/
@@ -396,10 +433,11 @@ export default class IdManager {
     }
   }
 
-  async acceptSRP(channel: Channel, protocol: string, service: string, keepChannel = false) {
-    const challenger = new Challenger(this.vaultysId.toVersion(0));
+  async acceptSRP(channel: Channel, protocol: string, service: string, metadata: any = {}) {
+    const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
+    const challenger = new Challenger(idV0);
     try {
-      let message = await channel.receive();
+      const message = await channel.receive();
       await challenger.update(message);
     } catch (error) {
       channel.send(Buffer.from([0]));
@@ -416,7 +454,7 @@ export default class IdManager {
     channel.send(cert);
 
     try {
-      let message = await channel.receive();
+      const message = await channel.receive();
       await challenger.update(message);
     } catch (error) {
       channel.close();
@@ -424,7 +462,6 @@ export default class IdManager {
     }
     if (challenger.isComplete()) {
       const certificate = challenger.getCertificate();
-      if (!keepChannel) channel.close();
       this.store.substore("wot").set(Date.now() + "", certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
