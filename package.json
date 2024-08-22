@@ -54,5 +54,5 @@
     "cbor": "^9.0.2",
     "tweetnacl": "^1.0.3"
   },
-  "packageManager": "pnpm@9.1.1+sha256.22e36fba7f4880ecf749a5ca128b8435da085ecd49575e7fb9e64d6bf4fad394"
+  "packageManager": "pnpm@9.7.0+sha512.dc09430156b427f5ecfc79888899e1c39d2d690f004be70e05230b72cb173d96839587545d09429b55ac3c429c801b4dc3c0e002f653830a420fa2dd4e3cf9cf"
 }
