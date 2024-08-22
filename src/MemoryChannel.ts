@@ -109,6 +109,66 @@ export function StreamChannel(channel: Channel) {
   };
 }
 
+export function convertWebWritableStreamToNodeWritable(webWritableStream: WritableStream) {
+  const writer = webWritableStream.getWriter();
+  return new Writable({
+    async write(chunk, encoding, callback) {
+      try {
+        // Get a writer from the Web WritableStream
+        await writer.write(chunk);
+        writer.releaseLock(); // Release the lock on the writer after writing
+        callback(); // Signal that the chunk has been processed
+      } catch (error) {
+        callback(); // Signal an error if it occurred
+      }
+    },
+    async final(callback) {
+      try {
+        // Close the Web WritableStream
+        const writer = webWritableStream.getWriter();
+        await writer.close();
+        writer.releaseLock(); // Release the lock on the writer after closing
+        callback(); // Signal that the stream is finished
+      } catch (error) {
+        callback(); // Signal an error if it occurred during close
+      }
+    },
+    async destroy(error, callback) {
+      try {
+        // Abort the Web WritableStream in case of an error
+        const writer = webWritableStream.getWriter();
+        await writer.abort(error);
+        writer.releaseLock(); // Release the lock on the writer after aborting
+        callback(error); // Signal that the stream is destroyed
+      } catch (abortError) {
+        callback(); // Signal an error if it occurred during abort
+      }
+    },
+  });
+}
+
+export function convertWebReadableStreamToNodeReadable(webReadableStream: ReadableStream) {
+  const reader = webReadableStream.getReader();
+
+  return new Readable({
+    async read() {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          //console.log(value);
+          if (done) {
+            this.push(null); // Signal the end of the stream
+            break;
+          }
+          this.push(Buffer.from(value)); // Need to convert Uint8Array to Buffer
+        }
+      } catch (error) {
+        this.destroy();
+      }
+    },
+  });
+}
+
 export class MemoryChannel implements Channel {
   name?: string;
   otherend?: MemoryChannel;

@@ -358,7 +358,9 @@ export default class IdManager {
     const challenger = await this.startSRP(channel, "p2p", "decrypt");
     if (challenger.isComplete()) {
       channel.send(toDecrypt);
-      return await channel.receive();
+      const new_encrypted = await channel.receive();
+      const decrypted = await this.vaultysId.decrypt(new_encrypted.toString("utf-8"));
+      return Buffer.from(decrypted ?? "", "utf-8");
     }
   }
 
@@ -368,8 +370,10 @@ export default class IdManager {
       if (!accept || (await accept(challenger.getContactId()))) {
         const toDecrypt = await channel.receive();
         const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
-        if (decrypted) channel.send(Buffer.from(decrypted, "utf-8"));
-        else channel.send(Buffer.from([0]));
+        if (decrypted) {
+          const encrypted = await this.vaultysId.encrypt(decrypted, [challenger.getContactId().id]);
+          channel.send(Buffer.from(encrypted ?? "", "utf-8"));
+        } else channel.send(Buffer.from([0]));
       }
     }
   }
