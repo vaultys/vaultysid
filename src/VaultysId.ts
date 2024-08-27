@@ -1,5 +1,6 @@
-import { hash } from "./crypto";
+import { hash, randomBytes } from "./crypto";
 import Fido2Manager from "./Fido2Manager";
+import Fido2PRFManager from "./Fido2PRFManager";
 import KeyManager from "./KeyManager";
 import SoftCredentials from "./SoftCredentials";
 
@@ -7,6 +8,7 @@ const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
 const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
+const TYPE_FIDO2PRF = 4;
 
 type StringifiedBuffer = {
   data: number[];
@@ -69,11 +71,83 @@ export default class VaultysId {
     if (type == TYPE_FIDO2) {
       const f2m = Fido2Manager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
+    } else if (type == TYPE_FIDO2PRF) {
+      const f2m = Fido2PRFManager.fromId(cleanId.slice(1));
+      return new VaultysId(f2m, certificate, type);
     } else {
       const km = KeyManager.fromId(cleanId.slice(1));
       return new VaultysId(km, certificate, type);
     }
   }
+
+  static createPublicKeyCredentialCreationOptions = (requireResidentKey: boolean): PublicKeyCredentialCreationOptions => {
+    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
+    const options: PublicKeyCredentialCreationOptions = {
+      challenge: randomBytes(32),
+      rp: {
+        name: "Vaultys ID",
+      },
+      user: {
+        id: randomBytes(16),
+        name: "Vaultys ID",
+        displayName: "Vaultys Wallet ID",
+      },
+      attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
+      authenticatorSelection: {
+        authenticatorAttachment: requireResidentKey ? "platform" : "cross-platform",
+        residentKey: requireResidentKey ? "required" : "discouraged",
+        userVerification: "preferred",
+      },
+      extensions: {
+        // @ts-expect-error "prf" is not yet included in dom types
+        prf: {
+          eval: {
+            first: Buffer.from("VaultysID salt", "utf-8"),
+          },
+        },
+      },
+      pubKeyCredParams: [
+        {
+          type: "public-key",
+          alg: -7, // SECP256/ECDSA, Ed25519/EdDSA (-8) not supported natively on mobile or yubikey (crying)
+        },
+        {
+          type: "public-key",
+          alg: -8, // Ed25519/EdDSA prefered
+        },
+        {
+          type: "public-key",
+          alg: -257, // RS256
+        },
+        // {
+        //   "type": "public-key",
+        //   "alg": -36
+        // },
+        // {
+        //   "type": "public-key",
+        //   "alg": -37
+        // },
+        // {
+        //   "type": "public-key",
+        //   "alg": -38
+        // },
+        // {
+        //   "type": "public-key",
+        //   "alg": -39
+        // },
+        // {
+        //   "type": "public-key",
+        //   "alg": -258
+        // },
+        // {
+        //   "type": "public-key",
+        //   "alg": -259
+        // }
+      ],
+    };
+
+    return options;
+  };
 
   static async fromEntropy(entropy: Buffer, type: number) {
     const cleanedEntropy = entropy as Buffer;
@@ -85,8 +159,13 @@ export default class VaultysId {
   static async fido2FromAttestation(attestation: PublicKeyCredential) {
     // should be somehow valid.
     await SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true);
-    const f2m = await Fido2Manager.createFromAttestation(attestation);
-    return new VaultysId(f2m, undefined, TYPE_FIDO2);
+    if (attestation.getClientExtensionResults().prf?.enabled) {
+      const f2m = await Fido2PRFManager.createFromAttestation(attestation);
+      return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
+    } else {
+      const f2m = await Fido2Manager.createFromAttestation(attestation);
+      return new VaultysId(f2m, undefined, TYPE_FIDO2);
+    }
   }
 
   static async machineFromEntropy(entropy: Buffer) {
@@ -106,6 +185,9 @@ export default class VaultysId {
     const type = secretBuffer[0];
     if (type == TYPE_FIDO2) {
       const f2m = Fido2Manager.fromSecret(secretBuffer.slice(1));
+      return new VaultysId(f2m, undefined, type);
+    } else if (type == TYPE_FIDO2PRF) {
+      const f2m = Fido2PRFManager.fromSecret(secretBuffer.slice(1));
       return new VaultysId(f2m, undefined, type);
     } else {
       const km = KeyManager.fromSecret(secretBuffer.slice(1));
@@ -188,7 +270,7 @@ export default class VaultysId {
   }
 
   isHardware() {
-    return this.type === TYPE_FIDO2;
+    return this.type === TYPE_FIDO2 || this.type === TYPE_FIDO2PRF;
   }
 
   isMachine() {

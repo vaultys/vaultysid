@@ -1,11 +1,11 @@
 import { dearmorAndDecrypt, encryptAndArmor } from "@samuelthomas2774/saltpack";
-import { hash, randomBytes } from "./crypto";
+import { hash, randomBytes, secureErase } from "./crypto";
 import { Buffer } from "buffer";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
 import * as bip32fix from "@stricahq/bip32ed25519";
 
-//@ts-ignore
+//@ts-expect-error fix for wrong way of exporting bip32ed25519
 const bip32 = bip32fix.default ?? bip32fix;
 
 const LEVEL_ROOT = 1;
@@ -65,7 +65,7 @@ export default class KeyManager {
   level: number = 1;
   version: 0 | 1 = 1;
   capability: "private" | "public" = "private";
-  entropy!: Buffer;
+  entropy: Buffer | undefined;
   proof!: Buffer;
   proofKey!: KeyPair;
   signer!: KeyPair;
@@ -248,13 +248,24 @@ export default class KeyManager {
     }
   }
 
-  async encrypt(plaintext: string, recipientIds: Buffer[]) {
-    if (this.capability == "private") {
-      const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
-      return await encryptAndArmor(plaintext, this.cypher as BoxKeyPair, publicKeys);
-    } else {
-      return null;
+  cleanSecureData() {
+    if (this.cypher?.secretKey) {
+      secureErase(this.cypher.secretKey);
+      delete this.cypher.secretKey;
     }
+    if (this.signer?.secretKey) {
+      secureErase(this.signer.secretKey);
+      delete this.signer.secretKey;
+    }
+    if (this.entropy) {
+      secureErase(this.entropy);
+      delete this.entropy;
+    }
+  }
+
+  async encrypt(plaintext: string, recipientIds: Buffer[]) {
+    const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
+    return await encryptAndArmor(plaintext, this.cypher as BoxKeyPair, publicKeys);
   }
 
   async decrypt(encryptedMessage: string, senderId: Buffer | null = null) {

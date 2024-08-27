@@ -264,9 +264,10 @@ export default class SoftCredentials {
   }
 
   // credentials request payload
-  static createRequest(alg: number) {
-    let challenge = Buffer.from(randomBytes(32).toString("base64"));
-    return {
+  static createRequest(alg: number, prf = false) {
+    const challenge = Buffer.from(randomBytes(32).toString("base64"));
+
+    const result: CredentialCreationOptions = {
       publicKey: {
         challenge,
         rp: {
@@ -280,12 +281,18 @@ export default class SoftCredentials {
         },
         pubKeyCredParams: [
           {
-            type: "public-key" as "public-key",
+            type: "public-key" as const,
             alg,
           },
         ],
       },
     };
+
+    if (prf) {
+      result.publicKey!.extensions = { prf: { eval: { first: randomBytes(32) } } };
+    }
+
+    return result;
   }
 
   static getCertificateInfo(response: AuthenticatorAttestationResponse) {
@@ -298,8 +305,9 @@ export default class SoftCredentials {
     }
   }
 
-  static async create({ publicKey }: { publicKey: PublicKeyCredentialCreationOptions }, origin = "test"): Promise<PublicKeyCredential> {
+  static async create(options: CredentialCreationOptions, origin = "test"): Promise<PublicKeyCredential> {
     const credential = new SoftCredentials();
+    const publicKey = options.publicKey!;
     credential.options = publicKey;
     credential.rpId = publicKey.rp.id!;
     credential.userHandle = Buffer.from(publicKey.user.id as ArrayBuffer);
@@ -357,8 +365,14 @@ export default class SoftCredentials {
       rawId: credential.rawId,
       authenticatorAttachment: null,
       type: "public-key",
+      //@ts-expect-error prf not yet in dom types
       getClientExtensionResults: () => {
-        return {};
+        //@ts-expect-error prf not yet in dom types
+        if (publicKey.extensions?.prf?.eval?.first) {
+          return { prf: { enabled: true } };
+        } else {
+          return {};
+        }
       },
       response: {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
@@ -374,7 +388,7 @@ export default class SoftCredentials {
   }
 
   static simpleVerify(COSEPublicKey: Buffer, response: AuthenticatorAssertionResponse, userVerification = false) {
-    const ckey = cbor.decode(COSEPublicKey);
+    const ckey = cbor.decode(COSEPublicKey, { extendedResults: true }).value;
     const rpIdHash = response.authenticatorData.slice(0, 32);
     const flagsInt = Buffer.from(response.authenticatorData)[32];
     const counter = response.authenticatorData.slice(33, 37);
@@ -452,7 +466,7 @@ export default class SoftCredentials {
   static async get({ publicKey }: { publicKey: PublicKeyCredentialRequestOptions }, origin = "test"): Promise<PublicKeyCredential> {
     if (!publicKey.allowCredentials) throw new Error();
     const id = Buffer.from(publicKey.allowCredentials[0].id as ArrayBuffer).toString("base64");
-    let credential = credentials[id];
+    const credential = credentials[id];
     credential.signCount += 1;
     // prepare signature
     const clientData = {
@@ -466,7 +480,7 @@ export default class SoftCredentials {
     const signCount = Buffer.allocUnsafe(4);
     signCount.writeUInt32BE(credential.signCount);
     const authenticatorData = Buffer.concat([rpIdHash, flags, signCount]);
-    let toSign = Buffer.concat([authenticatorData, clientDataHash]);
+    const toSign = Buffer.concat([authenticatorData, clientDataHash]);
     let signature: Uint8Array = new Uint8Array();
     if (credential.alg === -7) {
       signature = p256.sign(toSign, credential.keyPair.privateKey, { prehash: true }).toDERRawBytes();
@@ -479,8 +493,16 @@ export default class SoftCredentials {
       rawId: Buffer.from(id, "base64"),
       type: "public-key",
       authenticatorAttachment: null,
+      //@ts-expect-error prf not yet in dom types
       getClientExtensionResults: () => {
-        return {};
+        //@ts-expect-error prf not yet in dom types
+        if (publicKey.extensions?.prf?.eval?.first) {
+          // unsafe and not following w3c recommendation. for testing purpose only
+          //@ts-expect-error prf not yet in dom types
+          return { prf: { results: { first: hash("sha256", publicKey.extensions?.prf?.eval?.first as Buffer) } } };
+        } else {
+          return {};
+        }
       },
       response: {
         authenticatorData,

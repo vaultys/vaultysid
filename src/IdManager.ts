@@ -365,17 +365,17 @@ export default class IdManager {
   }
 
   async requestDecrypt(channel: Channel, toDecrypt: Buffer) {
-    const challenger = await this.startSRP(channel, "p2p", "decrypt");
+    const challenger = await this.acceptSRP(channel, "p2p", "decrypt");
     if (challenger.isComplete()) {
       channel.send(toDecrypt);
       const new_encrypted = await channel.receive();
       const decrypted = await this.vaultysId.decrypt(new_encrypted.toString("utf-8"));
       return Buffer.from(decrypted ?? "", "utf-8");
-    }
+    } else channel.send(Buffer.from([0]));
   }
 
   async acceptDecrypt(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) {
-    const challenger = await this.acceptSRP(channel, "p2p", "decrypt");
+    const challenger = await this.startSRP(channel, "p2p", "decrypt");
     if (challenger.isComplete()) {
       if (!accept || (await accept(challenger.getContactId()))) {
         const toDecrypt = await channel.receive();
@@ -385,7 +385,7 @@ export default class IdManager {
           channel.send(Buffer.from(encrypted ?? "", "utf-8"));
         } else channel.send(Buffer.from([0]));
       }
-    }
+    } else channel.send(Buffer.from([0]));
   }
 
   /***************************/

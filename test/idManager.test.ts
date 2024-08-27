@@ -5,6 +5,8 @@ import VaultysId from "../src/VaultysId";
 import { MemoryChannel } from "../src/MemoryChannel";
 import { MemoryStorage } from "../src/MemoryStorage";
 import { createReadStream, createWriteStream, readFileSync, rmSync } from "fs";
+import SoftCredentials from "../src/SoftCredentials";
+import "./utils";
 
 const hashFile = (name: string) => {
   const fileBuffer = readFileSync(name);
@@ -203,7 +205,8 @@ describe("SRG challenge with IdManager", () => {
     if (!channel.otherend) assert.fail();
     const s1 = MemoryStorage(() => "");
     const s2 = MemoryStorage(() => "");
-    const manager1 = new IdManager(await VaultysId.generatePerson(), s1);
+    const attestation = await SoftCredentials.create(SoftCredentials.createRequest(-7, true));
+    const manager1 = new IdManager(await VaultysId.fido2FromAttestation(attestation), s1);
     const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
 
     const input = createReadStream("./test/assets/testfile.png", {
@@ -225,7 +228,8 @@ describe("SRG challenge with IdManager", () => {
     // channel.setLogger((data) => console.log(data.toString("utf-8")));
     const s1 = MemoryStorage(() => "");
     const s2 = MemoryStorage(() => "");
-    const manager1 = new IdManager(await VaultysId.generatePerson(), s1);
+    const attestation = await SoftCredentials.create(SoftCredentials.createRequest(-7));
+    const manager1 = new IdManager(await VaultysId.fido2FromAttestation(attestation), s1);
     const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
 
     const encrypted = await manager2.vaultysId.encrypt("hello world", [manager1.vaultysId.id]);

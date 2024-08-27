@@ -5,7 +5,7 @@ import "./utils";
 
 // credentials request payload
 const createRequest = (alg: number) => {
-  let challenge = crypto.randomBytes(32);
+  const challenge = crypto.randomBytes(32);
   return {
     publicKey: {
       challenge,

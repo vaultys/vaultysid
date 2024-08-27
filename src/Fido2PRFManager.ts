@@ -1,11 +1,11 @@
-import { hash, randomBytes } from "./crypto";
+import { hash, randomBytes, secureErase } from "./crypto";
 import cbor from "cbor";
-import nacl from "tweetnacl";
+import nacl, { BoxKeyPair } from "tweetnacl";
 import SoftCredentials from "./SoftCredentials";
 import KeyManager, { KeyPair } from "./KeyManager";
 import { decode, encode } from "@msgpack/msgpack";
+import { dearmorAndDecrypt, encryptAndArmor } from "@samuelthomas2774/saltpack";
 
-const sha512 = (data: Buffer) => hash("sha512", data);
 const sha256 = (data: Buffer) => hash("sha256", data);
 
 declare global {
@@ -39,7 +39,7 @@ const lookup: Record<LookupType, number> = {
   "smart-card": 32,
 };
 
-const serializeID_v0 = (km: Fido2Manager) => {
+const serializeID_v0 = (km: Fido2PRFManager) => {
   const version = Buffer.from([0x83, 0xa1, 0x76, km.version]);
   const ckey = Buffer.concat([Buffer.from([0xa1, 0x63, 0xc5, 0x00, km.ckey.length]), km.ckey]);
   const cypher = Buffer.concat([Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length]), km.cypher.publicKey]);
@@ -50,7 +50,8 @@ const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && 
 const fromTransports = (transports: string[]): number => transports.reduceRight((memo, i) => memo + (lookup[i as LookupType] ? lookup[i as LookupType] : 0), 0);
 
 const getAuthTypeFromCkey = (ckey: Buffer) => {
-  const type = cbor.decode(ckey).get(1);
+  const decoded = cbor.decode(ckey, { extendedResults: true });
+  const type = decoded.value.get(1);
   if (type === 1) {
     return "Ed25519VerificationKey2020";
   } else if (type === 2) {
@@ -59,15 +60,16 @@ const getAuthTypeFromCkey = (ckey: Buffer) => {
 };
 
 const getSignerFromCkey = (ckey: Buffer) => {
-  const k = cbor.decode(ckey);
+  const k = cbor.decode(ckey, { extendedResults: true }).value;
   let publicKey: Buffer = Buffer.from([]);
   if (k.get(3) == -7) publicKey = Buffer.concat([Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
   else if (k.get(3) == -8) publicKey = k.get(-2);
   return { publicKey } as KeyPair;
 };
 
-export default class Fido2Manager extends KeyManager {
+export default class Fido2PRFManager extends KeyManager {
   fid!: Buffer;
+  prfsalt = Buffer.from("VaultysID salt");
   _transports: number = 0;
   ckey!: Buffer;
 
@@ -82,8 +84,9 @@ export default class Fido2Manager extends KeyManager {
   }
 
   static async createFromAttestation(attestation: PublicKeyCredential) {
-    const f2m = new Fido2Manager();
+    const f2m = new Fido2PRFManager();
     f2m.ckey = SoftCredentials.getCOSEPublicKey(attestation)!;
+    console.log(attestation, f2m.ckey);
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
     f2m.fid = Buffer.from(attestation.id, "base64");
 
@@ -94,17 +97,8 @@ export default class Fido2Manager extends KeyManager {
 
     // signing
     f2m.signer = getSignerFromCkey(f2m.ckey);
-
-    //encrypting
-    const entropy = randomBytes(32);
-    const seed = sha512(entropy);
-    const cypher = nacl.box.keyPair.fromSecretKey(seed.slice(0, 32));
-    f2m.cypher = {
-      publicKey: Buffer.from(cypher.publicKey),
-      secretKey: Buffer.from(cypher.secretKey),
-    };
-
-    f2m.entropy = entropy;
+    f2m.cypher = await f2m.getCypher();
+    delete f2m.cypher.secretKey;
     return f2m;
   }
 
@@ -131,14 +125,14 @@ export default class Fido2Manager extends KeyManager {
         f: this.fid,
         t: this._transports,
         c: this.ckey,
-        e: this.cypher.secretKey,
+        e: this.cypher.publicKey,
       }),
     );
   }
 
   static fromSecret(secret: Buffer) {
     const data = decode(secret) as ExportFIDO2Data;
-    const f2m = new Fido2Manager();
+    const f2m = new Fido2PRFManager();
     f2m.version = data.v ?? 0;
     f2m.capability = "private";
     f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : data.f;
@@ -146,17 +140,12 @@ export default class Fido2Manager extends KeyManager {
     f2m.ckey = data.c;
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
     f2m.signer = getSignerFromCkey(data.c);
-    const cypher = nacl.box.keyPair.fromSecretKey(data.e);
-    f2m.cypher = {
-      publicKey: Buffer.from(cypher.publicKey),
-      secretKey: Buffer.from(cypher.secretKey),
-    };
-
+    f2m.cypher = { publicKey: data.e };
     return f2m;
   }
 
   static instantiate(obj: any) {
-    const f2m = new Fido2Manager();
+    const f2m = new Fido2PRFManager();
     f2m.version = obj.version ?? 0;
     f2m.level = obj.level;
     f2m.fid = typeof obj.fid === "string" ? Buffer.from(obj.fid, "base64") : obj.fid;
@@ -172,7 +161,7 @@ export default class Fido2Manager extends KeyManager {
 
   static fromId(id: Buffer) {
     const data = decode(id) as ExportFIDO2Data;
-    const f2m = new Fido2Manager();
+    const f2m = new Fido2PRFManager();
     f2m.version = data.v ?? 0;
     f2m.capability = "public";
     f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : data.f;
@@ -242,6 +231,65 @@ export default class Fido2Manager extends KeyManager {
       return false;
     }
     return SoftCredentials.simpleVerify(this.ckey, response, userVerification);
+  }
+
+  cleanSecureData() {
+    if (this.cypher?.secretKey) {
+      secureErase(this.cypher.secretKey);
+      delete this.cypher.secretKey;
+    }
+  }
+
+  async getCypher() {
+    if (this.cypher?.secretKey) return this.cypher;
+    const publicKey: PublicKeyCredentialRequestOptions = {
+      challenge: Buffer.from([]),
+      userVerification: "preferred",
+      allowCredentials: [
+        {
+          type: "public-key",
+          id: this.fid,
+          transports: getTransports(this._transports) as AuthenticatorTransport[],
+        },
+      ],
+      extensions: {
+        prf: {
+          eval: {
+            // Input the contextual information
+            first: this.prfsalt,
+            // There is a "second" optional field too
+            // Though it is intended for key rotation.
+          },
+        },
+      },
+    };
+    const result = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
+    const {
+      prf: {
+        results: { first },
+      },
+    } = result.getClientExtensionResults();
+    // console.log(first);
+    const cypher = nacl.box.keyPair.fromSecretKey(Buffer.from(first));
+    this.cypher = {
+      publicKey: Buffer.from(cypher.publicKey),
+      secretKey: Buffer.from(cypher.secretKey),
+    };
+    return this.cypher;
+  }
+
+  async encrypt(plaintext: string, recipientIds: Buffer[]) {
+    const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
+    const cypher = await this.getCypher();
+    return await encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys);
+  }
+
+  async decrypt(encryptedMessage: string, senderId: Buffer | null = null) {
+    if (this.capability === "public") return null;
+    const cypher = await this.getCypher();
+    const senderKey = senderId ? KeyManager.fromId(senderId).cypher.publicKey : null;
+    const message = await dearmorAndDecrypt(encryptedMessage, cypher as BoxKeyPair, senderKey);
+    return message.toString();
   }
 
   async createRevocationCertificate(newId: string) {
