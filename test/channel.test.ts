@@ -17,7 +17,7 @@ describe("Channel tests", () => {
     channel.send(Buffer.from("hello world", "utf-8"));
     const message = await channel.otherend?.receive();
     assert.equal("hello world", message?.toString("utf-8"));
-  }).timeout(2000);
+  });
 
   it("stream file", async () => {
     const channel = MemoryChannel.createBidirectionnal();
@@ -53,5 +53,5 @@ describe("Channel tests", () => {
     const hash2 = hashFile("./test/assets/streamed_file_encrypted.png");
     assert.equal(hash1, hash2);
     fs.rmSync("./test/assets/streamed_file_encrypted.png");
-  }).timeout(2000);
+  });
 });

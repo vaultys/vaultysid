@@ -95,7 +95,7 @@ export default class Fido2PRFManager extends KeyManager {
   static async createFromAttestation(attestation: PublicKeyCredential) {
     const f2m = new Fido2PRFManager();
     f2m.ckey = SoftCredentials.getCOSEPublicKey(attestation)!;
-    console.log(attestation, f2m.ckey);
+    //console.log(attestation, f2m.ckey);
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
     f2m.fid = Buffer.from(attestation.id, "base64");
 

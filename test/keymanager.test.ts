@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import KeyManager, { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
 import * as bip32 from "@stricahq/bip32ed25519";
 
-//@ts-ignore
+// @ts-expect-error weird import for @stricahq/bip32ed25519
 const bip32fix = bip32.default ?? bip32;
 
 const writeVector = (km: KeyManager) => {
@@ -105,6 +105,7 @@ describe("KeyManager tests", () => {
     assert.ok(publicKM.verifySwapingCertificate(hiscp));
 
     // create the new Keymanager iterating on the index
+    if (!km.entropy) assert.fail();
     const newkm = await KeyManager.create_Id25519_fromEntropy(km.entropy, 1);
     assert.equal(newkm.id.toString("hex"), hiscp?.newId.toString("hex"));
   });

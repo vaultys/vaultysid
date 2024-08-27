@@ -3,12 +3,11 @@ import SoftCredentials from "../src/SoftCredentials";
 import assert from "assert";
 import VaultysId from "../src/VaultysId";
 import "./utils";
-import Fido2PRFManager from "../src/Fido2PRFManager";
 
 describe("Fido2PRFManager", () => {
   it("serder a Fido2PRFManager (ECDSA)", async () => {
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const f2m = await Fido2PRFManager.createFromAttestation(attestation);
     const secret = f2m.getSecret();
     const f2mbis = Fido2PRFManager.fromSecret(secret);
@@ -17,7 +16,7 @@ describe("Fido2PRFManager", () => {
 
   it("serder a VaultysId backed by a Fido2PRFManager (ECDSA)", async () => {
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const id1 = await VaultysId.fido2FromAttestation(attestation);
     assert.equal(id1.type, 4);
     const id2 = VaultysId.fromId(id1.id);
@@ -26,7 +25,7 @@ describe("Fido2PRFManager", () => {
 
   it("serder a VaultysId backed by a Fido2PRFManager (EdDSA)", async () => {
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const id1 = await VaultysId.fido2FromAttestation(attestation);
     const id2 = VaultysId.fromId(id1.id);
     assert.deepStrictEqual(id1.didDocument, id2.didDocument);
@@ -34,17 +33,17 @@ describe("Fido2PRFManager", () => {
 
   it("serder a private Fido2PRFManager to a public Fido2PRFManager (EdDSA)", async () => {
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const f2m = await Fido2PRFManager.createFromAttestation(attestation);
     const publicF2m = Fido2PRFManager.fromId(f2m.id);
     assert.equal(f2m.id.toString("hex"), publicF2m.id.toString("hex"));
   });
 
   it("sign and verify a message using EdDSA", async () => {
-    // @ts-ignore
+    // @ts-expect-error mockup
     global.CredentialUserInteractionRequested = 0;
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const signer = await Fido2PRFManager.createFromAttestation(attestation);
     const id = signer.id;
     const verifier = Fido2PRFManager.fromId(id);
@@ -56,10 +55,10 @@ describe("Fido2PRFManager", () => {
   });
 
   it("sign and verify a message using ECDSA", async () => {
-    // @ts-ignore
+    // @ts-expect-error mockup
     global.CredentialUserInteractionRequested = 0;
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const signer = await Fido2PRFManager.createFromAttestation(attestation);
     const id = signer.id;
     const verifier = Fido2PRFManager.fromId(id);
@@ -74,11 +73,11 @@ describe("Fido2PRFManager", () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
     const attestation3 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const alice = await Fido2PRFManager.createFromAttestation(attestation1);
-    // @ts-ignore
+    // @ts-expect-error mockup
     const bob = await Fido2PRFManager.createFromAttestation(attestation2);
-    // @ts-ignore
+    // @ts-expect-error mockup
     const eve = await Fido2PRFManager.createFromAttestation(attestation3);
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
@@ -99,11 +98,11 @@ describe("Fido2PRFManager", () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
     const attestation3 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const alice = await Fido2PRFManager.createFromAttestation(attestation1);
-    // @ts-ignore
+    // @ts-expect-error mockup
     const bob = await Fido2PRFManager.createFromAttestation(attestation2);
-    // @ts-ignore
+    // @ts-expect-error mockup
     const eve = await Fido2PRFManager.createFromAttestation(attestation3);
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
