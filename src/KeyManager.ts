@@ -216,7 +216,7 @@ export default class KeyManager {
   // }
 
   async createSwapingCertificate() {
-    if (this.level === LEVEL_ROOT) {
+    if (this.level === LEVEL_ROOT && this.entropy) {
       const newKey = await KeyManager.create_Id25519_fromEntropy(this.entropy, this.swapIndex + 1);
 
       const hiscp: HISCP = {

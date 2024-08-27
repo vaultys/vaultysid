@@ -1,4 +1,4 @@
-import { hash, randomBytes, secureErase } from "./crypto";
+import { hash, secureErase } from "./crypto";
 import cbor from "cbor";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import SoftCredentials from "./SoftCredentials";
@@ -13,6 +13,15 @@ declare global {
     CredentialUserInteractionRequest: () => Promise<void>;
   }
 }
+
+type Fido2PRFManagerSerialized = {
+  version: 0 | 1;
+  level: number;
+  fid: string | Buffer;
+  ckey: { data: Buffer } | Buffer;
+  cypher: { publicKey: { data: Buffer } | Buffer };
+  _transports: number;
+};
 
 type Fido2Signature = {
   s: Buffer;
@@ -144,17 +153,19 @@ export default class Fido2PRFManager extends KeyManager {
     return f2m;
   }
 
-  static instantiate(obj: any) {
+  static instantiate(obj: Fido2PRFManagerSerialized) {
     const f2m = new Fido2PRFManager();
     f2m.version = obj.version ?? 0;
     f2m.level = obj.level;
     f2m.fid = typeof obj.fid === "string" ? Buffer.from(obj.fid, "base64") : obj.fid;
-    f2m._transports = obj.t ? obj.t : 15;
-    f2m.ckey = obj.ckey.data ? Buffer.from(obj.ckey.data) : Buffer.from(obj.ckey);
+    f2m._transports = obj._transports ?? 15;
+    const _ckey = obj.ckey as { data: Buffer };
+    f2m.ckey = _ckey.data ? Buffer.from(_ckey.data) : Buffer.from(obj.ckey as Buffer);
     f2m.signer = getSignerFromCkey(f2m.ckey);
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+    const _publicKey = obj.cypher.publicKey as { data: Buffer };
     f2m.cypher = {
-      publicKey: obj.cypher.publicKey.data ? Buffer.from(obj.cypher.publicKey.data) : Buffer.from(obj.cypher.publicKey),
+      publicKey: _publicKey.data ? Buffer.from(_publicKey.data) : Buffer.from(obj.cypher.publicKey as Buffer),
     };
     return f2m;
   }
@@ -253,6 +264,7 @@ export default class Fido2PRFManager extends KeyManager {
         },
       ],
       extensions: {
+        // @ts-expect-error prf not yet in dom
         prf: {
           eval: {
             // Input the contextual information
@@ -265,6 +277,7 @@ export default class Fido2PRFManager extends KeyManager {
     };
     const result = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
     const {
+      // @ts-expect-error prf not yet in dom
       prf: {
         results: { first },
       },

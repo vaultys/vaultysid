@@ -289,6 +289,7 @@ export default class SoftCredentials {
     };
 
     if (prf) {
+      // @ts-expect-error prf not yet in dom
       result.publicKey!.extensions = { prf: { eval: { first: randomBytes(32) } } };
     }
 

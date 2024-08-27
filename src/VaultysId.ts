@@ -159,6 +159,7 @@ export default class VaultysId {
   static async fido2FromAttestation(attestation: PublicKeyCredential) {
     // should be somehow valid.
     await SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true);
+    // @ts-expect-error prf not yet in dom
     if (attestation.getClientExtensionResults().prf?.enabled) {
       const f2m = await Fido2PRFManager.createFromAttestation(attestation);
       return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
