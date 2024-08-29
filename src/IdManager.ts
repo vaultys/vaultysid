@@ -7,6 +7,7 @@ import { Store } from "./MemoryStorage";
 import SoftCredentials from "./SoftCredentials";
 import VaultysId from "./VaultysId";
 import { randomBytes } from "./crypto";
+import Fido2PRFManager from "./Fido2PRFManager";
 
 const getSignatureType = (challenge: string) => {
   if (challenge.startsWith("vaultys://login?")) {
@@ -22,6 +23,8 @@ const instanciateContact = (c: any) => {
   let vaultysId: VaultysId;
   if (c.type === 3) {
     vaultysId = new VaultysId(Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
+  } else if (c.type === 4) {
+    vaultysId = new VaultysId(Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
   } else {
     vaultysId = new VaultysId(KeyManager.instantiate(c.keyManager), c.certificate, c.type);
   }
@@ -75,8 +78,8 @@ export default class IdManager {
     const slave_store = master ? this.store : otherStore;
     this.store.set("metadata", { ...slave_store.get("metadata"), ...master_store.get("metadata") });
     ["signatures", "wot"].forEach((table) => {
-      let other = otherStore.substore(table);
-      let me = this.store.substore(table);
+      const other = otherStore.substore(table);
+      const me = this.store.substore(table);
       other.list().forEach((k) => {
         if (!me.get(k)) {
           me.set(k, other.get(k));
@@ -84,8 +87,8 @@ export default class IdManager {
       });
     });
 
-    let other = otherStore.substore("contacts");
-    let me = this.store.substore("contacts");
+    const other = otherStore.substore("contacts");
+    const me = this.store.substore("contacts");
     const m = master ? other : me;
     const s = master ? me : other;
     other.list().forEach((did) => {
@@ -160,7 +163,7 @@ export default class IdManager {
   getApp(did: string) {
     const app = this.store.substore("registrations").get(did);
     if (!app) return null;
-    return instanciateContact(app).toVersion(this.vaultysId.version);
+    return instanciateApp(app).toVersion(this.vaultysId.version);
   }
 
   setContactMetadata(did: string, name: string, value: any) {
@@ -353,7 +356,7 @@ export default class IdManager {
     if (challenger.isComplete()) {
       const { upload } = StreamChannel(channel);
       await upload(stream);
-    }
+    } else channel.send(Buffer.from([0]));
   }
 
   async download(channel: Channel, stream: Writable) {
@@ -361,7 +364,7 @@ export default class IdManager {
     if (challenger.isComplete()) {
       const { download } = StreamChannel(channel);
       await download(stream);
-    }
+    } else channel.send(Buffer.from([0]));
   }
 
   async requestDecrypt(channel: Channel, toDecrypt: Buffer) {

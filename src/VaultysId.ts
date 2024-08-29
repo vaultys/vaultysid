@@ -1,3 +1,4 @@
+import { createHmac, Hmac } from "crypto";
 import { hash, randomBytes } from "./crypto";
 import Fido2Manager from "./Fido2Manager";
 import Fido2PRFManager from "./Fido2PRFManager";
@@ -80,8 +81,10 @@ export default class VaultysId {
     }
   }
 
-  static createPublicKeyCredentialCreationOptions = (requireResidentKey: boolean): PublicKeyCredentialCreationOptions => {
+  static createPublicKeyCredentialCreationOptions = (passkey: boolean): PublicKeyCredentialCreationOptions => {
     const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
+    const hint = passkey ? "client-device" : "security-key";
+
     const options: PublicKeyCredentialCreationOptions = {
       challenge: randomBytes(32),
       rp: {
@@ -94,10 +97,11 @@ export default class VaultysId {
       },
       attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
       authenticatorSelection: {
-        authenticatorAttachment: requireResidentKey ? "platform" : "cross-platform",
-        residentKey: requireResidentKey ? "required" : "discouraged",
+        authenticatorAttachment: passkey ? "platform" : "cross-platform",
+        residentKey: passkey ? "required" : "discouraged",
         userVerification: "preferred",
       },
+      hints: [hint],
       extensions: {
         // @ts-expect-error "prf" is not yet included in dom types
         prf: {
@@ -156,11 +160,18 @@ export default class VaultysId {
     return new VaultysId(km, undefined, type);
   }
 
-  static async fido2FromAttestation(attestation: PublicKeyCredential) {
+  static async createWebauthn(passkey = true, onPRFEnabled?: () => Promise<boolean>) {
+    const options = VaultysId.createPublicKeyCredentialCreationOptions(passkey);
+    const attestation = await navigator.credentials.create({ publicKey: options });
+    if (!attestation) return null;
+    else return VaultysId.fido2FromAttestation(attestation as PublicKeyCredential, onPRFEnabled);
+  }
+
+  static async fido2FromAttestation(attestation: PublicKeyCredential, onPRFEnabled?: () => Promise<boolean>) {
     // should be somehow valid.
     await SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true);
     // @ts-expect-error prf not yet in dom
-    if (attestation.getClientExtensionResults().prf?.enabled) {
+    if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
       const f2m = await Fido2PRFManager.createFromAttestation(attestation);
       return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
     } else {
@@ -333,5 +344,13 @@ export default class VaultysId {
       else cleanId = (senderId as Buffer).subarray(1);
     }
     return this.keyManager.decrypt(encryptedMessage, cleanId);
+  }
+
+  async hmac(message: string) {
+    const cypher = await this.keyManager.getCypher();
+    if (!cypher.secretKey) return null;
+    const result = createHmac("sha256", cypher.secretKey.toString("hex"));
+    result.update("VaultysID-" + message);
+    return result.digest();
   }
 }

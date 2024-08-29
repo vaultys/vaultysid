@@ -46,7 +46,7 @@ const serializeID_v0 = (km: Fido2Manager) => {
   return Buffer.concat([version, ckey, cypher]);
 };
 
-const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]);
+const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]) as AuthenticatorTransport[];
 const fromTransports = (transports: string[]): number => transports.reduceRight((memo, i) => memo + (lookup[i as LookupType] ? lookup[i as LookupType] : 0), 0);
 
 const getAuthTypeFromCkey = (ckey: Buffer) => {
@@ -201,7 +201,7 @@ export default class Fido2Manager extends KeyManager {
         {
           type: "public-key",
           id: this.fid,
-          transports: getTransports(this._transports) as AuthenticatorTransport[],
+          transports: getTransports(this._transports),
         },
       ],
     };

@@ -4,3 +4,4 @@ dist
 rust
 stats.json
 test/assets/streamed_file.png
+test/assets/streamed_file_encrypted.png

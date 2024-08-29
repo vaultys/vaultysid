@@ -125,6 +125,10 @@ export default class KeyManager {
       );
   }
 
+  async getCypher() {
+    return this.cypher;
+  }
+
   getSecret() {
     return Buffer.from(
       encode({
@@ -265,7 +269,8 @@ export default class KeyManager {
 
   async encrypt(plaintext: string, recipientIds: Buffer[]) {
     const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
-    return await encryptAndArmor(plaintext, this.cypher as BoxKeyPair, publicKeys);
+    const cypher = (await this.getCypher()) as BoxKeyPair;
+    return await encryptAndArmor(plaintext, cypher, publicKeys);
   }
 
   async decrypt(encryptedMessage: string, senderId: Buffer | null = null) {
