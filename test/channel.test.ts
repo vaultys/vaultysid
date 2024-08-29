@@ -23,15 +23,18 @@ describe("Channel tests", () => {
     const channel = MemoryChannel.createBidirectionnal();
     // channel.setLogger((data) => console.log(data, "->"));
     // channel.otherend!.setLogger((data) => console.log(data, "<-"));
-    const { download } = StreamChannel(channel);
     const { upload } = StreamChannel(channel.otherend!);
+    const { download } = StreamChannel(channel);
     const input = fs.createReadStream("./test/assets/testfile.png", {
       highWaterMark: 1 * 1024,
     });
     const output = fs.createWriteStream("./test/assets/streamed_file.png", {
       highWaterMark: 1 * 1024,
     });
-    await Promise.all([download(output), upload(input)]);
+
+    const promise = download(output);
+    await upload(input);
+    await promise;
     const hash1 = hashFile("./test/assets/testfile.png");
     const hash2 = hashFile("./test/assets/streamed_file.png");
     assert.equal(hash1, hash2);
@@ -48,7 +51,9 @@ describe("Channel tests", () => {
     const output = fs.createWriteStream("./test/assets/streamed_file_encrypted.png", {
       highWaterMark: 1 * 1024,
     });
-    await Promise.all([download(output), upload(input)]);
+    const promise = download(output);
+    await upload(input);
+    await promise;
     const hash1 = hashFile("./test/assets/testfile.png");
     const hash2 = hashFile("./test/assets/streamed_file_encrypted.png");
     assert.equal(hash1, hash2);

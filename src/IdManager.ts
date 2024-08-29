@@ -391,6 +391,26 @@ export default class IdManager {
     } else channel.send(Buffer.from([0]));
   }
 
+  async requestPRF(channel: Channel, appid: string) {
+    const challenger = await this.acceptSRP(channel, "p2p", "prf");
+    if (challenger.isComplete()) {
+      channel.send(Buffer.from(appid, "utf-8"));
+      const prf = await channel.receive();
+      return Buffer.from(prf);
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async acceptPRF(channel: Channel, accept?: (contact: VaultysId, appid: string) => Promise<boolean>) {
+    const challenger = await this.startSRP(channel, "p2p", "prf");
+    if (challenger.isComplete()) {
+      const appid = await channel.receive();
+      if (!accept || (await accept(challenger.getContactId(), appid.toString("utf-8")))) {
+        const hmac = (await this.vaultysId.hmac(appid.toString("utf-8"))) ?? Buffer.from([0]);
+        channel.send(hmac);
+      }
+    } else channel.send(Buffer.from([0]));
+  }
+
   /***************************/
   /*   SIGNING PARTY HERE!   */
   /***************************/

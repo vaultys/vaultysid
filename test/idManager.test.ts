@@ -15,8 +15,8 @@ const hashFile = (name: string) => {
   return hashSum.digest("hex");
 };
 
-const generateWebauthn = async () => {
-  const attestation = await SoftCredentials.create(SoftCredentials.createRequest(-7, true));
+const generateWebauthn = async (prf = true) => {
+  const attestation = await SoftCredentials.create(SoftCredentials.createRequest(-7, prf));
   return VaultysId.fido2FromAttestation(attestation);
 };
 
@@ -262,7 +262,10 @@ describe("SRG challenge with IdManager", () => {
       const output = createWriteStream("./test/assets/streamed_file_encrypted.png", {
         highWaterMark: 1 * 1024,
       });
-      await Promise.all([manager2.download(channel, output), manager1.upload(channel.otherend, input)]);
+      const promise = manager2.download(channel, output);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      await manager1.upload(channel.otherend, input);
+      await promise;
       const hash1 = hashFile("./test/assets/testfile.png");
       const hash2 = hashFile("./test/assets/streamed_file_encrypted.png");
       assert.equal(hash1, hash2);
@@ -270,7 +273,7 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
-  it("Decrypt data over Channel", async () => {
+  it("perform PRF over Channel", async () => {
     const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
     for (const id1 of ids) {
       const channel = MemoryChannel.createEncryptedBidirectionnal();
@@ -281,22 +284,22 @@ describe("SRG challenge with IdManager", () => {
       const manager1 = new IdManager(id1, s1);
       const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
 
-      const encrypted = await manager2.vaultysId.encrypt("hello world", [manager1.vaultysId.id]);
-      if (!encrypted) assert.fail();
-      const [result] = await Promise.all([manager2.requestDecrypt(channel.otherend, Buffer.from(encrypted, "utf8")), manager1.acceptDecrypt(channel)]);
-      assert.equal(result?.toString("utf-8"), "hello world");
+      const promise = manager2.requestPRF(channel.otherend, "nostr");
+      manager1.acceptPRF(channel);
+      const result = await promise;
+      assert.deepEqual(result, await manager1.vaultysId.hmac("nostr"));
     }
   });
 
   it("perform migration from version 0 to 1", async () => {
     const ids = [];
     for (let i = 0; i < 2; i++) {
-      const vids1 = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
+      const vids1 = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn(), generateWebauthn(false)]);
       for (const vid of vids1) {
         const s1 = MemoryStorage(() => "");
         const id1 = new IdManager(vid, s1);
         for (let j = 0; j < 2; j++) {
-          const vids2 = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
+          const vids2 = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn(), generateWebauthn(false)]);
           for (const vid2 of vids2) {
             const s2 = MemoryStorage(() => "");
             const id2 = new IdManager(vid2, s2);
@@ -310,10 +313,10 @@ describe("SRG challenge with IdManager", () => {
 
     for (const id of ids) {
       id.migrate(0);
-      assert.equal(id.contacts.length, 6);
+      assert.equal(id.contacts.length, 8);
       assert.equal(id.apps.length, 2);
       id.migrate(1);
-      assert.equal(id.contacts.length, 6);
+      assert.equal(id.contacts.length, 8);
       assert.equal(id.apps.length, 2);
     }
   });
