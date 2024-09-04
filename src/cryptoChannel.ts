@@ -37,7 +37,7 @@ export const decrypt = (messageWithNonce: Buffer, key: Buffer) => {
 
 const encryptChannel = (channel: Channel, key: Buffer) => {
   const sendHandler = {
-    apply(target: (data: Buffer) => void, that: any, args: any) {
+    apply(target: (data: Buffer) => Promise<void>, that: any, args: any) {
       return target.call(that, encrypt(args[0], key));
     },
   };

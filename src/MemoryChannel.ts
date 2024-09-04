@@ -6,7 +6,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export type Channel = {
   start(): Promise<void>;
   close(): Promise<void>;
-  send(data: Buffer): void;
+  send(data: Buffer): Promise<void>;
   receive(): Promise<Buffer>;
   getConnectionString(): string;
   fromConnectionString(conn: string): Channel | null;
@@ -141,7 +141,7 @@ export function convertWebWritableStreamToNodeWritable(webWritableStream: Writab
         writer.releaseLock(); // Release the lock on the writer after aborting
         callback(error); // Signal that the stream is destroyed
       } catch (abortError) {
-        callback(); // Signal an error if it occurred during abort
+        callback(null); // Signal an error if it occurred during abort
       }
     },
   });

@@ -195,7 +195,7 @@ export default class KeyManager {
     return new bip32.Bip32PrivateKey(this.signer.secretKey!).toPrivateKey().sign(data);
   }
 
-  verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean) {
+  verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean {
     return bip32.Bip32PublicKey.fromBytes(this.signer.publicKey).toPublicKey().verify(signature, data);
   }
 

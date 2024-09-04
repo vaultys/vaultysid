@@ -1,4 +1,4 @@
-import { hash, secureErase } from "./crypto";
+import { secureErase } from "./crypto";
 import cbor from "cbor";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import SoftCredentials from "./SoftCredentials";

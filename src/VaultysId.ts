@@ -308,7 +308,7 @@ export default class VaultysId {
     throw new Error("no certificate, cannot derive OTP");
   }
 
-  async signChallenge(challenge: Buffer | string) {
+  async signChallenge(challenge: Buffer | string): Promise<Buffer> {
     if (typeof challenge == "string") {
       challenge = Buffer.from(challenge, "hex");
     }
