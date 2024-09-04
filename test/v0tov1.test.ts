@@ -139,7 +139,7 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
     try {
       await challenger2.update(challenger1.getCertificate());
     } catch (err: any) {
-      assert.equal(err?.message, "The challenge is in an expected state. Received state = '-2', expected state = '2'");
+      assert.equal(err?.message, "[COMPLETE] failed the verification of pk2");
       return;
     }
     assert.fail("The protocol should have failed");

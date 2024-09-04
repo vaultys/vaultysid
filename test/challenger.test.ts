@@ -18,8 +18,20 @@ const testCertificate = (rogueCert: Buffer) => {
 
 const delay = (ms: number = 1000) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const challengeNext = async (vaultysId: VaultysId, newCertificate?: Buffer, oldCertificate?: Buffer) => {
+  //console.log(newCertificate, oldCertificate);
+  const challenger = new Challenger(vaultysId);
+  if (oldCertificate) {
+    await challenger.init(oldCertificate);
+  } else if (!newCertificate) {
+    challenger.createChallenge("p2p", "test");
+  }
+  if (newCertificate) await challenger.update(newCertificate);
+  return challenger.getCertificate();
+};
+
 describe("Symetric Proof of Relationship - SRG", () => {
-  it("Perform Protocol with KeyManager", async () => {
+  it("Perform Protocol", async () => {
     const vaultysId1 = await VaultysId.generateMachine();
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -46,7 +58,20 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
-  it("Perform Protocol with KeyManager attacking protocol", async () => {
+  it("Perform Stateless Protocol", async () => {
+    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const init = await challengeNext(vaultysId1);
+    // console.log("init", Challenger.deserializeCertificate(init));
+    const step1 = await challengeNext(vaultysId2, init);
+    // console.log("step1", Challenger.deserializeCertificate(step1));
+    const complete = await challengeNext(vaultysId1, step1);
+    // console.log("complete", Challenger.deserializeCertificate(complete));
+    const finalise = await challengeNext(vaultysId2, complete, step1);
+    assert.equal(complete.toString("base64"), finalise.toString("base64"));
+  });
+
+  it("Perform Protocol attacking protocol", async () => {
     const vaultysId1 = await VaultysId.generateMachine();
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -75,7 +100,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.fail("The protocol with tampered nonce should have failed");
   });
 
-  it("Perform Protocol with KeyManager attacking service", async () => {
+  it("Perform Protocol attacking service", async () => {
     const vaultysId1 = await VaultysId.generateMachine();
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -104,7 +129,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.fail("The protocol with tampered nonce should have failed");
   });
 
-  it("Perform Protocol with KeyManager attacking nonce", async () => {
+  it("Perform Protocol attacking nonce", async () => {
     const vaultysId1 = await VaultysId.generateMachine();
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -133,7 +158,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.fail("The protocol with tampered nonce should have failed");
   });
 
-  it("Perform Protocol with KeyManager attacking timestamp", async () => {
+  it("Perform Protocol attacking timestamp", async () => {
     const vaultysId1 = await VaultysId.generateMachine();
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -162,6 +187,31 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.fail("The protocol with tampered timestamp should have failed");
   });
 
+  it("Perform Protocol attacking with legit but different certificate", async () => {
+    const vaultysId1 = await VaultysId.generateMachine();
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const challenger2 = new Challenger(vaultysId2);
+    challenger1.createChallenge("p2p", "auth");
+    await challenger2.update(challenger1.getCertificate());
+    await challenger1.update(challenger2.getCertificate());
+    await challenger2.update(challenger1.getCertificate());
+
+    const challenger3 = new Challenger(vaultysId1);
+    const challenger4 = new Challenger(vaultysId2);
+    challenger3.createChallenge("p2p", "auth");
+    await challenger4.update(challenger3.getCertificate());
+    await challenger3.update(challenger4.getCertificate());
+
+    try {
+      await challenger4.update(challenger1.getCertificate());
+    } catch (err: any) {
+      assert.equal(err?.message, "Nonce has been tampered with");
+      return;
+    }
+    assert.fail("The protocol with tampered legit certificate should have failed");
+  });
+
   it("Perform Protocol with Fido2Manager", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
     // @ts-ignore
@@ -169,7 +219,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     const challenger1 = new Challenger(vaultysId1);
 
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId2 = await VaultysId.fido2FromAttestation(attestation2);
     const challenger2 = new Challenger(vaultysId2);
 
@@ -189,7 +239,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
 
   it("Fail for liveliness at first round", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1, 50);
     const vaultysId2 = await VaultysId.generatePerson();
@@ -200,13 +250,13 @@ describe("Symetric Proof of Relationship - SRG", () => {
     await delay(100);
     await assert.rejects(challenger2.update(challenger1.getCertificate()), {
       name: "Error",
-      message: "challenge timestamp failed the liveliness at first signature",
+      message: "challenge timestamp failed the liveliness",
     });
   });
 
   it("Fail for liveliness at second round", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1, 50);
     const vaultysId2 = await VaultysId.generateMachine();
@@ -218,13 +268,13 @@ describe("Symetric Proof of Relationship - SRG", () => {
     await delay(100);
     await assert.rejects(challenger1.update(challenger2.getCertificate()), {
       name: "Error",
-      message: "challenge timestamp failed the liveliness at 2nd signature",
+      message: "challenge timestamp failed the liveliness",
     });
   });
 
   it("Pass for liveliness at third round", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1, 50);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -234,7 +284,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
-    await delay(100);
+    await delay(20);
     await challenger2.update(challenger1.getCertificate());
 
     assert.ok(challenger1.isComplete());
@@ -243,9 +293,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
-  it("Pass with time deviation of 5s in the future", async () => {
+  it("Pass with time deviation of 59s in the future", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generatePerson();
@@ -254,7 +304,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
     if (!challenger1.challenge) assert.fail();
-    challenger1.challenge.timestamp = challenger1.challenge.timestamp + 5000;
+    challenger1.challenge.timestamp = challenger1.challenge.timestamp + 59000;
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -266,9 +316,32 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
-  it("Fail with time deviation of 15s in the future", async () => {
+  it("Pass with time deviation of 59s in the past", async () => {
+    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-expect-error mockup
+    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generatePerson();
+    const challenger2 = new Challenger(vaultysId2);
+    assert.ok(!challenger1.isComplete());
+    assert.ok(!challenger1.hasFailed());
+    challenger1.createChallenge("p2p", "auth");
+    if (!challenger1.challenge) assert.fail();
+    challenger1.challenge.timestamp = challenger1.challenge.timestamp - 59000;
+    await challenger2.update(challenger1.getCertificate());
+    await challenger1.update(challenger2.getCertificate());
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await challenger2.update(challenger1.getCertificate());
+    assert.ok(challenger1.isComplete());
+    assert.ok(challenger2.isComplete());
+    assert.ok(!challenger1.hasFailed());
+
+    assert.equal(challenger1.toString(), challenger2.toString());
+  });
+
+  it("Fail with time deviation of 60s in the future", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await VaultysId.generateOrganization();
@@ -276,10 +349,27 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
-    challenger1.challenge!.timestamp = challenger1.challenge!.timestamp + 15000;
+    challenger1.challenge!.timestamp = challenger1.challenge!.timestamp + 60000;
     await assert.rejects(challenger2.update(challenger1.getCertificate()), {
       name: "Error",
-      message: "challenge timestamp failed the liveliness at first signature",
+      message: "challenge timestamp failed the liveliness",
+    });
+  });
+
+  it("Fail with time deviation of 60s in the past", async () => {
+    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
+    // @ts-expect-error mockup
+    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await VaultysId.generateOrganization();
+    const challenger2 = new Challenger(vaultysId2);
+    assert.ok(!challenger1.isComplete());
+    assert.ok(!challenger1.hasFailed());
+    challenger1.createChallenge("p2p", "auth");
+    challenger1.challenge!.timestamp = challenger1.challenge!.timestamp - 60000;
+    await assert.rejects(challenger2.update(challenger1.getCertificate()), {
+      name: "Error",
+      message: "challenge timestamp failed the liveliness",
     });
   });
   /*
