@@ -214,7 +214,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
 
   it("Perform Protocol with Fido2Manager", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1);
 

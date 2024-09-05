@@ -327,8 +327,8 @@ export default class VaultysId {
     return this.keyManager.verify(result, signature as Buffer, userVerification);
   }
 
-  async encrypt(plaintext: string, recipientIds: (Buffer | string)[]) {
-    return this.keyManager.encrypt(
+  async signcrypt(plaintext: string, recipientIds: (Buffer | string)[]) {
+    return this.keyManager.signcrypt(
       plaintext,
       recipientIds.map((id) => {
         if (typeof id === "string") return Buffer.from(id.slice(2), "hex");
@@ -336,6 +336,18 @@ export default class VaultysId {
       }),
     );
   }
+
+  static async encrypt(plaintext: string, recipientIds: (Buffer | string)[]) {
+    return KeyManager.encrypt(
+      plaintext,
+      recipientIds.map((id) => {
+        if (typeof id === "string") return Buffer.from(id.slice(2), "hex");
+        else return (id as Buffer).slice(1);
+      }),
+    );
+  }
+
+  encrypt = VaultysId.encrypt;
 
   async decrypt(encryptedMessage: string, senderId?: Buffer | string) {
     let cleanId: Buffer | undefined;
@@ -348,9 +360,6 @@ export default class VaultysId {
 
   async hmac(message: string) {
     const cypher = await this.keyManager.getCypher();
-    if (!cypher.secretKey) return null;
-    const result = createHmac("sha256", cypher.secretKey.toString("hex"));
-    result.update("VaultysID-" + message);
-    return result.digest();
+    return cypher.hmac(message);
   }
 }

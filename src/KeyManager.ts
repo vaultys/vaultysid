@@ -4,6 +4,7 @@ import { Buffer } from "buffer";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
 import * as bip32fix from "@stricahq/bip32ed25519";
+import { createHmac } from "crypto";
 
 //@ts-expect-error fix for wrong way of exporting bip32ed25519
 const bip32 = bip32fix.default ?? bip32fix;
@@ -126,7 +127,24 @@ export default class KeyManager {
   }
 
   async getCypher() {
-    return this.cypher;
+    // todo fetch secretKey here
+    const cypher = this.cypher;
+    return {
+      hmac: (message: string) =>
+        cypher.secretKey
+          ? createHmac("sha256", cypher.secretKey.toString("hex"))
+              .update("VaultysID-" + message)
+              .digest()
+          : undefined,
+      signcrypt: async (plaintext: string, publicKeys: Buffer[]) => encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys),
+      decrypt: async (encryptedMessage: string, senderKey?: Buffer | null) => dearmorAndDecrypt(encryptedMessage, cypher as BoxKeyPair, senderKey),
+    };
+  }
+
+  async getSigner() {
+    // todo fetch secretKey here
+    const secretKey = this.signer.secretKey!;
+    return new bip32.Bip32PrivateKey(secretKey).toPrivateKey();
   }
 
   getSecret() {
@@ -192,7 +210,8 @@ export default class KeyManager {
 
   async sign(data: Buffer) {
     if (this.capability == "public") return null;
-    return new bip32.Bip32PrivateKey(this.signer.secretKey!).toPrivateKey().sign(data);
+    const signer = await this.getSigner();
+    return signer.sign(data);
   }
 
   verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean {
@@ -267,16 +286,21 @@ export default class KeyManager {
     }
   }
 
-  async encrypt(plaintext: string, recipientIds: Buffer[]) {
+  static async encrypt(plaintext: string, recipientIds: Buffer[]) {
     const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
-    const cypher = (await this.getCypher()) as BoxKeyPair;
-    return await encryptAndArmor(plaintext, cypher, publicKeys);
+    return await encryptAndArmor(plaintext, null, publicKeys);
+  }
+
+  async signcrypt(plaintext: string, recipientIds: Buffer[]) {
+    const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
+    const cypher = await this.getCypher();
+    return await cypher.signcrypt(plaintext, publicKeys);
   }
 
   async decrypt(encryptedMessage: string, senderId: Buffer | null = null) {
-    if (this.capability == "public") return null;
+    const cypher = await this.getCypher();
     const senderKey = senderId ? KeyManager.fromId(senderId).cypher.publicKey : null;
-    const message = await dearmorAndDecrypt(encryptedMessage, this.cypher as BoxKeyPair, senderKey);
+    const message = await cypher.decrypt(encryptedMessage, senderKey);
     return message.toString();
   }
 

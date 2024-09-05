@@ -69,7 +69,7 @@ describe("Fido2PRFManager", () => {
     assert.ok(verifier.verify(message, signature));
   });
 
-  it("encrypt and decrypt messages (mixing ECDSA and EdDSA for id)", async () => {
+  it("signcrypt and decrypt messages (mixing ECDSA and EdDSA for id)", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
     const attestation3 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
@@ -82,19 +82,19 @@ describe("Fido2PRFManager", () => {
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
     // console.log(recipients);
-    const encrypted = await alice.encrypt(plaintext, recipients);
+    const signcrypted = await alice.signcrypt(plaintext, recipients);
 
-    if (encrypted == null) assert.fail();
-    assert.equal(encrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
-    const decryptedBob = await bob.decrypt(encrypted);
-    const decryptedEve = await eve.decrypt(encrypted);
-    const decryptedAlice = await alice.decrypt(encrypted);
+    if (signcrypted == null) assert.fail();
+    assert.equal(signcrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    const decryptedBob = await bob.decrypt(signcrypted);
+    const decryptedEve = await eve.decrypt(signcrypted);
+    const decryptedAlice = await alice.decrypt(signcrypted);
     assert.equal(decryptedEve, plaintext);
     assert.equal(decryptedEve, decryptedBob);
     assert.equal(decryptedEve, decryptedAlice);
   });
 
-  it("encrypt and blind decrypt messages", async () => {
+  it("signcrypt and blind decrypt messages", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
     const attestation3 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
@@ -106,12 +106,12 @@ describe("Fido2PRFManager", () => {
     const eve = await Fido2PRFManager.createFromAttestation(attestation3);
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
-    const encrypted = await alice.encrypt(plaintext, recipients);
-    if (encrypted == null) assert.fail();
-    assert.equal(encrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
-    const decryptedBob = await bob.decrypt(encrypted);
-    const decryptedEve = await eve.decrypt(encrypted);
-    const decryptedAlice = await alice.decrypt(encrypted);
+    const signcrypted = await alice.signcrypt(plaintext, recipients);
+    if (signcrypted == null) assert.fail();
+    assert.equal(signcrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    const decryptedBob = await bob.decrypt(signcrypted);
+    const decryptedEve = await eve.decrypt(signcrypted);
+    const decryptedAlice = await alice.decrypt(signcrypted);
     assert.equal(decryptedEve, plaintext);
     assert.equal(decryptedEve, decryptedBob);
     assert.equal(decryptedEve, decryptedAlice);

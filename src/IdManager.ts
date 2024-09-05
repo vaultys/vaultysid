@@ -432,7 +432,7 @@ export default class IdManager {
     });
   }
 
-  async startSRP(channel: Channel, protocol: string, service: string, metadata: any = {}) {
+  async startSRP(channel: Channel, protocol: string, service: string, metadata: Record<string, string> = {}) {
     const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
     const challenger = new Challenger(idV0);
     challenger.createChallenge(protocol, service, 0, metadata);
@@ -448,54 +448,55 @@ export default class IdManager {
     try {
       const message = await channel.receive();
       // console.log(message)
+      // TODO: accept contact id before going further
+      //console.log(challenger);
       await challenger.update(message);
     } catch (error) {
-      channel.send(Buffer.from([0]));
+      await channel.send(Buffer.from([0]));
       throw new Error(error as string);
     }
     if (challenger.isComplete()) {
       const certificate = challenger.getCertificate();
       if (!certificate) {
         channel.close();
-        channel.send(Buffer.from([0]));
+        await channel.send(Buffer.from([0]));
         throw new Error("Error processing challenge");
       }
-      // there is a caveat here, we are not sure that thhe last bit of information has been received
+      // there is a caveat here, we are not sure that the last bit of information has been received
       await channel.send(certificate);
       this.store.substore("wot").set(Date.now() + "", certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
     } else {
-      channel.send(Buffer.from([0]));
+      await channel.send(Buffer.from([0]));
       throw new Error("Can't add a new contact if the protocol is not complete");
     }
   }
 
-  async acceptSRP(channel: Channel, protocol: string, service: string, metadata: any = {}) {
+  async acceptSRP(channel: Channel, protocol: string, service: string, metadata: Record<string, string> = {}) {
     const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
     const challenger = new Challenger(idV0);
     try {
       const message = await channel.receive();
       await challenger.update(message);
     } catch (error) {
-      channel.send(Buffer.from([0]));
+      await channel.send(Buffer.from([0]));
       throw new Error(error as string);
     }
 
     const cert = challenger.getCertificate();
     if (!cert) {
-      channel.close();
-      channel.send(Buffer.from([0]));
+      await channel.send(Buffer.from([0]));
+      await channel.close();
       throw new Error("Error processing challenge");
     }
-
-    channel.send(cert);
+    await channel.send(cert);
 
     try {
       const message = await channel.receive();
       await challenger.update(message);
     } catch (error) {
-      channel.close();
+      await channel.close();
       throw new Error(error as string);
     }
     if (challenger.isComplete()) {
@@ -504,7 +505,7 @@ export default class IdManager {
       // TODO create/update merkle tree + sign it
       return challenger;
     } else {
-      channel.close();
+      await channel.close();
       throw new Error("Can't add a new contact if the protocol is not complete");
     }
   }
@@ -538,14 +539,14 @@ export default class IdManager {
     }
   }
 
-  async askContact(channel: Channel, metadata: any = {}) {
+  async askContact(channel: Channel, metadata: Record<string, string> = {}) {
     const challenger = await this.startSRP(channel, "p2p", "auth");
     const contact = challenger.getContactId();
     this.saveContact(contact);
     return contact;
   }
 
-  async acceptContact(channel: Channel, metadata: any = {}) {
+  async acceptContact(channel: Channel, metadata: Record<string, string> = {}) {
     const challenger = await this.acceptSRP(channel, "p2p", "auth");
     const contact = challenger.getContactId();
     this.saveContact(contact);

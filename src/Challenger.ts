@@ -54,8 +54,8 @@ const writeInt = (name: string, value: number) => {
     // uint64
     // Split 64 bit number into two 32 bit numbers because JavaScript only regards
     // 32 bits for bitwise operations.
-    let hi = value / 2 ** 32;
-    let lo = value % 2 ** 32;
+    const hi = value / 2 ** 32;
+    const lo = value % 2 ** 32;
     end = Buffer.from([0xd3, hi >>> 24, hi >>> 16, hi >>> 8, hi, lo >>> 24, lo >>> 16, lo >>> 8, lo]);
   } else {
     end = Buffer.from([0x00]);

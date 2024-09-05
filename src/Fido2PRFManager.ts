@@ -1,10 +1,9 @@
 import { secureErase } from "./crypto";
 import cbor from "cbor";
-import nacl, { BoxKeyPair } from "tweetnacl";
+import nacl from "tweetnacl";
 import SoftCredentials from "./SoftCredentials";
-import KeyManager, { KeyPair } from "./KeyManager";
+import { KeyPair } from "./KeyManager";
 import { decode, encode } from "@msgpack/msgpack";
-import { dearmorAndDecrypt, encryptAndArmor } from "@samuelthomas2774/saltpack";
 import Fido2Manager from "./Fido2Manager";
 
 declare global {
@@ -74,7 +73,7 @@ export default class Fido2PRFManager extends Fido2Manager {
 
     // signing
     f2m.signer = getSignerFromCkey(f2m.ckey);
-    f2m.cypher = await f2m.getCypher();
+    await f2m.getCypher();
     delete f2m.cypher.secretKey;
     return f2m;
   }
@@ -113,59 +112,47 @@ export default class Fido2PRFManager extends Fido2Manager {
   }
 
   async getCypher() {
-    if (this.cypher?.secretKey) return this.cypher;
-    const publicKey: PublicKeyCredentialRequestOptions = {
-      challenge: Buffer.from([]),
-      userVerification: "preferred",
-      allowCredentials: [
-        {
-          type: "public-key",
-          id: this.fid,
-          transports: getTransports(this._transports) as AuthenticatorTransport[],
-        },
-      ],
-      extensions: {
-        // @ts-expect-error prf not yet in dom
-        prf: {
-          eval: {
-            // Input the contextual information
-            first: this.prfsalt,
-            // There is a "second" optional field too
-            // Though it is intended for key rotation.
+    if (!this.cypher?.secretKey) {
+      const publicKey: PublicKeyCredentialRequestOptions = {
+        challenge: Buffer.from([]),
+        userVerification: "preferred",
+        allowCredentials: [
+          {
+            type: "public-key",
+            id: this.fid,
+            transports: getTransports(this._transports) as AuthenticatorTransport[],
+          },
+        ],
+        extensions: {
+          // @ts-expect-error prf not yet in dom
+          prf: {
+            eval: {
+              // Input the contextual information
+              first: this.prfsalt,
+              // There is a "second" optional field too
+              // Though it is intended for key rotation.
+            },
           },
         },
-      },
-    };
-    const result = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
-    const {
-      // @ts-expect-error prf not yet in dom
-      prf: {
-        results: { first },
-      },
-    } = result.getClientExtensionResults();
-    const cypher = nacl.box.keyPair.fromSecretKey(Buffer.from(first));
-    this.cypher = {
-      publicKey: Buffer.from(cypher.publicKey),
-      secretKey: Buffer.from(cypher.secretKey),
-    };
-    return this.cypher;
+      };
+      const result = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
+      const {
+        // @ts-expect-error prf not yet in dom
+        prf: {
+          results: { first },
+        },
+      } = result.getClientExtensionResults();
+      const cypher = nacl.box.keyPair.fromSecretKey(Buffer.from(first));
+      this.cypher = {
+        publicKey: Buffer.from(cypher.publicKey),
+        secretKey: Buffer.from(cypher.secretKey),
+      };
+    }
+
+    return super.getCypher();
   }
 
-  async encrypt(plaintext: string, recipientIds: Buffer[]) {
-    const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
-    const cypher = await this.getCypher();
-    return await encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys);
-  }
-
-  async decrypt(encryptedMessage: string, senderId: Buffer | null = null) {
-    if (this.capability === "public") return null;
-    const cypher = await this.getCypher();
-    const senderKey = senderId ? KeyManager.fromId(senderId).cypher.publicKey : null;
-    const message = await dearmorAndDecrypt(encryptedMessage, cypher as BoxKeyPair, senderKey);
-    return message.toString();
-  }
-
-  async createRevocationCertificate(newId: string) {
+  async createRevocationCertificate() {
     // impossible
     return null;
   }

@@ -185,34 +185,36 @@ export default class Fido2Manager extends KeyManager {
     return f2m;
   }
 
-  async sign(data: Buffer) {
-    if (this.capability == "public") return null;
-    // need fido2 credentials mounted
-    if (!navigator.credentials) return null;
-    // ugly request userinteraction (needed for Safari and iOS)
-    try {
-      await window?.CredentialUserInteractionRequest();
-    } catch (error) {}
-    const challenge = hash("sha256", data);
-    const publicKey: PublicKeyCredentialRequestOptions = {
-      challenge,
-      userVerification: "preferred",
-      allowCredentials: [
-        {
-          type: "public-key",
-          id: this.fid,
-          transports: getTransports(this._transports),
-        },
-      ],
+  async getSigner() {
+    return {
+      sign: async (data: Buffer) => {
+        if (!navigator.credentials) return null;
+        // ugly request userinteraction (needed for Safari and iOS)
+        try {
+          await window?.CredentialUserInteractionRequest();
+        } catch (error) {}
+        const challenge = hash("sha256", data);
+        const publicKey: PublicKeyCredentialRequestOptions = {
+          challenge,
+          userVerification: "preferred",
+          allowCredentials: [
+            {
+              type: "public-key",
+              id: this.fid,
+              transports: getTransports(this._transports),
+            },
+          ],
+        };
+        const { response } = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
+        const publicKeyResponse = response as AuthenticatorAssertionResponse;
+        const output: Fido2Signature = {
+          s: Buffer.from(publicKeyResponse.signature),
+          c: Buffer.from(publicKeyResponse.clientDataJSON),
+          a: Buffer.from(publicKeyResponse.authenticatorData),
+        };
+        return Buffer.from(encode(output));
+      },
     };
-    const { response } = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
-    const publicKeyResponse = response as AuthenticatorAssertionResponse;
-    const output: Fido2Signature = {
-      s: Buffer.from(publicKeyResponse.signature),
-      c: Buffer.from(publicKeyResponse.clientDataJSON),
-      a: Buffer.from(publicKeyResponse.authenticatorData),
-    };
-    return Buffer.from(encode(output));
   }
 
   verify(data: Buffer, signature: Buffer, userVerification: boolean = false) {
@@ -244,7 +246,7 @@ export default class Fido2Manager extends KeyManager {
     return SoftCredentials.simpleVerify(this.ckey, response, userVerification);
   }
 
-  async createRevocationCertificate(newId: string) {
+  async createRevocationCertificate() {
     // impossible
     return null;
   }

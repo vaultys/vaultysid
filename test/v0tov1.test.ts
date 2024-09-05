@@ -98,12 +98,12 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
 
   it("Perform Protocol with Fido2Manager", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = (await VaultysId.fido2FromAttestation(attestation1)).toVersion(0);
     const challenger1 = new Challenger(vaultysId1);
 
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId2 = (await VaultysId.fido2FromAttestation(attestation2)).toVersion(0);
     const challenger2 = new Challenger(vaultysId2);
 
@@ -126,7 +126,7 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
 
   it("Fail for different vaultysId versions", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1.toVersion(0));
     const vaultysId2 = await VaultysId.generatePerson();
@@ -168,12 +168,12 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 
   it("Perform Protocol with Fido2Manager", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1);
 
     const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId2 = await VaultysId.fido2FromAttestation(attestation2);
     const challenger2 = new Challenger(vaultysId2);
 
@@ -195,7 +195,7 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 
   it("Succeed for different vaultysId versions", async () => {
     const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-ignore
+    // @ts-expect-error mockup
     const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
     const challenger1 = new Challenger(vaultysId1.toVersion(0));
     const vaultysId2 = await VaultysId.generatePerson();

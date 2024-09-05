@@ -196,7 +196,7 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
-  it("pass a challenge over encrypted Channel", async () => {
+  it("pass a challenge over signcrypted Channel", async () => {
     const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
     for (const id1 of ids) {
       const channel = MemoryChannel.createBidirectionnal();
@@ -245,7 +245,7 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
-  it("Transfer data over encrypted Channel", async () => {
+  it("Transfer data over signcrypted Channel", async () => {
     const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
     for (const id1 of ids) {
       const channel = MemoryChannel.createEncryptedBidirectionnal();
@@ -259,7 +259,7 @@ describe("SRG challenge with IdManager", () => {
       const input = createReadStream("./test/assets/testfile.png", {
         highWaterMark: 1 * 1024,
       });
-      const output = createWriteStream("./test/assets/streamed_file_encrypted.png", {
+      const output = createWriteStream("./test/assets/streamed_file_signcrypted.png", {
         highWaterMark: 1 * 1024,
       });
       const promise = manager2.download(channel, output);
@@ -267,9 +267,9 @@ describe("SRG challenge with IdManager", () => {
       await manager1.upload(channel.otherend, input);
       await promise;
       const hash1 = hashFile("./test/assets/testfile.png");
-      const hash2 = hashFile("./test/assets/streamed_file_encrypted.png");
+      const hash2 = hashFile("./test/assets/streamed_file_signcrypted.png");
       assert.equal(hash1, hash2);
-      rmSync("./test/assets/streamed_file_encrypted.png");
+      rmSync("./test/assets/streamed_file_signcrypted.png");
     }
   });
 
