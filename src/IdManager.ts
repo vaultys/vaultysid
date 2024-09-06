@@ -427,7 +427,7 @@ export default class IdManager {
         // error if appid is too short of contains illegal character
         channel.send(Buffer.from([0]));
       } else if (!accept || (await accept(challenger.getContactId(), appid))) {
-        const hmac = (await this.vaultysId.hmac("prf/" + appid + "/antiscam")) ?? Buffer.from([0]);
+        const hmac = (await this.vaultysId.hmac("prf/" + appid + "/end")) ?? Buffer.from([0]);
         channel.send(hmac);
       }
     } else channel.send(Buffer.from([0]));

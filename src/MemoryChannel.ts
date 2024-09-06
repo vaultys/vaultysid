@@ -52,7 +52,11 @@ export function StreamChannel(channel: Channel) {
 
   const download = async (stream: Writable) => {
     const readStream = getReadStream();
-    const result = new Promise<void>((resolve) => readStream.on("end", () => resolve()));
+    const result = new Promise<void>((resolve) =>
+      readStream.on("end", () => {
+        resolve();
+      }),
+    );
     readStream.pipe(stream);
     await result;
   };
@@ -171,6 +175,7 @@ export function convertWebReadableStreamToNodeReadable(webReadableStream: Readab
 
 export class MemoryChannel implements Channel {
   name?: string;
+  lock = false;
   otherend?: MemoryChannel;
   receiver?: (data: Buffer) => void;
   logger?: (data: Buffer) => void;
@@ -219,18 +224,24 @@ export class MemoryChannel implements Channel {
 
   async send(data: Buffer) {
     // the other end might not listen yet
-    while (!this.otherend?.receiver) {
+    while (this.lock || !this.otherend?.receiver) {
+      // console.log(this.lock);
       await delay(10);
     }
+    this.lock = true;
     const receiver = this.otherend.receiver;
     delete this.otherend.receiver;
     if (this.logger) this.logger(data);
-    if (this.injector) receiver(await this.injector(data));
-    else receiver(data);
+    if (this.injector) {
+      const injected = await this.injector(data);
+      receiver(injected);
+    } else receiver(data);
+    this.lock = false;
   }
 
   async receive() {
     while (this.receiver) {
+      console.log(this.lock);
       await delay(10);
     }
     return new Promise<Buffer>((resolve) => (this.receiver = resolve));

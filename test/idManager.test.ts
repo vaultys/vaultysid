@@ -196,7 +196,7 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
-  it("pass a challenge over signcrypted Channel", async () => {
+  it("pass a challenge over encrypted Channel", async () => {
     const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
     for (const id1 of ids) {
       const channel = MemoryChannel.createBidirectionnal();
@@ -245,11 +245,12 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
-  it("Transfer data over signcrypted Channel", async () => {
+  it("Transfer data over encrypted Channel", async () => {
     const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
     for (const id1 of ids) {
       const channel = MemoryChannel.createEncryptedBidirectionnal();
-      //channel.setLogger((data) => console.log(data.toString("utf-8")));
+      // channel.setLogger((data) => console.log("<"));
+      // channel.otherend?.setLogger((data) => console.log(">"));
       if (!channel.otherend) assert.fail();
       const s1 = MemoryStorage(() => "");
       const s2 = MemoryStorage(() => "");
@@ -259,17 +260,15 @@ describe("SRG challenge with IdManager", () => {
       const input = createReadStream("./test/assets/testfile.png", {
         highWaterMark: 1 * 1024,
       });
-      const output = createWriteStream("./test/assets/streamed_file_signcrypted.png", {
-        highWaterMark: 1 * 1024,
-      });
+      const output = createWriteStream("./test/assets/streamed_file_encrypted.png");
       const promise = manager2.download(channel, output);
       await new Promise((resolve) => setTimeout(resolve, 10));
       await manager1.upload(channel.otherend, input);
       await promise;
       const hash1 = hashFile("./test/assets/testfile.png");
-      const hash2 = hashFile("./test/assets/streamed_file_signcrypted.png");
+      const hash2 = hashFile("./test/assets/streamed_file_encrypted.png");
       assert.equal(hash1, hash2);
-      rmSync("./test/assets/streamed_file_signcrypted.png");
+      rmSync("./test/assets/streamed_file_encrypted.png");
     }
   });
 
@@ -287,7 +286,7 @@ describe("SRG challenge with IdManager", () => {
       const promise = manager2.requestPRF(channel.otherend, "nostr");
       manager1.acceptPRF(channel);
       const result = await promise;
-      assert.deepEqual(result, await manager1.vaultysId.hmac("nostr"));
+      assert.deepEqual(result, await manager1.vaultysId.hmac("prf/nostr/end"));
     }
   });
 

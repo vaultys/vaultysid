@@ -28,9 +28,7 @@ describe("Channel tests", () => {
     const input = fs.createReadStream("./test/assets/testfile.png", {
       highWaterMark: 1 * 1024,
     });
-    const output = fs.createWriteStream("./test/assets/streamed_file.png", {
-      highWaterMark: 1 * 1024,
-    });
+    const output = fs.createWriteStream("./test/assets/streamed_file.png");
 
     const promise = download(output);
     await upload(input);
@@ -48,9 +46,7 @@ describe("Channel tests", () => {
     const input = fs.createReadStream("./test/assets/testfile.png", {
       highWaterMark: 1 * 1024,
     });
-    const output = fs.createWriteStream("./test/assets/streamed_file_encrypted.png", {
-      highWaterMark: 1 * 1024,
-    });
+    const output = fs.createWriteStream("./test/assets/streamed_file_encrypted.png");
     const promise = download(output);
     await upload(input);
     await promise;
