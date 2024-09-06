@@ -133,7 +133,7 @@ export default class KeyManager {
       hmac: (message: string) =>
         cypher.secretKey
           ? createHmac("sha256", cypher.secretKey.toString("hex"))
-              .update("VaultysID-" + message)
+              .update("VaultysID/" + message + "/end")
               .digest()
           : undefined,
       signcrypt: async (plaintext: string, publicKeys: Buffer[]) => encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys),

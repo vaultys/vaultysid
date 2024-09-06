@@ -19,7 +19,19 @@ const getSignatureType = (challenge: string) => {
   }
 };
 
-const instanciateContact = (c: any) => {
+type StoredContact = {
+  type: number;
+  keyManager: KeyManager;
+  certificate: Buffer;
+};
+
+type StoredApp = {
+  site: string;
+  serverId: string;
+  certificate: Buffer;
+};
+
+const instanciateContact = (c: StoredContact) => {
   let vaultysId: VaultysId;
   if (c.type === 3) {
     vaultysId = new VaultysId(Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
@@ -31,7 +43,7 @@ const instanciateContact = (c: any) => {
   return vaultysId;
 };
 
-const instanciateApp = (a: any) => {
+const instanciateApp = (a: StoredApp) => {
   return VaultysId.fromId(Buffer.from(a.serverId, "base64"), a.certificate);
 };
 
@@ -271,7 +283,7 @@ export default class IdManager {
     }
     const url = new URL(data);
     if (url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 && url.searchParams.get("hash") && url.searchParams.get("timestamp")) {
-      return await this.vaultysId.verifyChallenge(challenge, signature, userVerifiation);
+      return this.vaultysId.verifyChallenge(challenge, signature, userVerifiation);
     }
 
     return false;
@@ -339,7 +351,7 @@ export default class IdManager {
         this.merge(data, !initiator);
       }
     } else {
-      const challenger = await this.acceptSRP(channel, "p2p", "selfauth", true);
+      const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
 
       if (challenger.isSelfAuth() && challenger.isComplete()) {
         channel.send(Buffer.from(this.store.toString(), "utf-8"));
@@ -392,6 +404,12 @@ export default class IdManager {
   }
 
   async requestPRF(channel: Channel, appid: string) {
+    if (appid.length < 3) {
+      throw new Error("appid is too short, less than 3 characters");
+    }
+    if (appid.split("-").length > 1) {
+      throw new Error("appid contains illegal character /");
+    }
     const challenger = await this.acceptSRP(channel, "p2p", "prf");
     if (challenger.isComplete()) {
       channel.send(Buffer.from(appid, "utf-8"));
@@ -403,9 +421,13 @@ export default class IdManager {
   async acceptPRF(channel: Channel, accept?: (contact: VaultysId, appid: string) => Promise<boolean>) {
     const challenger = await this.startSRP(channel, "p2p", "prf");
     if (challenger.isComplete()) {
-      const appid = await channel.receive();
-      if (!accept || (await accept(challenger.getContactId(), appid.toString("utf-8")))) {
-        const hmac = (await this.vaultysId.hmac(appid.toString("utf-8"))) ?? Buffer.from([0]);
+      const result = await channel.receive();
+      const appid = result.toString("utf-8");
+      if (appid.length < 3 || appid.split("-").length > 1) {
+        // error if appid is too short of contains illegal character
+        channel.send(Buffer.from([0]));
+      } else if (!accept || (await accept(challenger.getContactId(), appid))) {
+        const hmac = (await this.vaultysId.hmac("prf/" + appid + "/antiscam")) ?? Buffer.from([0]);
         channel.send(hmac);
       }
     } else channel.send(Buffer.from([0]));
@@ -521,7 +543,7 @@ export default class IdManager {
           site: name ?? app.did,
           serverId: app.id.toString("base64"),
           certificate: app.certificate,
-        });
+        } as StoredApp);
       }
     }
   }
@@ -533,7 +555,7 @@ export default class IdManager {
     } else {
       const contactstore = this.store.substore("contacts");
       if (!contactstore.get(contact.did)) {
-        contactstore.set(contact.did, contact);
+        contactstore.set(contact.did, contact as StoredContact);
         this.store.save();
       }
     }
