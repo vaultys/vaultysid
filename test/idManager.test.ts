@@ -262,7 +262,6 @@ describe("SRG challenge with IdManager", () => {
       });
       const output = createWriteStream("./test/assets/streamed_file_encrypted.png");
       const promise = manager2.download(channel, output);
-      await new Promise((resolve) => setTimeout(resolve, 10));
       await manager1.upload(channel.otherend, input);
       await promise;
       const hash1 = hashFile("./test/assets/testfile.png");
