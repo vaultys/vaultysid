@@ -1,12 +1,13 @@
 import assert from "assert";
 import { createHash, randomBytes } from "crypto";
-import IdManager from "../src/IdManager";
+import IdManager, { FileSignature } from "../src/IdManager";
 import VaultysId from "../src/VaultysId";
 import { MemoryChannel } from "../src/MemoryChannel";
 import { MemoryStorage } from "../src/MemoryStorage";
 import { createReadStream, createWriteStream, readFileSync, rmSync } from "fs";
 import SoftCredentials from "../src/SoftCredentials";
 import "./utils";
+import { hash } from "../src/crypto";
 
 const hashFile = (name: string) => {
   const fileBuffer = readFileSync(name);
@@ -114,14 +115,15 @@ describe("IdManager", () => {
     const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
     for (const id1 of ids) {
       const s = MemoryStorage(() => "");
-      const fileHashMock = randomBytes(32);
+      const file = { arrayBuffer: randomBytes(1024), type: "random" };
+      const h = hash("sha256", file.arrayBuffer);
       const manager = new IdManager(id1, s);
-      const payload = await manager.signFile(fileHashMock);
+      const payload = await manager.signFile(file);
       const signatures = manager.getSignatures();
       assert.equal(signatures.length, 1);
       const challenge = new URL(signatures[0].challenge);
-      assert.equal(challenge.searchParams.get("hash"), fileHashMock.toString("hex"));
-      assert.ok(manager.verifyFile(signatures[0].payload.challenge.toString("hex"), signatures[0].payload.signature));
+      assert.equal(challenge.searchParams.get("hash"), h.toString("hex"));
+      assert.ok(manager.verifyFile(file, signatures[0].payload as FileSignature, id1));
       if (payload.signature == null) assert.fail();
       assert.equal(signatures[0].payload.signature.toString("hex"), payload.signature.toString("hex"));
       //console.log(signatures[0]);
@@ -286,6 +288,29 @@ describe("SRG challenge with IdManager", () => {
       manager1.acceptPRF(channel);
       const result = await promise;
       assert.deepEqual(result, await manager1.vaultysId.hmac("prf/nostr/end"));
+    }
+  });
+
+  it("sign a File over Channel", async () => {
+    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
+
+    for (const id1 of ids) {
+      const channel = MemoryChannel.createEncryptedBidirectionnal();
+      if (!channel.otherend) assert.fail();
+      // channel.setLogger((data) => console.log(data.toString("utf-8")));
+      const s1 = MemoryStorage(() => "");
+      const s2 = MemoryStorage(() => "");
+      const manager1 = new IdManager(id1, s1);
+      const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
+
+      const input = readFileSync("./test/assets/testfile.png");
+      const file = { arrayBuffer: input, type: "image/png" };
+
+      const promise = manager2.requestSignFile(channel.otherend, file);
+      manager1.acceptSignFile(channel);
+      const result = await promise;
+      assert.notEqual(result, undefined);
+      assert.ok(manager2.verifyFile(file, result!, manager1.vaultysId));
     }
   });
 

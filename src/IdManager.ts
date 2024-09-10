@@ -6,13 +6,14 @@ import { Channel, StreamChannel } from "./MemoryChannel";
 import { Store } from "./MemoryStorage";
 import SoftCredentials from "./SoftCredentials";
 import VaultysId from "./VaultysId";
-import { randomBytes } from "./crypto";
+import { hash, randomBytes } from "./crypto";
 import Fido2PRFManager from "./Fido2PRFManager";
+import { decode, encode } from "@msgpack/msgpack";
 
 const getSignatureType = (challenge: string) => {
-  if (challenge.startsWith("vaultys://login?")) {
+  if (challenge.startsWith("vaultys://connect?")) {
     return "LOGIN";
-  } else if (challenge.startsWith("vaultys://docsign?")) {
+  } else if (challenge.startsWith("vaultys://signfile?")) {
     return "DOCUMENT";
   } else {
     return "UNKNOWN";
@@ -29,6 +30,16 @@ type StoredApp = {
   site: string;
   serverId: string;
   certificate: Buffer;
+};
+
+export type FileSignature = {
+  challenge: Buffer;
+  signature: Buffer;
+};
+
+type File = {
+  arrayBuffer: Buffer;
+  type: string;
 };
 
 const instanciateContact = (c: StoredContact) => {
@@ -265,9 +276,10 @@ export default class IdManager {
     return signature;
   }
 
-  async signFile(hash: Buffer) {
-    const challenge = Buffer.from(`vaultys://docsign?hash=${hash.toString("hex")}&timestamp=${Date.now()}`, "utf-8");
-    const payload = {
+  async signFile(file: File) {
+    const h = hash("sha256", file.arrayBuffer).toString("hex");
+    const challenge = Buffer.from(`vaultys://signfile?hash=${h}&timestamp=${Date.now()}`, "utf-8");
+    const payload: FileSignature = {
       challenge,
       signature: await this.vaultysId.signChallenge(challenge),
     };
@@ -276,16 +288,20 @@ export default class IdManager {
     return payload;
   }
 
-  async verifyFile(challenge: Buffer, signature: Buffer, userVerifiation = true) {
-    const data = challenge.toString("utf8");
-    if (!data.startsWith("vaultys://docsign?")) {
+  verifyFile(file: File, fileSignature: FileSignature, contactId: VaultysId, userVerifiation = true) {
+    const data = fileSignature.challenge.toString("utf8");
+    if (!data.startsWith("vaultys://signfile?")) {
       return false;
     }
+    const h = hash("sha256", file.arrayBuffer).toString("hex");
     const url = new URL(data);
-    if (url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 && url.searchParams.get("hash") && url.searchParams.get("timestamp")) {
-      return this.vaultysId.verifyChallenge(challenge, signature, userVerifiation);
+    const fileHash = url.searchParams.get("hash");
+    if (h !== fileHash) {
+      return false;
     }
-
+    if (url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 && url.searchParams.get("timestamp")) {
+      return contactId.verifyChallenge(fileSignature.challenge, fileSignature.signature, userVerifiation);
+    }
     return false;
   }
 
@@ -399,6 +415,30 @@ export default class IdManager {
           const encrypted = await this.vaultysId.encrypt(decrypted, [challenger.getContactId().id]);
           channel.send(Buffer.from(encrypted ?? "", "utf-8"));
         } else channel.send(Buffer.from([0]));
+      }
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async requestSignFile(channel: Channel, file: File) {
+    const challenger = await this.acceptSRP(channel, "p2p", "signfile");
+    if (challenger.isComplete()) {
+      channel.send(Buffer.from(encode(file)));
+      const result = await channel.receive();
+      const fileSignature = decode(result) as FileSignature;
+      if (this.verifyFile(file, fileSignature, challenger.getContactId().toVersion(1))) {
+        return fileSignature;
+      } else return undefined;
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async acceptSignFile(channel: Channel, accept?: (contact: VaultysId, file: File) => Promise<boolean>) {
+    const challenger = await this.startSRP(channel, "p2p", "signfile");
+    if (challenger.isComplete()) {
+      const result = await channel.receive();
+      const file = decode(result) as File;
+      if (!accept || (await accept(challenger.getContactId(), file))) {
+        const result = await this.signFile(file);
+        channel.send(Buffer.from(encode(result)));
       }
     } else channel.send(Buffer.from([0]));
   }

@@ -1,4 +1,3 @@
-import { createHmac, Hmac } from "crypto";
 import { hash, randomBytes } from "./crypto";
 import Fido2Manager from "./Fido2Manager";
 import Fido2PRFManager from "./Fido2PRFManager";
