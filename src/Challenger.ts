@@ -50,7 +50,7 @@ const writeInt = (name: string, value: number) => {
   } else if (value >= -0x80000000 && value <= 0x7fffffff) {
     // int32
     end = Buffer.from([0xd2, value >>> 24, value >>> 16, value >>> 8, value]);
-  } else if (value > 0 && value <= 0xffffffffffffffff) {
+  } else if (value > 0 && value <= 0xffffffffffffffffn) {
     // uint64
     // Split 64 bit number into two 32 bit numbers because JavaScript only regards
     // 32 bits for bitwise operations.

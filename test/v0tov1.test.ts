@@ -138,7 +138,8 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
     await challenger1.update(challenger2.getCertificate());
     try {
       await challenger2.update(challenger1.getCertificate());
-    } catch (err: any) {
+    } catch (err) {
+      // @ts-expect-error useless type check
       assert.equal(err?.message, "[COMPLETE] failed the verification of pk2");
       return;
     }
