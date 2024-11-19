@@ -3,7 +3,13 @@
   "version": "2.2.0",
   "description": "",
   "main": "dist/index.js",
-  "browser": "web/vaultysid.min.js",
+  "exports": {
+    ".": {
+      "node": "./dist/index.js",
+      "browser": "./web/vaultysid.min.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build_web": "webpack --config webpack.config.web.cjs",
     "build_esm": "webpack --config webpack.config.esm.cjs",
