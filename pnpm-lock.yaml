@@ -17,14 +17,14 @@ importers:
         specifier: 3.0.0-beta2
         version: 3.0.0-beta2
       '@noble/curves':
-        specifier: ^1.3.0
-        version: 1.3.0
+        specifier: ^1.6.0
+        version: 1.6.0
       '@noble/hashes':
-        specifier: ^1.4.0
-        version: 1.4.0
+        specifier: ^1.5.0
+        version: 1.5.0
       '@peculiar/x509':
-        specifier: ^1.9.7
-        version: 1.9.7
+        specifier: ^1.12.3
+        version: 1.12.3
       '@samuelthomas2774/saltpack':
         specifier: ^0.3.2
         version: 0.3.2
@@ -32,8 +32,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       cbor:
-        specifier: ^9.0.2
-        version: 9.0.2
+        specifier: ^10.0.3
+        version: 10.0.3
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
@@ -332,16 +332,13 @@ packages:
     resolution: {integrity: sha512-y+l1PNV0XDyY8sM3YtuMLK5vE3/hkfId+Do8pLo/OPxfxuFAUwcGz3oiiUuV46/aBpwTzZ+mRWVMtlSKbradhw==}
     engines: {node: '>= 14'}
 
-  '@noble/curves@1.3.0':
-    resolution: {integrity: sha512-t01iSXPuN+Eqzb4eBX0S5oubSqXbK/xXa1Ne18Hj8f9pStxztHCE2gfboSp/dZRLSqfuLpRK2nDXDK+W9puocA==}
+  '@noble/curves@1.6.0':
+    resolution: {integrity: sha512-TlaHRXDehJuRNR9TfZDNQ45mMEd5dwUwmicsafcIX4SsNiqnCHKjE/1alYPd/lDRVhxdhUAlv8uEhMCI5zjIJQ==}
+    engines: {node: ^14.21.3 || >=16}
 
-  '@noble/hashes@1.3.3':
-    resolution: {integrity: sha512-V7/fPHgl+jsVPXqqeOzT8egNj2iBIVt+ECeMMG8TdcnTikP3oaBtUVqpT/gYCR68aEBJSF+XbYUxStjbFMqIIA==}
-    engines: {node: '>= 16'}
-
-  '@noble/hashes@1.4.0':
-    resolution: {integrity: sha512-V1JJ1WTRUqHHrOSh597hURcMqVKVGL/ea3kv0gSnEdsEZ0/+VyPghM1lMNGc00z7CIQorSvbKpuJkxvuHbvdbg==}
-    engines: {node: '>= 16'}
+  '@noble/hashes@1.5.0':
+    resolution: {integrity: sha512-1j6kQFb7QRru7eKN3ZDvRcP13rugwdxZqCjbiAVZfIJwgj2A65UmT4TgARXGlXgnRkORLTDTrO19ZErt7+QXgA==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -355,38 +352,38 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@peculiar/asn1-cms@2.3.8':
-    resolution: {integrity: sha512-Wtk9R7yQxGaIaawHorWKP2OOOm/RZzamOmSWwaqGphIuU6TcKYih0slL6asZlSSZtVoYTrBfrddSOD/jTu9vuQ==}
+  '@peculiar/asn1-cms@2.3.13':
+    resolution: {integrity: sha512-joqu8A7KR2G85oLPq+vB+NFr2ro7Ls4ol13Zcse/giPSzUNN0n2k3v8kMpf6QdGUhI13e5SzQYN8AKP8sJ8v4w==}
 
-  '@peculiar/asn1-csr@2.3.8':
-    resolution: {integrity: sha512-ZmAaP2hfzgIGdMLcot8gHTykzoI+X/S53x1xoGbTmratETIaAbSWMiPGvZmXRA0SNEIydpMkzYtq4fQBxN1u1w==}
+  '@peculiar/asn1-csr@2.3.13':
+    resolution: {integrity: sha512-+JtFsOUWCw4zDpxp1LbeTYBnZLlGVOWmHHEhoFdjM5yn4wCn+JiYQ8mghOi36M2f6TPQ17PmhNL6/JfNh7/jCA==}
 
-  '@peculiar/asn1-ecc@2.3.8':
-    resolution: {integrity: sha512-Ah/Q15y3A/CtxbPibiLM/LKcMbnLTdUdLHUgdpB5f60sSvGkXzxJCu5ezGTFHogZXWNX3KSmYqilCrfdmBc6pQ==}
+  '@peculiar/asn1-ecc@2.3.14':
+    resolution: {integrity: sha512-zWPyI7QZto6rnLv6zPniTqbGaLh6zBpJyI46r1yS/bVHJXT2amdMHCRRnbV5yst2H8+ppXG6uXu/M6lKakiQ8w==}
 
-  '@peculiar/asn1-pfx@2.3.8':
-    resolution: {integrity: sha512-XhdnCVznMmSmgy68B9pVxiZ1XkKoE1BjO4Hv+eUGiY1pM14msLsFZ3N7K46SoITIVZLq92kKkXpGiTfRjlNLyg==}
+  '@peculiar/asn1-pfx@2.3.13':
+    resolution: {integrity: sha512-fypYxjn16BW+5XbFoY11Rm8LhZf6euqX/C7BTYpqVvLem1GvRl7A+Ro1bO/UPwJL0z+1mbvXEnkG0YOwbwz2LA==}
 
-  '@peculiar/asn1-pkcs8@2.3.8':
-    resolution: {integrity: sha512-rL8k2x59v8lZiwLRqdMMmOJ30GHt6yuHISFIuuWivWjAJjnxzZBVzMTQ72sknX5MeTSSvGwPmEFk2/N8+UztFQ==}
+  '@peculiar/asn1-pkcs8@2.3.13':
+    resolution: {integrity: sha512-VP3PQzbeSSjPjKET5K37pxyf2qCdM0dz3DJ56ZCsol3FqAXGekb4sDcpoL9uTLGxAh975WcdvUms9UcdZTuGyQ==}
 
-  '@peculiar/asn1-pkcs9@2.3.8':
-    resolution: {integrity: sha512-+nONq5tcK7vm3qdY7ZKoSQGQjhJYMJbwJGbXLFOhmqsFIxEWyQPHyV99+wshOjpOjg0wUSSkEEzX2hx5P6EKeQ==}
+  '@peculiar/asn1-pkcs9@2.3.13':
+    resolution: {integrity: sha512-rIwQXmHpTo/dgPiWqUgby8Fnq6p1xTJbRMxCiMCk833kQCeZrC5lbSKg6NDnJTnX2kC6IbXBB9yCS2C73U2gJg==}
 
-  '@peculiar/asn1-rsa@2.3.8':
-    resolution: {integrity: sha512-ES/RVEHu8VMYXgrg3gjb1m/XG0KJWnV4qyZZ7mAg7rrF3VTmRbLxO8mk+uy0Hme7geSMebp+Wvi2U6RLLEs12Q==}
+  '@peculiar/asn1-rsa@2.3.13':
+    resolution: {integrity: sha512-wBNQqCyRtmqvXkGkL4DR3WxZhHy8fDiYtOjTeCd7SFE5F6GBeafw3EJ94PX/V0OJJrjQ40SkRY2IZu3ZSyBqcg==}
 
-  '@peculiar/asn1-schema@2.3.8':
-    resolution: {integrity: sha512-ULB1XqHKx1WBU/tTFIA+uARuRoBVZ4pNdOA878RDrRbBfBGcSzi5HBkdScC6ZbHn8z7L8gmKCgPC1LHRrP46tA==}
+  '@peculiar/asn1-schema@2.3.13':
+    resolution: {integrity: sha512-3Xq3a01WkHRZL8X04Zsfg//mGaA21xlL4tlVn4v2xGT0JStiztATRkMwa5b+f/HXmY2smsiLXYK46Gwgzvfg3g==}
 
-  '@peculiar/asn1-x509-attr@2.3.8':
-    resolution: {integrity: sha512-4Z8mSN95MOuX04Aku9BUyMdsMKtVQUqWnr627IheiWnwFoheUhX3R4Y2zh23M7m80r4/WG8MOAckRKc77IRv6g==}
+  '@peculiar/asn1-x509-attr@2.3.13':
+    resolution: {integrity: sha512-WpEos6CcnUzJ6o2Qb68Z7Dz5rSjRGv/DtXITCNBtjZIRWRV12yFVci76SVfOX8sisL61QWMhpLKQibrG8pi2Pw==}
 
-  '@peculiar/asn1-x509@2.3.8':
-    resolution: {integrity: sha512-voKxGfDU1c6r9mKiN5ZUsZWh3Dy1BABvTM3cimf0tztNwyMJPhiXY94eRTgsMQe6ViLfT6EoXxkWVzcm3mFAFw==}
+  '@peculiar/asn1-x509@2.3.13':
+    resolution: {integrity: sha512-PfeLQl2skXmxX2/AFFCVaWU8U6FKW1Db43mgBhShCOFS1bVxqtvusq1hVjfuEcuSQGedrLdCSvTgabluwN/M9A==}
 
-  '@peculiar/x509@1.9.7':
-    resolution: {integrity: sha512-O+fR1ge6U8upO52q5b3d4tF4SxUdK4IQ0y++Z/Wlqq+ySZUf+deHnbMlDB1YZsIQ/DXU0i5M7Y1DyF5kwpXouQ==}
+  '@peculiar/x509@1.12.3':
+    resolution: {integrity: sha512-+Mzq+W7cNEKfkNZzyLl6A6ffqc3r21HGZUezgfKxpZrkORfOqgRXnS80Zu0IV6a9Ue9QBJeKD7kN0iWfc3bhRQ==}
 
   '@pkgr/core@0.1.1':
     resolution: {integrity: sha512-cq8o4cWH0ibXh9VGi5P20Tu9XF/0fFXl9EUinr9QfTM7a7p0oTA4iJRCQWppXR1Pg8dSM0UCItCkPwsk9qWWYA==}
@@ -735,9 +732,9 @@ packages:
   caniuse-lite@1.0.30001620:
     resolution: {integrity: sha512-WJvYsOjd1/BYUY6SNGUosK9DUidBPDTnOARHp3fSmFO1ekdxaY6nKRttEVrfMmYi80ctS0kz1wiWmm14fVc3ew==}
 
-  cbor@9.0.2:
-    resolution: {integrity: sha512-JPypkxsB10s9QOWwa6zwPzqE1Md3vqpPc+cai4sAecuCsRyAtAl/pMyhPlMbT/xtPnm2dznJZYRLui57qiRhaQ==}
-    engines: {node: '>=16'}
+  cbor@10.0.3:
+    resolution: {integrity: sha512-72Jnj81xMsqepqdcSdf2+fflz/UDsThOHy5hj2MW5F5xzHL8Oa0KQ6I6V9CwVUPxg5pf+W9xp6W2KilaRXWWtw==}
+    engines: {node: '>=18'}
 
   chai@4.4.1:
     resolution: {integrity: sha512-13sOfMv2+DWduEU+/xbun3LScLoqN17nBeTLUsmDfKdoiC1fr0n9PU4guu4AhRcOVFk/sW8LyZWHuhWtQZiF+g==}
@@ -1697,6 +1694,9 @@ packages:
   tslib@2.6.2:
     resolution: {integrity: sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==}
 
+  tslib@2.8.1:
+    resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+
   tsx@4.7.1:
     resolution: {integrity: sha512-8d6VuibXHtlN5E3zFkgY8u4DX7Y3Z27zvvPKVmLon/D4AjuKzarkUBTLDBgj9iTQ0hg5xM7c/mYiRVM+HETf0g==}
     engines: {node: '>=18.0.0'}
@@ -1982,13 +1982,11 @@ snapshots:
 
   '@msgpack/msgpack@3.0.0-beta2': {}
 
-  '@noble/curves@1.3.0':
+  '@noble/curves@1.6.0':
     dependencies:
-      '@noble/hashes': 1.3.3
+      '@noble/hashes': 1.5.0
 
-  '@noble/hashes@1.3.3': {}
-
-  '@noble/hashes@1.4.0': {}
+  '@noble/hashes@1.5.0': {}
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -2002,95 +2000,95 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.17.1
 
-  '@peculiar/asn1-cms@2.3.8':
+  '@peculiar/asn1-cms@2.3.13':
     dependencies:
-      '@peculiar/asn1-schema': 2.3.8
-      '@peculiar/asn1-x509': 2.3.8
-      '@peculiar/asn1-x509-attr': 2.3.8
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
+      '@peculiar/asn1-x509-attr': 2.3.13
       asn1js: 3.0.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-csr@2.3.8':
+  '@peculiar/asn1-csr@2.3.13':
     dependencies:
-      '@peculiar/asn1-schema': 2.3.8
-      '@peculiar/asn1-x509': 2.3.8
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
       asn1js: 3.0.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-ecc@2.3.8':
+  '@peculiar/asn1-ecc@2.3.14':
     dependencies:
-      '@peculiar/asn1-schema': 2.3.8
-      '@peculiar/asn1-x509': 2.3.8
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
       asn1js: 3.0.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-pfx@2.3.8':
+  '@peculiar/asn1-pfx@2.3.13':
     dependencies:
-      '@peculiar/asn1-cms': 2.3.8
-      '@peculiar/asn1-pkcs8': 2.3.8
-      '@peculiar/asn1-rsa': 2.3.8
-      '@peculiar/asn1-schema': 2.3.8
+      '@peculiar/asn1-cms': 2.3.13
+      '@peculiar/asn1-pkcs8': 2.3.13
+      '@peculiar/asn1-rsa': 2.3.13
+      '@peculiar/asn1-schema': 2.3.13
       asn1js: 3.0.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-pkcs8@2.3.8':
+  '@peculiar/asn1-pkcs8@2.3.13':
     dependencies:
-      '@peculiar/asn1-schema': 2.3.8
-      '@peculiar/asn1-x509': 2.3.8
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
       asn1js: 3.0.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-pkcs9@2.3.8':
+  '@peculiar/asn1-pkcs9@2.3.13':
     dependencies:
-      '@peculiar/asn1-cms': 2.3.8
-      '@peculiar/asn1-pfx': 2.3.8
-      '@peculiar/asn1-pkcs8': 2.3.8
-      '@peculiar/asn1-schema': 2.3.8
-      '@peculiar/asn1-x509': 2.3.8
-      '@peculiar/asn1-x509-attr': 2.3.8
+      '@peculiar/asn1-cms': 2.3.13
+      '@peculiar/asn1-pfx': 2.3.13
+      '@peculiar/asn1-pkcs8': 2.3.13
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
+      '@peculiar/asn1-x509-attr': 2.3.13
       asn1js: 3.0.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-rsa@2.3.8':
+  '@peculiar/asn1-rsa@2.3.13':
     dependencies:
-      '@peculiar/asn1-schema': 2.3.8
-      '@peculiar/asn1-x509': 2.3.8
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
       asn1js: 3.0.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-schema@2.3.8':
+  '@peculiar/asn1-schema@2.3.13':
     dependencies:
       asn1js: 3.0.5
       pvtsutils: 1.3.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-x509-attr@2.3.8':
+  '@peculiar/asn1-x509-attr@2.3.13':
     dependencies:
-      '@peculiar/asn1-schema': 2.3.8
-      '@peculiar/asn1-x509': 2.3.8
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
       asn1js: 3.0.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/asn1-x509@2.3.8':
+  '@peculiar/asn1-x509@2.3.13':
     dependencies:
-      '@peculiar/asn1-schema': 2.3.8
+      '@peculiar/asn1-schema': 2.3.13
       asn1js: 3.0.5
       ipaddr.js: 2.2.0
       pvtsutils: 1.3.5
-      tslib: 2.6.2
+      tslib: 2.8.1
 
-  '@peculiar/x509@1.9.7':
+  '@peculiar/x509@1.12.3':
     dependencies:
-      '@peculiar/asn1-cms': 2.3.8
-      '@peculiar/asn1-csr': 2.3.8
-      '@peculiar/asn1-ecc': 2.3.8
-      '@peculiar/asn1-pkcs9': 2.3.8
-      '@peculiar/asn1-rsa': 2.3.8
-      '@peculiar/asn1-schema': 2.3.8
-      '@peculiar/asn1-x509': 2.3.8
+      '@peculiar/asn1-cms': 2.3.13
+      '@peculiar/asn1-csr': 2.3.13
+      '@peculiar/asn1-ecc': 2.3.14
+      '@peculiar/asn1-pkcs9': 2.3.13
+      '@peculiar/asn1-rsa': 2.3.13
+      '@peculiar/asn1-schema': 2.3.13
+      '@peculiar/asn1-x509': 2.3.13
       pvtsutils: 1.3.5
       reflect-metadata: 0.2.2
-      tslib: 2.6.2
+      tslib: 2.8.1
       tsyringe: 4.8.0
 
   '@pkgr/core@0.1.1': {}
@@ -2400,7 +2398,7 @@ snapshots:
     dependencies:
       pvtsutils: 1.3.5
       pvutils: 1.1.3
-      tslib: 2.6.2
+      tslib: 2.8.1
 
   assertion-error@1.1.0: {}
 
@@ -2507,7 +2505,7 @@ snapshots:
 
   caniuse-lite@1.0.30001620: {}
 
-  cbor@9.0.2:
+  cbor@10.0.3:
     dependencies:
       nofilter: 3.1.0
 
@@ -3328,7 +3326,7 @@ snapshots:
 
   pvtsutils@1.3.5:
     dependencies:
-      tslib: 2.6.2
+      tslib: 2.8.1
 
   pvutils@1.1.3: {}
 
@@ -3542,6 +3540,8 @@ snapshots:
   tslib@1.14.1: {}
 
   tslib@2.6.2: {}
+
+  tslib@2.8.1: {}
 
   tsx@4.7.1:
     dependencies:
