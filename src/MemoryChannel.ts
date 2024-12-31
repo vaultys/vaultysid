@@ -9,7 +9,7 @@ export type Channel = {
   send(data: Buffer): Promise<void>;
   receive(): Promise<Buffer>;
   getConnectionString(): string;
-  fromConnectionString(conn: string): Channel | null;
+  fromConnectionString(conn: string, options?: any): Channel | null;
 };
 
 export function StreamChannel(channel: Channel) {
