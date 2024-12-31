@@ -1,5 +1,6 @@
 // nodejs polyfill
 import SoftCredentials from "../src/SoftCredentials";
+import { describe, it } from "mocha";
 
 if (global.navigator) {
   // node > 20

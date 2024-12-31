@@ -19,7 +19,7 @@ export type ChallengeType = {
   sign2?: Buffer;
   metadata?: object;
   state: number;
-  error: string;
+  error?: string;
 };
 
 const writeString = (name: string, value: string) => Buffer.concat([Buffer.from([0xa0 + name.length]), Buffer.from(name, "ascii"), Buffer.from([0xa0 + value.length]), Buffer.from(value, "ascii")]);

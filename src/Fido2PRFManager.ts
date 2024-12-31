@@ -124,7 +124,6 @@ export default class Fido2PRFManager extends Fido2Manager {
           },
         ],
         extensions: {
-          // @ts-expect-error prf not yet in dom
           prf: {
             eval: {
               // Input the contextual information
@@ -136,13 +135,10 @@ export default class Fido2PRFManager extends Fido2Manager {
         },
       };
       const result = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
-      const {
-        // @ts-expect-error prf not yet in dom
-        prf: {
-          results: { first },
-        },
-      } = result.getClientExtensionResults();
-      const cypher = nacl.box.keyPair.fromSecretKey(Buffer.from(first));
+      const { prf } = result.getClientExtensionResults();
+      const first = prf?.results?.first;
+      if (!first) throw new Error("PRF failed");
+      const cypher = nacl.box.keyPair.fromSecretKey(new Uint8Array(first as any));
       this.cypher = {
         publicKey: Buffer.from(cypher.publicKey),
         secretKey: Buffer.from(cypher.secretKey),

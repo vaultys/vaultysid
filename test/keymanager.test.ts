@@ -218,8 +218,11 @@ describe("KeyManager tests", () => {
   });
 
   it("Decrypt a sample encrypted message", async () => {
-    const message = "BEGIN SALTPACK ENCRYPTED MESSAGE. keDIDMQWYvVR58B FTfTeD305lGzPUD Z8BRVEgGXzcjJWB UefZGlwlo9LZtuR Q1KxD1dDReRrFIb 0E0SQdmaBQYHx9R oCVcbFhChzVlNdn 82WpOddWUOChb8I 1R9N6WJJ0wDzdtf 5eNbHvEmWyMd2xw 7NbmAq4nmhxIUxJ Wf2EVXbNNQcpQtu brSHcdqzRPtlNhz 3o7Gi8tCV3y0FZ2I61ads82FMhOe7M 8VAZIEKeeigWrUu bvZLjmHB0jlkqz2 6Pm6HMpawR38XCP vLBbB9phSyb7ShU hgyimdfO6shNe01 sCkCKfeXh99M8lC F8yR49B33BhV547 rEI2MYR2wepXPm3 Poo1Xa8UMEZufGC JiOpRBmYgOPz3h. END SALTPACK ENCRYPTED MESSAGE.";
-    const id = VaultysId.fromSecret("", "base64");
+    // const bob = await VaultysId.generateMachine();
+    // console.log(await VaultysId.encrypt("test", [bob.id]));
+    // console.log(bob.getSecret("base64"));
+    const message = "BEGIN SALTPACK ENCRYPTED MESSAGE. keDIDMQWYvVR58B FTfTeD305hcoHcr Wi4X4pWBmPExHwE WaBDIrIPJ7pgJVE 2Yaxiu3jYK3Osf2 uhjKjQeNaUshMjT QrZdWGFObOEKXZS u5ZF9IyxzRQiBF8 vtIJhLH1kKcDJj4 IQGkhxNTmUljHeo ulEUOyGRt0K3CrR gVkJxxehI8H0GJy 0iJTgCMM7DEX4Jk qmUWofh3hNbfZcs G171PLnJVJ484sS ozpRNJIRMYpHD4g lEdwwVM3NfIoSW3 Cg6FKTrtiNoDgtN gvXoqM96taPvEal dAjNjMgXFcuPT2b U0CFssYXxGKzAnJ gevNrFwrZGLd78h. END SALTPACK ENCRYPTED MESSAGE.";
+    const id = VaultysId.fromSecret("AIShdgGhcMQg3KBa7NhKclRHgvQL/51gDBKkVt9ndZurKDM+wDY4uBSheMRgIEM+lQwxORCD8hOul7keOXea5fMYYghYYL2inBxdB1Uop0p+SGS0ju18I7OOTiMDGGKo7wzTR0xj5xxE9qpTHqHAbWi6fPFaYOXNTK1t6NwVTiNkJDrvqK1OvVrzHnOGoWXEIJRd5AQLlhofk5h7yIGMHzJt5kWUX/J+sTH4gQhGtW1S", "base64");
     const decrypted = await id.decrypt(message);
     assert.equal(decrypted, "test");
   });

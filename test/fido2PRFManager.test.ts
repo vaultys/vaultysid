@@ -40,7 +40,6 @@ describe("Fido2PRFManager", () => {
   });
 
   it("sign and verify a message using EdDSA", async () => {
-    // @ts-expect-error mockup
     global.CredentialUserInteractionRequested = 0;
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
     // @ts-expect-error mockup
@@ -55,7 +54,6 @@ describe("Fido2PRFManager", () => {
   });
 
   it("sign and verify a message using ECDSA", async () => {
-    // @ts-expect-error mockup
     global.CredentialUserInteractionRequested = 0;
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
     // @ts-expect-error mockup

@@ -100,9 +100,9 @@ export default class VaultysId {
         residentKey: passkey ? "required" : "discouraged",
         userVerification: "preferred",
       },
+      // @ts-ignore not yet in dom types
       hints: [hint],
       extensions: {
-        // @ts-expect-error "prf" is not yet included in dom types
         prf: {
           eval: {
             first: Buffer.from("VaultysID salt", "utf-8"),
@@ -169,7 +169,6 @@ export default class VaultysId {
   static async fido2FromAttestation(attestation: PublicKeyCredential, onPRFEnabled?: () => Promise<boolean>) {
     // should be somehow valid.
     await SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true);
-    // @ts-expect-error prf not yet in dom
     if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
       const f2m = await Fido2PRFManager.createFromAttestation(attestation);
       return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);

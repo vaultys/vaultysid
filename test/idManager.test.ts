@@ -284,9 +284,8 @@ describe("SRG challenge with IdManager", () => {
       const manager1 = new IdManager(id1, s1);
       const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
 
-      const promise = manager2.requestPRF(channel.otherend, "nostr");
       manager1.acceptPRF(channel);
-      const result = await promise;
+      const result = await manager2.requestPRF(channel.otherend, "nostr");
       assert.deepEqual(result, await manager1.vaultysId.hmac("prf/nostr/end"));
     }
   });
@@ -306,16 +305,22 @@ describe("SRG challenge with IdManager", () => {
       const input = readFileSync("./test/assets/testfile.png");
       const file = { arrayBuffer: input, type: "image/png" };
 
-      const promise = manager2.requestSignFile(channel.otherend, file);
       manager1.acceptSignFile(channel);
-      const result = await promise;
-      assert.notEqual(result, undefined);
-      assert.ok(manager2.verifyFile(file, result!, manager1.vaultysId));
+      const result = await manager2.requestSignFile(channel.otherend, file);
+
+      if (!result) return assert.fail("no result of the sign file request");
+      const challenge = new URL(result.challenge.toString("utf8"));
+      //console.log(challenge);
+      assert.equal(challenge.protocol, "vaultys:");
+      assert.equal(challenge.host, "signfile");
+      assert.equal(challenge.searchParams.get("hash"), "a73d53246950a93ee956e413f50ed326e36f9a052dcd6fc5388ae19290931f32");
+      assert.notEqual(challenge.searchParams.get("timestamp"), null);
+      assert.ok(manager2.verifyFile(file, result, manager1.vaultysId));
     }
   });
 
   it("perform migration from version 0 to 1", async () => {
-    const ids = [];
+    const ids: IdManager[] = [];
     for (let i = 0; i < 2; i++) {
       const vids1 = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn(), generateWebauthn(false)]);
       for (const vid of vids1) {

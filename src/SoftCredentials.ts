@@ -289,7 +289,6 @@ export default class SoftCredentials {
     };
 
     if (prf) {
-      // @ts-expect-error prf not yet in dom
       result.publicKey!.extensions = { prf: { eval: { first: randomBytes(32) } } };
     }
 
@@ -366,15 +365,14 @@ export default class SoftCredentials {
       rawId: credential.rawId,
       authenticatorAttachment: null,
       type: "public-key",
-      //@ts-expect-error prf not yet in dom types
       getClientExtensionResults: () => {
-        //@ts-expect-error prf not yet in dom types
         if (publicKey.extensions?.prf?.eval?.first) {
           return { prf: { enabled: true } };
         } else {
           return {};
         }
       },
+      toJSON() {},
       response: {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         attestationObject: cbor.encode(attestationObject),
@@ -494,17 +492,15 @@ export default class SoftCredentials {
       rawId: Buffer.from(id, "base64"),
       type: "public-key",
       authenticatorAttachment: null,
-      //@ts-expect-error prf not yet in dom types
       getClientExtensionResults: () => {
-        //@ts-expect-error prf not yet in dom types
         if (publicKey.extensions?.prf?.eval?.first) {
           // unsafe and not following w3c recommendation. for testing purpose only
-          //@ts-expect-error prf not yet in dom types
           return { prf: { results: { first: hash("sha256", publicKey.extensions?.prf?.eval?.first as Buffer) } } };
         } else {
           return {};
         }
       },
+      toJSON() {},
       response: {
         authenticatorData,
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
