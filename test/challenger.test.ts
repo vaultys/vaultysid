@@ -349,7 +349,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth");
-    challenger1.challenge!.timestamp = challenger1.challenge!.timestamp + 60000;
+    challenger1.challenge!.timestamp = challenger1.challenge!.timestamp + 60001;
     await assert.rejects(challenger2.update(challenger1.getCertificate()), {
       name: "Error",
       message: "challenge timestamp failed the liveliness",
