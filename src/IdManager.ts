@@ -509,28 +509,28 @@ export default class IdManager {
 
     try {
       const message = await channel.receive();
-      // console.log(message)
+      // console.log("startSRP", message)
       // TODO: accept contact id before going further
       //console.log(challenger);
       await challenger.update(message);
     } catch (error) {
-      await channel.send(Buffer.from([0]));
+      channel.send(Buffer.from([0]));
       throw new Error(error as string);
     }
     if (challenger.isComplete()) {
       const certificate = challenger.getCertificate();
       if (!certificate) {
         channel.close();
-        await channel.send(Buffer.from([0]));
+        channel.send(Buffer.from([0]));
         throw new Error("Error processing challenge");
       }
       // there is a caveat here, we are not sure that the last bit of information has been received
-      await channel.send(certificate);
+      channel.send(certificate);
       this.store.substore("wot").set(Date.now() + "", certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
     } else {
-      await channel.send(Buffer.from([0]));
+      channel.send(Buffer.from([0]));
       throw new Error("Can't add a new contact if the protocol is not complete");
     }
   }
@@ -540,22 +540,27 @@ export default class IdManager {
     const challenger = new Challenger(idV0);
     try {
       const message = await channel.receive();
+      // console.log("acceptSRP", message)
       await challenger.update(message);
     } catch (error) {
-      await channel.send(Buffer.from([0]));
+      channel.send(Buffer.from([0]));
       throw new Error(error as string);
     }
 
     const cert = challenger.getCertificate();
     if (!cert) {
-      await channel.send(Buffer.from([0]));
+      channel.send(Buffer.from([0]));
       await channel.close();
       throw new Error("Error processing challenge");
     }
-    await channel.send(cert);
+    // console.log("acceptSRP sending 1")
+    channel.send(cert);
+    // console.log("acceptSRP sending 2")
 
     try {
+     
       const message = await channel.receive();
+      // console.log("acceptSRP 2", message)
       await challenger.update(message);
     } catch (error) {
       await channel.close();
