@@ -19,7 +19,6 @@
     "@types/mocha": "^8.2.3",
     "@types/node": "^22.10.2",
     "@types/pbkdf2": "^3.1.2",
-    "@types/pumpify": "^1.4.4",
     "@typescript-eslint/eslint-plugin": "^8.19.0",
     "@typescript-eslint/parser": "^8.19.0",
     "buffer": "^6.0.3",
@@ -56,7 +55,8 @@
     "overrides": {
       "readable-stream": "^3.6.2",
       "bn.js": "^5.2.1",
-      "elliptic": "^6.5.5"
+      "elliptic": "^6.5.5",
+      "buffer": "^6.0.3"
     }
   },
   "packageManager": "pnpm@9.7.0+sha512.dc09430156b427f5ecfc79888899e1c39d2d690f004be70e05230b72cb173d96839587545d09429b55ac3c429c801b4dc3c0e002f653830a420fa2dd4e3cf9cf"

@@ -151,7 +151,7 @@ export default class IdManager {
     })) as PublicKeyCredential;
     if (creds == null) return false;
     const response = creds.response as AuthenticatorAssertionResponse;
-    const extractedChallenge = SoftCredentials.extractChallenge(Buffer.from(response.clientDataJSON));
+    const extractedChallenge = SoftCredentials.extractChallenge(response.clientDataJSON);
 
     if (challenge.toString("base64") !== extractedChallenge) {
       return false;
@@ -558,7 +558,6 @@ export default class IdManager {
     // console.log("acceptSRP sending 2")
 
     try {
-     
       const message = await channel.receive();
       // console.log("acceptSRP 2", message)
       await challenger.update(message);

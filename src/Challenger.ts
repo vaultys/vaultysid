@@ -126,6 +126,7 @@ const deserialize = (challenge: Buffer): ChallengeType => {
       }
     } else if (!!result.sign1 && result.nonce?.length === 32 && !!result.pk1 && !!result.pk2 && !!result.sign2) {
       result.state = COMPLETE;
+      //console.log(result);
       const id1 = VaultysId.fromId(result.pk1);
       const id2 = VaultysId.fromId(result.pk2);
       if (id1.version !== id2.version) {

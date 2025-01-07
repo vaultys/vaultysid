@@ -28,11 +28,12 @@ const createRequest = (alg: number) => {
   };
 };
 
-let attestation: PublicKeyCredential, attestationSafe;
+let attestation: PublicKeyCredential, attestationSafe: PublicKeyCredential;
 
 describe("SoftCredentials", () => {
   it("create attestation (ECDSA)", async () => {
     attestation = await SoftCredentials.create(createRequest(-7));
+    console.log(attestation);
   });
   it("create attestation (EdDSA)", async () => {
     attestationSafe = await SoftCredentials.create(createRequest(-8));

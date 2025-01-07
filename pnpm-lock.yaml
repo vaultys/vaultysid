@@ -8,6 +8,7 @@ overrides:
   readable-stream: ^3.6.2
   bn.js: ^5.2.1
   elliptic: ^6.5.5
+  buffer: ^6.0.3
 
 importers:
 
@@ -56,9 +57,6 @@ importers:
       '@types/pbkdf2':
         specifier: ^3.1.2
         version: 3.1.2
-      '@types/pumpify':
-        specifier: ^1.4.4
-        version: 1.4.4
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.19.0
         version: 8.19.0(@typescript-eslint/parser@8.19.0(eslint@9.17.0)(typescript@5.7.2))(eslint@9.17.0)(typescript@5.7.2)
@@ -460,9 +458,6 @@ packages:
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
 
-  '@types/duplexify@3.6.4':
-    resolution: {integrity: sha512-2eahVPsd+dy3CL6FugAzJcxoraWhUghZGEQJns1kTKfCXWKJ5iG/VkaB05wRVrDKHfOFKqb0X0kXh91eE99RZg==}
-
   '@types/elliptic@6.4.18':
     resolution: {integrity: sha512-UseG6H5vjRiNpQvrhy4VF/JXdA3V/Fp5amvveaL+fs28BZ6xIKJBPnUPRlEaZpysD9MbpfaLi8lbl7PGUAkpWw==}
 
@@ -486,9 +481,6 @@ packages:
 
   '@types/pbkdf2@3.1.2':
     resolution: {integrity: sha512-uRwJqmiXmh9++aSu1VNEn3iIxWOhd8AHXNSdlaLfdAAdSTY9jYVeGWnzejM3dvrkbqE3/hyQkQQ29IFATEGlew==}
-
-  '@types/pumpify@1.4.4':
-    resolution: {integrity: sha512-+cWbQUecD04MQYkjNBhPmcUIP368aloYmqm+ImdMKA8rMpxRNAhZAD6gIj+sAVTF1DliqrT/qUp6aGNi/9U3tw==}
 
   '@typescript-eslint/eslint-plugin@8.19.0':
     resolution: {integrity: sha512-NggSaEZCdSrFddbctrVjkVZvFC6KGfKfNK0CU7mNK/iKHGKbzT4Wmgm08dKpcZECBu9f5FypndoMyRHkdqfT1Q==}
@@ -2230,10 +2222,6 @@ snapshots:
 
   '@types/deep-eql@4.0.2': {}
 
-  '@types/duplexify@3.6.4':
-    dependencies:
-      '@types/node': 22.10.2
-
   '@types/elliptic@6.4.18':
     dependencies:
       '@types/bn.js': 5.1.6
@@ -2260,11 +2248,6 @@ snapshots:
 
   '@types/pbkdf2@3.1.2':
     dependencies:
-      '@types/node': 22.10.2
-
-  '@types/pumpify@1.4.4':
-    dependencies:
-      '@types/duplexify': 3.6.4
       '@types/node': 22.10.2
 
   '@typescript-eslint/eslint-plugin@8.19.0(@typescript-eslint/parser@8.19.0(eslint@9.17.0)(typescript@5.7.2))(eslint@9.17.0)(typescript@5.7.2)':

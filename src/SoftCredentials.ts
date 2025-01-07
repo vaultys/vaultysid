@@ -1,5 +1,6 @@
 // TODO: to revamp and optimize
 import crypto from "crypto";
+import { Buffer } from "buffer";
 import { randomBytes, hash as myhash, fromUTF8 } from "./crypto";
 import cbor from "cbor";
 import { ed25519 } from "@noble/curves/ed25519";
@@ -247,12 +248,12 @@ type SoftKeyPair = {
 // Webauthn Partial Implementation for testing
 export default class SoftCredentials {
   signCount: number;
-  rawId: Buffer;
-  aaguid: Buffer;
-  challenge!: Buffer;
+  rawId: Buffer<ArrayBuffer>;
+  aaguid: Buffer<ArrayBuffer>;
+  challenge!: Buffer<ArrayBuffer>;
   options!: PublicKeyCredentialCreationOptions;
   rpId!: string;
-  userHandle!: Buffer;
+  userHandle!: Buffer<ArrayBuffer>;
   alg!: number;
   keyPair!: SoftKeyPair;
   coseKey!: Map<number, number | Uint8Array>;
@@ -310,7 +311,7 @@ export default class SoftCredentials {
     const publicKey = options.publicKey!;
     credential.options = publicKey;
     credential.rpId = publicKey.rp.id!;
-    credential.userHandle = Buffer.from(publicKey.user.id as ArrayBuffer);
+    credential.userHandle = Buffer.from(publicKey.user.id.toString(), "base64");
     credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
     credential.alg = publicKey.pubKeyCredParams[0].alg;
     if (credential.alg === -8) {
@@ -360,9 +361,9 @@ export default class SoftCredentials {
       attStmt: {},
     };
 
-    const pkCredentials: PublicKeyCredential = {
+    const pkCredentials = {
       id: credential.rawId.toString("base64"),
-      rawId: credential.rawId,
+      rawId: credential.rawId as unknown as ArrayBuffer,
       authenticatorAttachment: null,
       type: "public-key",
       getClientExtensionResults: () => {
@@ -380,7 +381,7 @@ export default class SoftCredentials {
         getAuthenticatorData: () => attestationObject.authData,
         getPublicKey: () => coseKey,
         getPublicKeyAlgorithm: () => -7,
-      } as AuthenticatorAttestationResponse,
+      } as unknown as AuthenticatorAttestationResponse,
     };
 
     return pkCredentials;
@@ -453,7 +454,7 @@ export default class SoftCredentials {
     }
   }
 
-  static extractChallenge(clientDataJSON: Buffer) {
+  static extractChallenge(clientDataJSON: ArrayBuffer) {
     const clientData = JSON.parse(clientDataJSON.toString());
     const m = clientData.challenge.length % 4;
     return clientData.challenge
@@ -489,7 +490,7 @@ export default class SoftCredentials {
 
     const pkCredentials: PublicKeyCredential = {
       id,
-      rawId: Buffer.from(id, "base64"),
+      rawId: Buffer.from(id, "base64").buffer,
       type: "public-key",
       authenticatorAttachment: null,
       getClientExtensionResults: () => {
@@ -506,7 +507,7 @@ export default class SoftCredentials {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         signature: signature,
         userHandle: credential.userHandle,
-      } as AuthenticatorAssertionResponse,
+      } as unknown as AuthenticatorAssertionResponse,
     };
 
     return pkCredentials;

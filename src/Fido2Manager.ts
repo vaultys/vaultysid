@@ -15,9 +15,9 @@ declare global {
 }
 
 type Fido2Signature = {
-  s: Buffer;
-  c: Buffer;
-  a: Buffer;
+  s: ArrayBuffer;
+  c: ArrayBuffer;
+  a: ArrayBuffer;
 };
 
 type ExportFIDO2Data = {
@@ -217,16 +217,17 @@ export default class Fido2Manager extends KeyManager {
     };
   }
 
-  verify(data: Buffer, signature: Buffer, userVerification: boolean = false) {
-    const decoded = decode(signature) as Fido2Signature;
-    const response: AuthenticatorAssertionResponse = {
+  verify(data: Buffer, signature: Buffer | Uint8Array, userVerification: boolean = false) {
+    const signatureBuffer = Buffer.from(signature);
+    const decoded = decode(signatureBuffer) as Fido2Signature;
+    const response = {
       signature: decoded.s,
       clientDataJSON: decoded.c,
       authenticatorData: decoded.a,
-      userHandle: Buffer.from([]),
+      userHandle: Buffer.from([]).buffer,
     };
     const challenge = hash("sha256", data).toString("base64");
-    const extractedChallenge = SoftCredentials.extractChallenge(response.clientDataJSON as Buffer);
+    const extractedChallenge = SoftCredentials.extractChallenge(response.clientDataJSON);
     if (challenge !== extractedChallenge) {
       return false;
     }
