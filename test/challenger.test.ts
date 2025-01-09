@@ -1,6 +1,5 @@
-import Challenger from "../src/Challenger";
 import SoftCredentials from "../src/SoftCredentials";
-import VaultysId from "../src/VaultysId";
+import { VaultysId, Challenger } from "../";
 import assert from "assert";
 import "./utils";
 import { randomBytes } from "../src/crypto";

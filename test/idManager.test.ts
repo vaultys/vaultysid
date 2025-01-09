@@ -1,9 +1,7 @@
 import assert from "assert";
 import { createHash, randomBytes } from "crypto";
-import IdManager, { FileSignature } from "../src/IdManager";
-import VaultysId from "../src/VaultysId";
-import { MemoryChannel } from "../src/MemoryChannel";
-import { MemoryStorage } from "../src/MemoryStorage";
+import  { FileSignature } from "../src/IdManager";
+import { IdManager, VaultysId, MemoryChannel, MemoryStorage } from "..";
 import { createReadStream, createWriteStream, readFileSync, rmSync } from "fs";
 import SoftCredentials from "../src/SoftCredentials";
 import "./utils";

@@ -1,8 +1,8 @@
 import assert from "assert";
 import { randomBytes } from "crypto";
-import KeyManager, { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
+import { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
 import * as bip32 from "@stricahq/bip32ed25519";
-import { VaultysId } from "../dist";
+import { VaultysId, KeyManager } from "../";
 
 // @ts-expect-error weird import for @stricahq/bip32ed25519
 const bip32fix = bip32.default ?? bip32;

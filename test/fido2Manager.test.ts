@@ -1,7 +1,7 @@
 import Fido2Manager from "../src/Fido2Manager";
 import SoftCredentials from "../src/SoftCredentials";
 import assert from "assert";
-import VaultysId from "../src/VaultysId";
+import { VaultysId } from "../";
 import "./utils";
 
 describe("Fido2Manager", () => {

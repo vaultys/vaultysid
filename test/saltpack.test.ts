@@ -1,5 +1,5 @@
 import SoftCredentials from "../src/SoftCredentials";
-import VaultysId from "../src/VaultysId";
+import { VaultysId } from "../";
 import assert from "assert";
 import "./utils";
 

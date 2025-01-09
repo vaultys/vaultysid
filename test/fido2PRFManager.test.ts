@@ -1,7 +1,7 @@
 import Fido2PRFManager from "../src/Fido2PRFManager";
 import SoftCredentials from "../src/SoftCredentials";
 import assert from "assert";
-import VaultysId from "../src/VaultysId";
+import { VaultysId } from "../";
 import "./utils";
 
 describe("Fido2PRFManager", () => {
