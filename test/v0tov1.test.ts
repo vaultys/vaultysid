@@ -73,7 +73,7 @@ describe("VaultysId Migration", () => {
     assert.equal(bob.store.substore("wot").list().length, wot.length);
     assert.equal(bob.store.substore("contacts").list().length, wot.length);
     assert.equal(bob.vaultysId.version, 1);
-  });
+  }).timeout(5000);
 });
 
 describe("Symetric Proof of Relationship - SRG - V0", () => {

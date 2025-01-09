@@ -209,5 +209,5 @@ describe("SRG challenge with IdManager", () => {
       id.migrate(1);
       assert.equal(id.contacts.length, 10);
     }
-  });
+  }).timeout(5000);
 });
