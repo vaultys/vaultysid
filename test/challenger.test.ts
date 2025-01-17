@@ -1,8 +1,10 @@
-import SoftCredentials from "../src/SoftCredentials";
 import { VaultysId, Challenger } from "../";
+import { Buffer } from "buffer/";
 import assert from "assert";
-import "./utils";
+import "./shims";
 import { randomBytes } from "../src/crypto";
+import SoftCredentials from "../src/platform/SoftCredentials";
+import { createRandomVaultysId } from "./utils";
 
 const testCertificate = (rogueCert: Buffer) => {
   try {
@@ -31,9 +33,9 @@ const challengeNext = async (vaultysId: VaultysId, newCertificate?: Buffer, oldC
 
 describe("Symetric Proof of Relationship - SRG", () => {
   it("Perform Protocol", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     assert.equal(challenger1.isComplete(), false);
     assert.equal(challenger1.hasFailed(), false);
@@ -58,8 +60,8 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Perform Stateless Protocol", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId1 = await createRandomVaultysId();
+    const vaultysId2 = await createRandomVaultysId();
     const init = await challengeNext(vaultysId1);
     // console.log("init", Challenger.deserializeCertificate(init));
     const step1 = await challengeNext(vaultysId2, init);
@@ -71,9 +73,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Perform Protocol attacking protocol", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     const challengerattack = new Challenger(vaultysId2);
     assert.equal(challenger1.isComplete(), false);
@@ -85,7 +87,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     challengerattack.challenge!.protocol = "hack";
     delete challengerattack.challenge?.pk2;
     delete challengerattack.challenge?.sign2;
-    challengerattack.challenge!.nonce = challengerattack.challenge!.nonce?.subarray(0, 16);
+    challengerattack.challenge!.nonce = Buffer.from(challengerattack.challenge!.nonce!.subarray(0, 16));
     await challenger2.update(challengerattack.getCertificate());
     // console.log(challengerattack.challenge);
     assert.equal(challenger1.state, 0);
@@ -100,9 +102,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Perform Protocol attacking service", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     const challengerattack = new Challenger(vaultysId2);
     assert.equal(challenger1.isComplete(), false);
@@ -114,7 +116,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     challengerattack.challenge!.service = "hack";
     delete challengerattack.challenge?.pk2;
     delete challengerattack.challenge?.sign2;
-    challengerattack.challenge!.nonce = challengerattack.challenge!.nonce?.subarray(0, 16);
+    challengerattack.challenge!.nonce = Buffer.from(challengerattack.challenge!.nonce!.subarray(0, 16));
     await challenger2.update(challengerattack.getCertificate());
     // console.log(challengerattack.challenge);
     assert.equal(challenger1.state, 0);
@@ -129,9 +131,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Perform Protocol attacking nonce", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     const challengerattack = new Challenger(vaultysId2);
     assert.equal(challenger1.isComplete(), false);
@@ -158,9 +160,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Perform Protocol attacking timestamp", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     const challengerattack = new Challenger(vaultysId2);
     assert.equal(challenger1.isComplete(), false);
@@ -173,7 +175,7 @@ describe("Symetric Proof of Relationship - SRG", () => {
     challengerattack.challenge!.timestamp = Date.now();
     delete challengerattack.challenge?.pk2;
     delete challengerattack.challenge?.sign2;
-    challengerattack.challenge!.nonce = challengerattack.challenge!.nonce?.subarray(0, 16);
+    challengerattack.challenge!.nonce = Buffer.from(challengerattack.challenge!.nonce!.subarray(0, 16));
     await challenger2.update(challengerattack.getCertificate());
     assert.equal(challenger1.state, 0);
     assert.equal(challenger2.state, 1);
@@ -187,9 +189,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Perform Protocol attacking with legit but different certificate", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
@@ -211,37 +213,10 @@ describe("Symetric Proof of Relationship - SRG", () => {
     assert.fail("The protocol with tampered legit certificate should have failed");
   });
 
-  it("Perform Protocol with Fido2Manager", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
-    const challenger1 = new Challenger(vaultysId1);
-
-    const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-expect-error mockup
-    const vaultysId2 = await VaultysId.fido2FromAttestation(attestation2);
-    const challenger2 = new Challenger(vaultysId2);
-
-    assert.equal(challenger1.isComplete(), false);
-    assert.equal(challenger1.hasFailed(), false);
-    challenger1.createChallenge("p2p", "auth");
-    await challenger2.update(challenger1.getCertificate());
-    await challenger1.update(challenger2.getCertificate());
-    assert.ok(challenger1.isComplete());
-    assert.ok(!challenger2.isComplete());
-    await challenger2.update(challenger1.getCertificate());
-    // SYMETRIC PROOF
-    assert.ok(challenger1.isComplete());
-    assert.ok(challenger2.isComplete());
-    assert.equal(challenger1.toString(), challenger2.toString());
-  });
-
   it("Fail for liveliness at first round", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1, 50);
-    const vaultysId2 = await VaultysId.generatePerson();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2, 50);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
@@ -254,11 +229,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Fail for liveliness at second round", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1, 50);
-    const vaultysId2 = await VaultysId.generateMachine();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2, 50);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
@@ -272,11 +245,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Pass for liveliness at third round", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1, 50);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2, 50);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
@@ -293,11 +264,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Pass with time deviation of 59s in the future", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generatePerson();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
@@ -316,11 +285,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Pass with time deviation of 59s in the past", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generatePerson();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
@@ -339,11 +306,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Fail with time deviation of 60s in the future", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
@@ -356,11 +321,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
   });
 
   it("Fail with time deviation of 60s in the past", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());

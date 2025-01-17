@@ -1,14 +1,13 @@
-import SoftCredentials from "../src/SoftCredentials";
 import { VaultysId } from "../";
 import assert from "assert";
-import "./utils";
+import "./shims";
+import { createRandomVaultysId } from "./utils";
 
 describe("Saltpack", () => {
   it("Saltpack working with ID", async () => {
-    const attestation = await SoftCredentials.create(SoftCredentials.createRequest(-7, true));
-    const alice = await VaultysId.generatePerson();
-    const bob = await VaultysId.fido2FromAttestation(attestation);
-    const eve = await VaultysId.generatePerson();
+    const alice = await createRandomVaultysId();
+    const bob = await createRandomVaultysId();
+    const eve = await createRandomVaultysId();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id.toString("hex")];
     const ENCRYPTED = await alice.signcrypt(plaintext, recipients);

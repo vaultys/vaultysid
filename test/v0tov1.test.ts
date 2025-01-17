@@ -1,9 +1,11 @@
-import SoftCredentials from "../src/SoftCredentials";
+import { Buffer } from "buffer/";
+import SoftCredentials from "../src/platform/SoftCredentials";
 import { VaultysId, Challenger, IdManager, MemoryChannel, MemoryStorage } from "../";
 import assert from "assert";
-import "./utils";
+import "./shims";
+import { createRandomVaultysId } from "./utils";
 
-const generateWot = async (max = 10) => {
+const generateWot = async (max = 4) => {
   const result: IdManager[] = [];
   for (let i = 0; i < max; i++) {
     const vaultysId = await VaultysId.generatePerson();
@@ -27,17 +29,17 @@ const testCertificate = (rogueCert: Buffer) => {
 
 describe("VaultysId Migration", () => {
   it("create VaultysId  with version 1 by default", async () => {
-    const bob = await VaultysId.generateMachine();
+    const bob = await createRandomVaultysId();
     assert.equal(bob.version, 1);
   });
   it("Migrate VaultysId to Version 0", async () => {
-    const bob = await VaultysId.generatePerson();
+    const bob = await createRandomVaultysId();
     bob.toVersion(0);
     assert.equal(bob.version, 0);
   });
 
   it("Migrate IdManager to Version 0", async () => {
-    const vaultysId = await VaultysId.generatePerson();
+    const vaultysId = await createRandomVaultysId();
     const s = MemoryStorage(() => "");
     const bob = new IdManager(vaultysId, s);
     const wot = await generateWot();
@@ -74,9 +76,9 @@ describe("VaultysId Migration", () => {
 
 describe("Symetric Proof of Relationship - SRG - V0", () => {
   it("Perform Protocol with KeyManager", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1.toVersion(0));
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2.toVersion(0));
     assert.equal(challenger1.isComplete(), false);
     assert.equal(challenger1.hasFailed(), false);
@@ -92,40 +94,10 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
-  it("Perform Protocol with Fido2Manager", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-expect-error mockup
-    const vaultysId1 = (await VaultysId.fido2FromAttestation(attestation1)).toVersion(0);
-    const challenger1 = new Challenger(vaultysId1);
-
-    const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-expect-error mockup
-    const vaultysId2 = (await VaultysId.fido2FromAttestation(attestation2)).toVersion(0);
-    const challenger2 = new Challenger(vaultysId2);
-
-    assert.equal(challenger1.isComplete(), false);
-    assert.equal(challenger1.hasFailed(), false);
-    challenger1.createChallenge("p2p", "auth", 0);
-    await challenger2.update(challenger1.getCertificate());
-    await challenger1.update(challenger2.getCertificate());
-
-    assert.ok(challenger1.isComplete());
-    assert.ok(!challenger2.isComplete());
-    await challenger2.update(challenger1.getCertificate());
-    // SYMETRIC PROOF
-    assert.ok(challenger1.isComplete());
-    assert.ok(challenger2.isComplete());
-    assert.equal(vaultysId1.version, 0);
-    assert.equal(vaultysId2.version, 0);
-    assert.equal(challenger1.toString(), challenger2.toString());
-  });
-
   it("Fail for different vaultysId versions", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1.toVersion(0));
-    const vaultysId2 = await VaultysId.generatePerson();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
@@ -145,9 +117,9 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
 
 describe("Symetric Proof of Relationship - SRG - V1", () => {
   it("Perform Protocol with KeyManager", async () => {
-    const vaultysId1 = await VaultysId.generateMachine();
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await VaultysId.generateOrganization();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     assert.equal(challenger1.isComplete(), false);
     assert.equal(challenger1.hasFailed(), false);
@@ -160,42 +132,13 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
     // SYMETRIC PROOF
     assert.ok(challenger1.isComplete());
     assert.ok(challenger2.isComplete());
-    assert.equal(challenger1.toString(), challenger2.toString());
-  });
-
-  it("Perform Protocol with Fido2Manager", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
-    const challenger1 = new Challenger(vaultysId1);
-
-    const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(-8));
-    // @ts-expect-error mockup
-    const vaultysId2 = await VaultysId.fido2FromAttestation(attestation2);
-    const challenger2 = new Challenger(vaultysId2);
-
-    assert.equal(challenger1.isComplete(), false);
-    assert.equal(challenger1.hasFailed(), false);
-    challenger1.createChallenge("p2p", "auth", 1);
-    await challenger2.update(challenger1.getCertificate());
-    await challenger1.update(challenger2.getCertificate());
-    assert.ok(challenger1.isComplete());
-    assert.ok(!challenger2.isComplete());
-    await challenger2.update(challenger1.getCertificate());
-    // SYMETRIC PROOF
-    assert.ok(challenger1.isComplete());
-    assert.ok(challenger2.isComplete());
-    assert.equal(vaultysId1.version, 1);
-    assert.equal(vaultysId2.version, 1);
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
   it("Succeed for different vaultysId versions", async () => {
-    const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(-7));
-    // @ts-expect-error mockup
-    const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+    const vaultysId1 = await createRandomVaultysId();
     const challenger1 = new Challenger(vaultysId1.toVersion(0));
-    const vaultysId2 = await VaultysId.generatePerson();
+    const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());

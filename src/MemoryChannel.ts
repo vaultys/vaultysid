@@ -1,5 +1,6 @@
 import cc from "./cryptoChannel";
 import { Readable, Stream, Writable } from "stream";
+import { Buffer } from "buffer/";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

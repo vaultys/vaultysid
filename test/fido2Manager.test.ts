@@ -1,8 +1,9 @@
+import { Buffer } from "buffer/";
 import Fido2Manager from "../src/Fido2Manager";
-import SoftCredentials from "../src/SoftCredentials";
+import SoftCredentials from "../src/platform/SoftCredentials";
 import assert from "assert";
 import { VaultysId } from "../";
-import "./utils";
+import "./shims";
 
 describe("Fido2Manager", () => {
   it("serder a Fido2Manager (ECDSA)", async () => {
@@ -39,6 +40,7 @@ describe("Fido2Manager", () => {
   });
 
   it("sign and verify a message using EdDSA", async () => {
+    // @ts-ignore
     global.CredentialUserInteractionRequested = 0;
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-8));
     // @ts-expect-error mockup
@@ -53,6 +55,7 @@ describe("Fido2Manager", () => {
   });
 
   it("sign and verify a message using ECDSA", async () => {
+    // @ts-ignore
     global.CredentialUserInteractionRequested = 0;
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7));
     // @ts-expect-error mockup

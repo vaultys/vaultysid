@@ -1,6 +1,7 @@
 import { decode, encode } from "@msgpack/msgpack";
 import { randomBytes } from "./crypto";
 import VaultysId from "./VaultysId";
+import { Buffer } from "buffer/";
 
 const ERROR = -2;
 const UNINITIALISED = -1;
@@ -310,7 +311,7 @@ export default class Challenger {
 
   getCertificate() {
     if (!this.challenge) return Buffer.from([]);
-    return Buffer.from(serialize(this.challenge) || []);
+    return serialize(this.challenge) || Buffer.from([]);
   }
 
   getUnsignedChallenge() {
@@ -429,6 +430,7 @@ export default class Challenger {
         throw new Error(`The challenge was expecting protocol '${this.challenge!.protocol}' and service '${this.challenge!.service}', received '${tempchallenge.protocol}' and '${tempchallenge.service}'`);
       }
       if (this.state === INIT && tempchallenge.state === STEP1) {
+        // @ts-ignore
         if (!tempchallenge.nonce?.subarray(0, 16).equals(this.challenge!.nonce!.subarray(0, 16))) {
           this.state = ERROR;
           throw new Error("Nonce has been tampered with");
@@ -455,6 +457,7 @@ export default class Challenger {
           this.state = ERROR;
           throw new Error(`The challenge was expecting protocol '${this.challenge!.protocol}' and service '${this.challenge!.service}', received '${tempchallenge.protocol}' and '${tempchallenge.service}'`);
         }
+        // @ts-ignore
         if (!tempchallenge.nonce?.subarray(16, 32).equals(this.challenge!.nonce!.subarray(16, 32))) {
           this.state = ERROR;
           throw new Error("Nonce has been tampered with");

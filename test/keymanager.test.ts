@@ -1,8 +1,10 @@
 import assert from "assert";
+import { Buffer } from "buffer/";
 import { randomBytes } from "crypto";
 import { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
 import * as bip32 from "@stricahq/bip32ed25519";
 import { VaultysId, KeyManager } from "../";
+import { createRandomVaultysId } from "./utils";
 
 // @ts-expect-error weird import for @stricahq/bip32ed25519
 const bip32fix = bip32.default ?? bip32;
@@ -165,9 +167,9 @@ describe("KeyManager tests", () => {
   });
 
   it("VaultysId: signcrypt and decrypt messages", async () => {
-    const alice = await VaultysId.generatePerson();
-    const bob = await VaultysId.generateMachine();
-    const eve = await VaultysId.generateOrganization();
+    const alice = await createRandomVaultysId();
+    const bob = await createRandomVaultysId();
+    const eve = await createRandomVaultysId();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
     const ENCRYPTED = await alice.signcrypt(plaintext, recipients);
@@ -183,9 +185,9 @@ describe("KeyManager tests", () => {
   });
 
   it("VaultysId: encrypt and decrypt messages", async () => {
-    const alice = await VaultysId.generatePerson();
-    const bob = await VaultysId.generateMachine();
-    const eve = await VaultysId.generateOrganization();
+    const alice = await createRandomVaultysId();
+    const bob = await createRandomVaultysId();
+    const eve = await createRandomVaultysId();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
     const ENCRYPTED = await VaultysId.encrypt(plaintext, recipients);
@@ -201,9 +203,9 @@ describe("KeyManager tests", () => {
   });
 
   it("VaultysId: signcrypt and blind decrypt messages", async () => {
-    const alice = await VaultysId.generatePerson();
-    const bob = await VaultysId.generateMachine();
-    const eve = await VaultysId.generateOrganization();
+    const alice = await createRandomVaultysId();
+    const bob = await createRandomVaultysId();
+    const eve = await createRandomVaultysId();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
     const ENCRYPTED = await alice.signcrypt(plaintext, recipients);
@@ -218,7 +220,7 @@ describe("KeyManager tests", () => {
   });
 
   it("Decrypt a sample encrypted message", async () => {
-    // const bob = await VaultysId.generateMachine();
+    // const bob = await createRandomVaultysId();
     // console.log(await VaultysId.encrypt("test", [bob.id]));
     // console.log(bob.getSecret("base64"));
     const message = "BEGIN SALTPACK ENCRYPTED MESSAGE. keDIDMQWYvVR58B FTfTeD305hcoHcr Wi4X4pWBmPExHwE WaBDIrIPJ7pgJVE 2Yaxiu3jYK3Osf2 uhjKjQeNaUshMjT QrZdWGFObOEKXZS u5ZF9IyxzRQiBF8 vtIJhLH1kKcDJj4 IQGkhxNTmUljHeo ulEUOyGRt0K3CrR gVkJxxehI8H0GJy 0iJTgCMM7DEX4Jk qmUWofh3hNbfZcs G171PLnJVJ484sS ozpRNJIRMYpHD4g lEdwwVM3NfIoSW3 Cg6FKTrtiNoDgtN gvXoqM96taPvEal dAjNjMgXFcuPT2b U0CFssYXxGKzAnJ gevNrFwrZGLd78h. END SALTPACK ENCRYPTED MESSAGE.";

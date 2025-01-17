@@ -1,5 +1,6 @@
 import { Channel } from "./MemoryChannel";
 import { secretbox, randomBytes } from "./crypto";
+import { Buffer } from "buffer/";
 
 const newNonce = () => randomBytes(secretbox.nonceLength);
 

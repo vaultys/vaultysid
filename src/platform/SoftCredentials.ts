@@ -1,7 +1,7 @@
 // TODO: to revamp and optimize
 import crypto from "crypto";
-import { Buffer } from "buffer";
-import { randomBytes, hash as myhash, fromUTF8 } from "./crypto";
+import { Buffer } from "buffer/";
+import { randomBytes, hash as myhash, fromUTF8 } from "../crypto";
 import cbor from "cbor";
 import { ed25519 } from "@noble/curves/ed25519";
 import { p256 } from "@noble/curves/p256";
@@ -141,7 +141,7 @@ const parseAuthData = (buffer: Buffer) => {
   };
 };
 
-const verifyPackedAttestation = async (response: AuthenticatorAttestationResponse, userVerification = false) => {
+const verifyPackedAttestation = (response: AuthenticatorAttestationResponse, userVerification = false) => {
   const attestationBuffer = Buffer.from(response.attestationObject);
   const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
   if (attestationStruct.fmt == "none") return false;
@@ -248,12 +248,12 @@ type SoftKeyPair = {
 // Webauthn Partial Implementation for testing
 export default class SoftCredentials {
   signCount: number;
-  rawId: Buffer<ArrayBuffer>;
-  aaguid: Buffer<ArrayBuffer>;
-  challenge!: Buffer<ArrayBuffer>;
+  rawId: Buffer;
+  aaguid: Buffer;
+  challenge!: Buffer;
   options!: PublicKeyCredentialCreationOptions;
   rpId!: string;
-  userHandle!: Buffer<ArrayBuffer>;
+  userHandle!: Buffer;
   alg!: number;
   keyPair!: SoftKeyPair;
   coseKey!: Map<number, number | Uint8Array>;
@@ -351,9 +351,9 @@ export default class SoftCredentials {
     const rpIdHash = myhash("sha256", Buffer.from(credential.rpId, "ascii"));
     const flags = Buffer.from("41", "hex"); // attested_data + user_present
     const signCount = Buffer.allocUnsafe(4);
-    signCount.writeUInt32BE(credential.signCount);
+    signCount.writeUInt32BE(credential.signCount, 0);
     const rawIdLength = Buffer.allocUnsafe(2);
-    rawIdLength.writeUInt16BE(credential.rawId.length);
+    rawIdLength.writeUInt16BE(credential.rawId.length, 0);
     const coseKey = cbor.encode(credential.coseKey);
     const attestationObject = {
       authData: Buffer.concat([rpIdHash, flags, signCount, credential.aaguid, rawIdLength, credential.rawId, coseKey]),
@@ -425,7 +425,7 @@ export default class SoftCredentials {
     return verifyPackedAttestation(attestation, userVerification);
   }
 
-  static verify(attestation: PublicKeyCredential, assertion: PublicKeyCredential, userVerifiation = false) {
+  static verify(attestation: PublicKeyCredential, assertion: PublicKeyCredential, userVerifiation = false): boolean {
     //if (assertion.id !== attestation.id) return false;
     const hash = myhash("sha256", Buffer.from(assertion.response.clientDataJSON));
     const ass = assertion.response as AuthenticatorAssertionResponse;
@@ -452,6 +452,7 @@ export default class SoftCredentials {
       const pubKey = Buffer.concat([Buffer.from("04", "hex"), x, y]);
       return verifyECDSA(data, pubKey, Buffer.from(ass.signature));
     }
+    return false;
   }
 
   static extractChallenge(clientDataJSON: ArrayBuffer) {
@@ -478,7 +479,7 @@ export default class SoftCredentials {
     const rpIdHash = myhash("sha256", Buffer.from(credential.rpId, "utf-8"));
     const flags = Buffer.from("05", "hex"); // user verification
     const signCount = Buffer.allocUnsafe(4);
-    signCount.writeUInt32BE(credential.signCount);
+    signCount.writeUInt32BE(credential.signCount, 0);
     const authenticatorData = Buffer.concat([rpIdHash, flags, signCount]);
     const toSign = Buffer.concat([authenticatorData, clientDataHash]);
     let signature: Uint8Array = new Uint8Array();

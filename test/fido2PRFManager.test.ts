@@ -1,8 +1,9 @@
-import Fido2PRFManager from "../src/Fido2PRFManager";
-import SoftCredentials from "../src/SoftCredentials";
+import { Buffer } from "buffer/";
 import assert from "assert";
+import Fido2PRFManager from "../src/Fido2PRFManager";
+import SoftCredentials from "../src/platform/SoftCredentials";
 import { VaultysId } from "../";
-import "./utils";
+import "./shims";
 
 describe("Fido2PRFManager", () => {
   it("serder a Fido2PRFManager (ECDSA)", async () => {
@@ -40,6 +41,7 @@ describe("Fido2PRFManager", () => {
   });
 
   it("sign and verify a message using EdDSA", async () => {
+    // @ts-ignore
     global.CredentialUserInteractionRequested = 0;
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-8, true));
     // @ts-expect-error mockup
@@ -54,6 +56,7 @@ describe("Fido2PRFManager", () => {
   });
 
   it("sign and verify a message using ECDSA", async () => {
+    //@ts-ignore
     global.CredentialUserInteractionRequested = 0;
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7, true));
     // @ts-expect-error mockup

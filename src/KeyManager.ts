@@ -1,6 +1,6 @@
 import { dearmorAndDecrypt, encryptAndArmor } from "@samuelthomas2774/saltpack";
 import { hash, randomBytes, secureErase } from "./crypto";
-import { Buffer } from "buffer";
+import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
 import * as bip32fix from "@stricahq/bip32ed25519";
@@ -99,7 +99,7 @@ export default class KeyManager {
       secretKey: privateKey.toBytes(),
     };
     const swapIndexBuffer = Buffer.alloc(8);
-    swapIndexBuffer.writeBigInt64LE(BigInt(swapIndex));
+    swapIndexBuffer.writeBigInt64LE(BigInt(swapIndex) as unknown as number, 0);
     const seed2 = sha256(Buffer.concat([seed.slice(32, 64), swapIndexBuffer]));
     const cypher = nacl.box.keyPair.fromSecretKey(seed2);
     km.cypher = {
@@ -132,9 +132,11 @@ export default class KeyManager {
     return {
       hmac: (message: string) =>
         cypher.secretKey
-          ? createHmac("sha256", cypher.secretKey.toString("hex"))
-              .update("VaultysID/" + message + "/end")
-              .digest()
+          ? Buffer.from(
+              createHmac("sha256", Buffer.from(cypher.secretKey).toString("hex"))
+                .update("VaultysID/" + message + "/end")
+                .digest(),
+            )
           : undefined,
       signcrypt: async (plaintext: string, publicKeys: Buffer[]) => encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys),
       decrypt: async (encryptedMessage: string, senderKey?: Buffer | null) => dearmorAndDecrypt(encryptedMessage, cypher as BoxKeyPair, senderKey),
@@ -249,7 +251,7 @@ export default class KeyManager {
         signature: Buffer.from([]),
       };
       const timestampBuffer = Buffer.alloc(8);
-      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp));
+      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
       const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
       hiscp.signature = new bip32.Bip32PrivateKey(this.proofKey.secretKey!).toPrivateKey().sign(hiscpBuffer);
       return hiscp;
@@ -261,7 +263,7 @@ export default class KeyManager {
     const proof = hash("sha256", hiscp.proofKey).toString("hex");
     if (proof === this.proof.toString("hex")) {
       const timestampBuffer = Buffer.alloc(8);
-      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp));
+      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
       const newKey = KeyManager.fromId(hiscp.newId);
       const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
       const proofVerifier = bip32.Bip32PublicKey.fromBytes(hiscp.proofKey);

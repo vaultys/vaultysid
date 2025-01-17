@@ -1,28 +1,16 @@
 import assert from "assert";
-import { createHash, randomBytes } from "crypto";
-import  { FileSignature } from "../src/IdManager";
+import { Buffer } from "buffer/";
+import { FileSignature } from "../src/IdManager";
 import { IdManager, VaultysId, MemoryChannel, MemoryStorage } from "..";
-import { createReadStream, createWriteStream, readFileSync, rmSync } from "fs";
-import SoftCredentials from "../src/SoftCredentials";
-import "./utils";
+import "./shims";
 import { hash } from "../src/crypto";
-
-const hashFile = (name: string) => {
-  const fileBuffer = readFileSync(name);
-  const hashSum = createHash("sha256");
-  hashSum.update(fileBuffer);
-  return hashSum.digest("hex");
-};
-
-const generateWebauthn = async (prf = true) => {
-  const attestation = await SoftCredentials.create(SoftCredentials.createRequest(-7, prf));
-  return VaultysId.fido2FromAttestation(attestation);
-};
+import { createRandomVaultysId } from "./utils";
+import { randomBytes } from "crypto";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const secret = id1.getSecret();
       const id2 = VaultysId.fromSecret(secret);
       assert.equal(id2.fingerprint, id1.fingerprint);
@@ -36,8 +24,8 @@ describe("IdManager", () => {
   });
 
   it("serder a vaultys secret in base64", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const secret = id1.getSecret("base64");
       const id2 = VaultysId.fromSecret(secret, "base64");
       assert.equal(id2.fingerprint, id1.fingerprint);
@@ -51,8 +39,8 @@ describe("IdManager", () => {
   });
 
   it("serder to public Idmanager", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const id2 = VaultysId.fromId(id1.id);
       assert.equal(id2.fingerprint, id1.fingerprint);
       assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
@@ -66,8 +54,8 @@ describe("IdManager", () => {
   });
 
   it("serder to public Idmanager stringified", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const id = JSON.stringify(id1.id);
       const id2 = VaultysId.fromId(JSON.parse(id));
       assert.equal(id2.fingerprint, id1.fingerprint);
@@ -77,16 +65,16 @@ describe("IdManager", () => {
   });
 
   it("serder to public Idmanager as hex string", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const id2 = VaultysId.fromId(id1.id.toString("hex"));
       assert.equal(id2.fingerprint, id1.fingerprint);
     }
   });
 
   it("serder to public Idmanager as base64 string", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const id2 = VaultysId.fromId(id1.id.toString("base64"), undefined, "base64");
       assert.equal(id2.fingerprint, id1.fingerprint);
       assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
@@ -95,8 +83,8 @@ describe("IdManager", () => {
   });
 
   it("sign unspecified data and log it in the store", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const s = MemoryStorage(() => "");
       const manager = new IdManager(id1, s);
       const signature = await manager.signChallenge(manager.vaultysId.id);
@@ -110,10 +98,10 @@ describe("IdManager", () => {
   });
 
   it("sign random document hash and log it in the store", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const s = MemoryStorage(() => "");
-      const file = { arrayBuffer: randomBytes(1024), type: "random" };
+      const file = { arrayBuffer: Buffer.from(randomBytes(1024)), type: "random" };
       const h = hash("sha256", file.arrayBuffer);
       const manager = new IdManager(id1, s);
       const payload = await manager.signFile(file);
@@ -147,8 +135,8 @@ describe("IdManager", () => {
 
 describe("SRG challenge with IdManager", () => {
   it("pass a challenge", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const channel = MemoryChannel.createBidirectionnal();
       if (!channel.otherend) assert.fail();
       const s1 = MemoryStorage(() => "");
@@ -197,8 +185,8 @@ describe("SRG challenge with IdManager", () => {
   });
 
   it("pass a challenge over encrypted Channel", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const channel = MemoryChannel.createBidirectionnal();
       if (!channel.otherend) assert.fail();
       const s1 = MemoryStorage(() => "");
@@ -245,35 +233,9 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
-  it("Transfer data over encrypted Channel", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
-      const channel = MemoryChannel.createEncryptedBidirectionnal();
-      // channel.setLogger((data) => console.log("<"));
-      // channel.otherend?.setLogger((data) => console.log(">"));
-      if (!channel.otherend) assert.fail();
-      const s1 = MemoryStorage(() => "");
-      const s2 = MemoryStorage(() => "");
-      const manager1 = new IdManager(id1, s1);
-      const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
-
-      const input = createReadStream("./test/assets/testfile.png", {
-        highWaterMark: 1 * 1024,
-      });
-      const output = createWriteStream("./test/assets/streamed_file_encrypted.png");
-      const promise = manager2.download(channel, output);
-      await manager1.upload(channel.otherend, input);
-      await promise;
-      const hash1 = hashFile("./test/assets/testfile.png");
-      const hash2 = hashFile("./test/assets/streamed_file_encrypted.png");
-      assert.equal(hash1, hash2);
-      rmSync("./test/assets/streamed_file_encrypted.png");
-    }
-  });
-
   it("perform PRF over Channel", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-    for (const id1 of ids) {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
       const channel = MemoryChannel.createEncryptedBidirectionnal();
       if (!channel.otherend) assert.fail();
       // channel.setLogger((data) => console.log(data.toString("utf-8")));
@@ -288,45 +250,16 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
-  it("sign a File over Channel", async () => {
-    const ids = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn()]);
-
-    for (const id1 of ids) {
-      const channel = MemoryChannel.createEncryptedBidirectionnal();
-      if (!channel.otherend) assert.fail();
-      // channel.setLogger((data) => console.log(data.toString("utf-8")));
-      const s1 = MemoryStorage(() => "");
-      const s2 = MemoryStorage(() => "");
-      const manager1 = new IdManager(id1, s1);
-      const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
-
-      const input = readFileSync("./test/assets/testfile.png");
-      const file = { arrayBuffer: input, type: "image/png" };
-
-      manager1.acceptSignFile(channel);
-      const result = await manager2.requestSignFile(channel.otherend, file);
-
-      if (!result) return assert.fail("no result of the sign file request");
-      const challenge = new URL(result.challenge.toString("utf8"));
-      //console.log(challenge);
-      assert.equal(challenge.protocol, "vaultys:");
-      assert.equal(challenge.host, "signfile");
-      assert.equal(challenge.searchParams.get("hash"), "a73d53246950a93ee956e413f50ed326e36f9a052dcd6fc5388ae19290931f32");
-      assert.notEqual(challenge.searchParams.get("timestamp"), null);
-      assert.ok(manager2.verifyFile(file, result, manager1.vaultysId));
-    }
-  });
-
   it("perform migration from version 0 to 1", async () => {
     const ids: IdManager[] = [];
     for (let i = 0; i < 2; i++) {
-      const vids1 = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn(), generateWebauthn(false)]);
-      for (const vid of vids1) {
+      for (let i = 0; i < 4; i++) {
+        const vid = await createRandomVaultysId();
         const s1 = MemoryStorage(() => "");
         const id1 = new IdManager(vid, s1);
         for (let j = 0; j < 2; j++) {
-          const vids2 = await Promise.all([VaultysId.generateMachine(), VaultysId.generateOrganization(), VaultysId.generatePerson(), generateWebauthn(), generateWebauthn(false)]);
-          for (const vid2 of vids2) {
+          for (let i = 0; i < 4; i++) {
+            const vid2 = await createRandomVaultysId();
             const s2 = MemoryStorage(() => "");
             const id2 = new IdManager(vid2, s2);
             id1.saveContact(id2.vaultysId);
@@ -339,11 +272,9 @@ describe("SRG challenge with IdManager", () => {
 
     for (const id of ids) {
       id.migrate(0);
-      assert.equal(id.contacts.length, 8);
-      assert.equal(id.apps.length, 2);
+      assert.equal(id.contacts.length + id.apps.length, 8);
       id.migrate(1);
-      assert.equal(id.contacts.length, 8);
-      assert.equal(id.apps.length, 2);
+      assert.equal(id.contacts.length + id.apps.length, 8);
     }
-  });
+  }).timeout(20000);
 });

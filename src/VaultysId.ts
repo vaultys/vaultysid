@@ -2,7 +2,9 @@ import { hash, randomBytes } from "./crypto";
 import Fido2Manager from "./Fido2Manager";
 import Fido2PRFManager from "./Fido2PRFManager";
 import KeyManager from "./KeyManager";
-import SoftCredentials from "./SoftCredentials";
+import SoftCredentials from "./platform/SoftCredentials";
+import { getWebAuthnProvider } from "./platform/webauthn";
+import { Buffer } from "buffer/";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
@@ -161,14 +163,15 @@ export default class VaultysId {
 
   static async createWebauthn(passkey = true, onPRFEnabled?: () => Promise<boolean>) {
     const options = VaultysId.createPublicKeyCredentialCreationOptions(passkey);
-    const attestation = await navigator.credentials.create({ publicKey: options });
+    const webAuthn = getWebAuthnProvider();
+    const attestation = await webAuthn.create(options);
     if (!attestation) return null;
     else return VaultysId.fido2FromAttestation(attestation as PublicKeyCredential, onPRFEnabled);
   }
 
   static async fido2FromAttestation(attestation: PublicKeyCredential, onPRFEnabled?: () => Promise<boolean>) {
     // should be somehow valid.
-    await SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true);
+    SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true);
     if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
       const f2m = await Fido2PRFManager.createFromAttestation(attestation);
       return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
@@ -252,7 +255,7 @@ export default class VaultysId {
           id: `${this.did}#keys-1`,
           type: this.keyManager.authType,
           controller: this.did,
-          publicKeyMultibase: "m" + this.keyManager.signer.publicKey.toString("base64"),
+          publicKeyMultibase: "m" + Buffer.from(this.keyManager.signer.publicKey).toString("base64"),
         },
       ],
       keyAgreement: [
@@ -260,7 +263,7 @@ export default class VaultysId {
           id: `${this.did}#keys-2`,
           type: this.keyManager.encType,
           controller: this.did,
-          publicKeyMultibase: "m" + this.keyManager.cypher.publicKey.toString("base64"),
+          publicKeyMultibase: "m" + Buffer.from(this.keyManager.cypher.publicKey).toString("base64"),
         },
       ],
     };
@@ -351,6 +354,7 @@ export default class VaultysId {
     let cleanId: Buffer | undefined;
     if (senderId) {
       if (typeof senderId === "string") cleanId = Buffer.from(senderId.slice(2));
+      // @ts-ignore
       else cleanId = (senderId as Buffer).subarray(1);
     }
     return this.keyManager.decrypt(encryptedMessage, cleanId);

@@ -4,11 +4,12 @@ import Fido2Manager from "./Fido2Manager";
 import KeyManager from "./KeyManager";
 import { Channel, StreamChannel } from "./MemoryChannel";
 import { Store } from "./MemoryStorage";
-import SoftCredentials from "./SoftCredentials";
+import SoftCredentials from "./platform/SoftCredentials";
 import VaultysId from "./VaultysId";
 import { hash, randomBytes } from "./crypto";
 import Fido2PRFManager from "./Fido2PRFManager";
 import { decode, encode } from "@msgpack/msgpack";
+import { Buffer } from "buffer/";
 
 const getSignatureType = (challenge: string) => {
   if (challenge.startsWith("vaultys://connect?")) {

@@ -1,9 +1,11 @@
 import { hash, randomBytes } from "./crypto";
 import cbor from "cbor";
 import nacl from "tweetnacl";
-import SoftCredentials from "./SoftCredentials";
+import { getWebAuthnProvider, WebAuthnProvider } from "./platform/webauthn";
 import KeyManager, { KeyPair } from "./KeyManager";
 import { decode, encode } from "@msgpack/msgpack";
+import SoftCredentials from "./platform/SoftCredentials";
+import { Buffer } from "buffer/";
 
 const sha512 = (data: Buffer) => hash("sha512", data);
 const sha256 = (data: Buffer) => hash("sha256", data);
@@ -67,6 +69,7 @@ const getSignerFromCkey = (ckey: Buffer) => {
 };
 
 export default class Fido2Manager extends KeyManager {
+  webAuthn: WebAuthnProvider;
   fid!: Buffer;
   _transports: number = 0;
   ckey!: Buffer;
@@ -75,6 +78,7 @@ export default class Fido2Manager extends KeyManager {
     super();
     this.level = 1; // ROOT, no Proof Management
     this.encType = "X25519KeyAgreementKey2019";
+    this.webAuthn = getWebAuthnProvider();
   }
 
   get transports(): AuthenticatorTransport[] {
@@ -205,7 +209,7 @@ export default class Fido2Manager extends KeyManager {
             },
           ],
         };
-        const { response } = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
+        const { response } = (await this.webAuthn.get(publicKey)) as PublicKeyCredential;
         const publicKeyResponse = response as AuthenticatorAssertionResponse;
         const output: Fido2Signature = {
           s: Buffer.from(publicKeyResponse.signature),
@@ -248,7 +252,7 @@ export default class Fido2Manager extends KeyManager {
   }
 
   async createRevocationCertificate() {
-    // impossible
+    // TODO use an external id
     return null;
   }
 }

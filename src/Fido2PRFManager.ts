@@ -1,10 +1,11 @@
 import { secureErase } from "./crypto";
 import cbor from "cbor";
 import nacl from "tweetnacl";
-import SoftCredentials from "./SoftCredentials";
+import SoftCredentials from "./platform/SoftCredentials";
 import { KeyPair } from "./KeyManager";
 import { decode, encode } from "@msgpack/msgpack";
 import Fido2Manager from "./Fido2Manager";
+import { Buffer } from "buffer/";
 
 declare global {
   interface Window {
@@ -134,7 +135,7 @@ export default class Fido2PRFManager extends Fido2Manager {
           },
         },
       };
-      const result = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
+      const result = await this.webAuthn.get(publicKey);
       const { prf } = result.getClientExtensionResults();
       const first = prf?.results?.first;
       if (!first) throw new Error("PRF failed");
