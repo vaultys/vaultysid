@@ -62,27 +62,19 @@ describe("Browser Tests", () => {
 
   it("should run tests in browser", async () => {
     const testUrl = `http://localhost:${PORT}/test/test.html`;
+    await page.goto(testUrl);
 
-    try {
-      await page.goto(testUrl);
-
-      // Wait for tests to complete
-      const results = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          const checkInterval = setInterval(() => {
-            if (window.mochaResults) {
-              clearInterval(checkInterval);
-              resolve(window.mochaResults);
-            }
-          }, 100);
-        });
+    // Wait for tests to complete
+    const results: any = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        const checkInterval = setInterval(() => {
+          if (window.mochaResults) {
+            clearInterval(checkInterval);
+            resolve(window.mochaResults);
+          }
+        }, 100);
       });
-
-      //console.log("Test Results:", JSON.stringify(results, null, 2));
-      expect(results.failures).to.equal(0);
-    } catch (error) {
-      console.error("Test execution failed:", error);
-      throw error;
-    }
+    });
+    expect(results.failures).to.equal(0);
   }).timeout(100000);
 });

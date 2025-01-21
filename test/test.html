@@ -3,23 +3,15 @@
   <head>
     <title>Channel PeerJS Tests</title>
     <meta charset="utf-8" />
-    <link rel="stylesheet" href="https://unpkg.com/mocha/mocha.css" />
-    <!-- <link rel="stylesheet" href="../node_modules/mocha/mocha.css" /> -->
+    <link rel="stylesheet" href="../node_modules/mocha/mocha.css" />
   </head>
   <body>
     <div id="mocha"></div>
     <!-- Load dependencies before your test bundle -->
     <script src="../node_modules/mocha/mocha.js"></script>
 
-    <!-- Buffer polyfill -->
-    <script src="./assets/buffer.js"></script>
-
     <!-- Initialize mocha -->
     <script>
-      window.global = window;
-      window.process = { env: {} };
-      window.Buffer = buffer.Buffer;
-
       mocha.setup({
         ui: "bdd",
         timeout: 10000,
@@ -31,22 +23,9 @@
     <script src="./assets/test-bundle.js"></script>
     <script class="mocha-exec">
       mocha.run(function (failures) {
-        const results = mocha.suite.suites.map((suite) => {
-          return {
-            title: suite.title,
-            tests: suite.tests.map((test) => {
-              return {
-                title: test.title,
-                state: test.state,
-                err: test.err,
-              };
-            }),
-          };
-        });
-
         window.mochaResults = {
           failures: failures,
-          results: mocha.suite.suites,
+          suites: mocha.suite.suites,
         };
       });
     </script>
