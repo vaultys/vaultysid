@@ -9,7 +9,7 @@
     "strict": true,
     "allowJs": true,
     "skipLibCheck": true,
-    "outDir": "./dist",
+    "outDir": "./dist/node",
     "declaration": true
   },
   "include": ["index.ts", "src"],

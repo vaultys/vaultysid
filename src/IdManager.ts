@@ -1,33 +1,61 @@
+import { Readable, Writable } from "stream";
 import Challenger from "./Challenger";
 import Fido2Manager from "./Fido2Manager";
 import KeyManager from "./KeyManager";
-import { Channel } from "./MemoryChannel";
+import { Channel, StreamChannel } from "./MemoryChannel";
 import { Store } from "./MemoryStorage";
-import SoftCredentials from "./SoftCredentials";
+import SoftCredentials from "./platform/SoftCredentials";
 import VaultysId from "./VaultysId";
-import { randomBytes } from "./crypto";
+import { hash, randomBytes } from "./crypto";
+import Fido2PRFManager from "./Fido2PRFManager";
+import { decode, encode } from "@msgpack/msgpack";
+import { Buffer } from "buffer/";
 
 const getSignatureType = (challenge: string) => {
-  if (challenge.startsWith("vaultys://login?")) {
+  if (challenge.startsWith("vaultys://connect?")) {
     return "LOGIN";
-  } else if (challenge.startsWith("vaultys://docsign?")) {
+  } else if (challenge.startsWith("vaultys://signfile?")) {
     return "DOCUMENT";
   } else {
     return "UNKNOWN";
   }
 };
 
-const instanciateContact = (c: any) => {
+type StoredContact = {
+  type: number;
+  keyManager: KeyManager;
+  certificate: Buffer;
+};
+
+type StoredApp = {
+  site: string;
+  serverId: string;
+  certificate: Buffer;
+};
+
+export type FileSignature = {
+  challenge: Buffer;
+  signature: Buffer;
+};
+
+type File = {
+  arrayBuffer: Buffer;
+  type: string;
+};
+
+const instanciateContact = (c: StoredContact) => {
   let vaultysId: VaultysId;
   if (c.type === 3) {
     vaultysId = new VaultysId(Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
+  } else if (c.type === 4) {
+    vaultysId = new VaultysId(Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
   } else {
     vaultysId = new VaultysId(KeyManager.instantiate(c.keyManager), c.certificate, c.type);
   }
   return vaultysId;
 };
 
-const instanciateApp = (a: any) => {
+const instanciateApp = (a: StoredApp) => {
   return VaultysId.fromId(Buffer.from(a.serverId, "base64"), a.certificate);
 };
 
@@ -74,8 +102,8 @@ export default class IdManager {
     const slave_store = master ? this.store : otherStore;
     this.store.set("metadata", { ...slave_store.get("metadata"), ...master_store.get("metadata") });
     ["signatures", "wot"].forEach((table) => {
-      let other = otherStore.substore(table);
-      let me = this.store.substore(table);
+      const other = otherStore.substore(table);
+      const me = this.store.substore(table);
       other.list().forEach((k) => {
         if (!me.get(k)) {
           me.set(k, other.get(k));
@@ -83,8 +111,8 @@ export default class IdManager {
       });
     });
 
-    let other = otherStore.substore("contacts");
-    let me = this.store.substore("contacts");
+    const other = otherStore.substore("contacts");
+    const me = this.store.substore("contacts");
     const m = master ? other : me;
     const s = master ? me : other;
     other.list().forEach((did) => {
@@ -124,7 +152,7 @@ export default class IdManager {
     })) as PublicKeyCredential;
     if (creds == null) return false;
     const response = creds.response as AuthenticatorAssertionResponse;
-    const extractedChallenge = SoftCredentials.extractChallenge(Buffer.from(response.clientDataJSON));
+    const extractedChallenge = SoftCredentials.extractChallenge(response.clientDataJSON);
 
     if (challenge.toString("base64") !== extractedChallenge) {
       return false;
@@ -136,21 +164,30 @@ export default class IdManager {
     const s = this.store.substore("contacts");
     return s
       .list()
-      .map((c) => s.get(c))
-      .map(instanciateContact);
+      .map((did) => s.get(did))
+      .map(instanciateContact)
+      .map((contact) => contact.toVersion(this.vaultysId.version));
+  }
+
+  get apps() {
+    const s = this.store.substore("registrations");
+    return s
+      .list()
+      .map((did) => s.get(did))
+      .map(instanciateApp)
+      .map((app) => app.toVersion(this.vaultysId.version));
   }
 
   getContact(did: string) {
     const c = this.store.substore("contacts").get(did);
     if (!c) return null;
-    let vaultysId = instanciateContact(c);
-    if (vaultysId.version !== this.vaultysId.version) {
-      const forceVersion = this.vaultysId.version;
-      this.vaultysId.toVersion(vaultysId.version);
-      this.migrate(forceVersion);
-      this.store.save();
-    }
-    return vaultysId.toVersion(this.vaultysId.version);
+    return instanciateContact(c).toVersion(this.vaultysId.version);
+  }
+
+  getApp(did: string) {
+    const app = this.store.substore("registrations").get(did);
+    if (!app) return null;
+    return instanciateApp(app).toVersion(this.vaultysId.version);
   }
 
   setContactMetadata(did: string, name: string, value: any) {
@@ -194,7 +231,8 @@ export default class IdManager {
 
   get displayName() {
     const metadata = this.store.get("metadata");
-    return metadata.firstname ? metadata.firstname + " " + (metadata.name ?? "") : metadata.name ?? "Anonymous " + this.vaultysId.fingerprint?.slice(-4);
+    const result = metadata.firstname ? metadata.firstname + " " + (metadata.name ?? "") : metadata.name;
+    return result?.length > 0 ? result : "Anonymous " + this.vaultysId.fingerprint?.slice(-4);
   }
 
   set phone(n) {
@@ -239,9 +277,10 @@ export default class IdManager {
     return signature;
   }
 
-  async signFile(hash: Buffer) {
-    const challenge = Buffer.from(`vaultys://docsign?hash=${hash.toString("hex")}&timestamp=${Date.now()}`, "utf-8");
-    const payload = {
+  async signFile(file: File) {
+    const h = hash("sha256", file.arrayBuffer).toString("hex");
+    const challenge = Buffer.from(`vaultys://signfile?hash=${h}&timestamp=${Date.now()}`, "utf-8");
+    const payload: FileSignature = {
       challenge,
       signature: await this.vaultysId.signChallenge(challenge),
     };
@@ -250,16 +289,20 @@ export default class IdManager {
     return payload;
   }
 
-  async verifyFile(challenge: Buffer, signature: Buffer, userVerifiation = true) {
-    const data = challenge.toString("utf8");
-    if (!data.startsWith("vaultys://docsign?")) {
+  verifyFile(file: File, fileSignature: FileSignature, contactId: VaultysId, userVerifiation = true) {
+    const data = fileSignature.challenge.toString("utf8");
+    if (!data.startsWith("vaultys://signfile?")) {
       return false;
     }
+    const h = hash("sha256", file.arrayBuffer).toString("hex");
     const url = new URL(data);
-    if (url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 && url.searchParams.get("hash") && url.searchParams.get("timestamp")) {
-      return await this.vaultysId.verifyChallenge(challenge, signature, userVerifiation);
+    const fileHash = url.searchParams.get("hash");
+    if (h !== fileHash) {
+      return false;
     }
-
+    if (url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 && url.searchParams.get("timestamp")) {
+      return contactId.verifyChallenge(fileSignature.challenge, fileSignature.signature, userVerifiation);
+    }
     return false;
   }
 
@@ -325,7 +368,7 @@ export default class IdManager {
         this.merge(data, !initiator);
       }
     } else {
-      const challenger = await this.acceptSRP(channel, "p2p", "selfauth", true);
+      const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
 
       if (challenger.isSelfAuth() && challenger.isComplete()) {
         channel.send(Buffer.from(this.store.toString(), "utf-8"));
@@ -335,6 +378,100 @@ export default class IdManager {
       channel.close();
     }
     this.store.save();
+  }
+
+  async upload(channel: Channel, stream: Readable) {
+    const challenger = await this.startSRP(channel, "p2p", "transfer");
+    if (challenger.isComplete()) {
+      const { upload } = StreamChannel(channel);
+      await upload(stream);
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async download(channel: Channel, stream: Writable) {
+    const challenger = await this.acceptSRP(channel, "p2p", "transfer");
+    if (challenger.isComplete()) {
+      const { download } = StreamChannel(channel);
+      await download(stream);
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async requestDecrypt(channel: Channel, toDecrypt: Buffer) {
+    const challenger = await this.acceptSRP(channel, "p2p", "decrypt");
+    if (challenger.isComplete()) {
+      channel.send(toDecrypt);
+      const new_encrypted = await channel.receive();
+      const decrypted = await this.vaultysId.decrypt(new_encrypted.toString("utf-8"));
+      return Buffer.from(decrypted ?? "", "utf-8");
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async acceptDecrypt(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) {
+    const challenger = await this.startSRP(channel, "p2p", "decrypt");
+    if (challenger.isComplete()) {
+      if (!accept || (await accept(challenger.getContactId()))) {
+        const toDecrypt = await channel.receive();
+        const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
+        if (decrypted) {
+          const encrypted = await this.vaultysId.encrypt(decrypted, [challenger.getContactId().id]);
+          channel.send(Buffer.from(encrypted ?? "", "utf-8"));
+        } else channel.send(Buffer.from([0]));
+      }
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async requestSignFile(channel: Channel, file: File) {
+    const challenger = await this.acceptSRP(channel, "p2p", "signfile");
+    if (challenger.isComplete()) {
+      channel.send(Buffer.from(encode(file)));
+      const result = await channel.receive();
+      const fileSignature = decode(result) as FileSignature;
+      if (this.verifyFile(file, fileSignature, challenger.getContactId().toVersion(1))) {
+        return fileSignature;
+      } else return undefined;
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async acceptSignFile(channel: Channel, accept?: (contact: VaultysId, file: File) => Promise<boolean>) {
+    const challenger = await this.startSRP(channel, "p2p", "signfile");
+    if (challenger.isComplete()) {
+      const result = await channel.receive();
+      const file = decode(result) as File;
+      if (!accept || (await accept(challenger.getContactId(), file))) {
+        const result = await this.signFile(file);
+        channel.send(Buffer.from(encode(result)));
+      }
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async requestPRF(channel: Channel, appid: string) {
+    if (appid.length < 3) {
+      throw new Error("appid is too short, less than 3 characters");
+    }
+    if (appid.split("-").length > 1) {
+      throw new Error("appid contains illegal character /");
+    }
+    const challenger = await this.acceptSRP(channel, "p2p", "prf");
+    if (challenger.isComplete()) {
+      channel.send(Buffer.from(appid, "utf-8"));
+      const prf = await channel.receive();
+      return Buffer.from(prf);
+    } else channel.send(Buffer.from([0]));
+  }
+
+  async acceptPRF(channel: Channel, accept?: (contact: VaultysId, appid: string) => Promise<boolean>) {
+    const challenger = await this.startSRP(channel, "p2p", "prf");
+    if (challenger.isComplete()) {
+      const result = await channel.receive();
+      const appid = result.toString("utf-8");
+      if (appid.length < 3 || appid.split("-").length > 1) {
+        // error if appid is too short of contains illegal character
+        channel.send(Buffer.from([0]));
+      } else if (!accept || (await accept(challenger.getContactId(), appid))) {
+        const hmac = (await this.vaultysId.hmac("prf/" + appid + "/end")) ?? Buffer.from([0]);
+        channel.send(hmac);
+      }
+    } else channel.send(Buffer.from([0]));
   }
 
   /***************************/
@@ -358,8 +495,9 @@ export default class IdManager {
     });
   }
 
-  async startSRP(channel: Channel, protocol: string, service: string, metadata: any = {}) {
-    const challenger = new Challenger(this.vaultysId.toVersion(0));
+  async startSRP(channel: Channel, protocol: string, service: string, metadata: Record<string, string> = {}) {
+    const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
+    const challenger = new Challenger(idV0);
     challenger.createChallenge(protocol, service, 0, metadata);
     const cert = challenger.getCertificate();
     if (!cert) {
@@ -372,7 +510,9 @@ export default class IdManager {
 
     try {
       const message = await channel.receive();
-      // console.log(message)
+      // console.log("startSRP", message)
+      // TODO: accept contact id before going further
+      //console.log(challenger);
       await challenger.update(message);
     } catch (error) {
       channel.send(Buffer.from([0]));
@@ -385,7 +525,7 @@ export default class IdManager {
         channel.send(Buffer.from([0]));
         throw new Error("Error processing challenge");
       }
-      // there is a caveat here, we are not sure that thhe last bit of information has been received
+      // there is a caveat here, we are not sure that the last bit of information has been received
       channel.send(certificate);
       this.store.substore("wot").set(Date.now() + "", certificate);
       // TODO create/update merkle tree + sign it
@@ -396,10 +536,12 @@ export default class IdManager {
     }
   }
 
-  async acceptSRP(channel: Channel, protocol: string, service: string, keepChannel = false) {
-    const challenger = new Challenger(this.vaultysId.toVersion(0));
+  async acceptSRP(channel: Channel, protocol: string, service: string, metadata: Record<string, string> = {}) {
+    const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
+    const challenger = new Challenger(idV0);
     try {
-      let message = await channel.receive();
+      const message = await channel.receive();
+      // console.log("acceptSRP", message)
       await challenger.update(message);
     } catch (error) {
       channel.send(Buffer.from([0]));
@@ -408,54 +550,70 @@ export default class IdManager {
 
     const cert = challenger.getCertificate();
     if (!cert) {
-      channel.close();
       channel.send(Buffer.from([0]));
+      await channel.close();
       throw new Error("Error processing challenge");
     }
-
+    // console.log("acceptSRP sending 1")
     channel.send(cert);
+    // console.log("acceptSRP sending 2")
 
     try {
-      let message = await channel.receive();
+      const message = await channel.receive();
+      // console.log("acceptSRP 2", message)
       await challenger.update(message);
     } catch (error) {
-      channel.close();
+      await channel.close();
       throw new Error(error as string);
     }
     if (challenger.isComplete()) {
       const certificate = challenger.getCertificate();
-      if (!keepChannel) channel.close();
       this.store.substore("wot").set(Date.now() + "", certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
     } else {
-      channel.close();
+      await channel.close();
       throw new Error("Can't add a new contact if the protocol is not complete");
+    }
+  }
+
+  saveApp(app: VaultysId, name?: string) {
+    app.toVersion(this.vaultysId.version);
+    if (!app.isMachine()) {
+      this.saveContact(app);
+    } else {
+      const appstore = this.store.substore("registrations");
+      if (!appstore.get(app.did)) {
+        appstore.set(app.did, {
+          site: name ?? app.did,
+          serverId: app.id.toString("base64"),
+          certificate: app.certificate,
+        } as StoredApp);
+      }
     }
   }
 
   saveContact(contact: VaultysId) {
     contact.toVersion(this.vaultysId.version);
     if (contact.isMachine()) {
-      this.store.substore("registrations").set(contact.did, {
-        site: contact.did,
-        serverId: contact?.id.toString("base64"),
-        certificate: contact.certificate,
-      });
+      this.saveApp(contact);
     } else {
-      this.store.substore("contacts").set(contact.did, contact);
+      const contactstore = this.store.substore("contacts");
+      if (!contactstore.get(contact.did)) {
+        contactstore.set(contact.did, contact as StoredContact);
+        this.store.save();
+      }
     }
-    this.store.save();
   }
 
-  async askContact(channel: Channel, metadata: any = {}) {
+  async askContact(channel: Channel, metadata: Record<string, string> = {}) {
     const challenger = await this.startSRP(channel, "p2p", "auth");
     const contact = challenger.getContactId();
     this.saveContact(contact);
     return contact;
   }
 
-  async acceptContact(channel: Channel, metadata: any = {}) {
+  async acceptContact(channel: Channel, metadata: Record<string, string> = {}) {
     const challenger = await this.acceptSRP(channel, "p2p", "auth");
     const contact = challenger.getContactId();
     this.saveContact(contact);

@@ -1,5 +1,6 @@
 import { Channel } from "./MemoryChannel";
-import { secretbox, toBase64, fromBase64, randomBytes } from "./crypto";
+import { secretbox, randomBytes } from "./crypto";
+import { Buffer } from "buffer/";
 
 const newNonce = () => randomBytes(secretbox.nonceLength);
 
@@ -21,10 +22,7 @@ export const decrypt = (messageWithNonce: Buffer, key: Buffer) => {
   const keyUint8Array = key;
   const messageWithNonceAsUint8Array = messageWithNonce;
   const nonce = messageWithNonceAsUint8Array.slice(0, secretbox.nonceLength);
-  const message = messageWithNonceAsUint8Array.slice(
-    secretbox.nonceLength,
-    messageWithNonce.length,
-  );
+  const message = messageWithNonceAsUint8Array.slice(secretbox.nonceLength, messageWithNonce.length);
 
   const decrypted = secretbox.open(message, nonce, keyUint8Array);
 
@@ -40,7 +38,7 @@ export const decrypt = (messageWithNonce: Buffer, key: Buffer) => {
 
 const encryptChannel = (channel: Channel, key: Buffer) => {
   const sendHandler = {
-    apply(target: (data: Buffer) => void, that:any, args: any) {
+    apply(target: (data: Buffer) => Promise<void>, that: any, args: any) {
       return target.call(that, encrypt(args[0], key));
     },
   };

@@ -1,11 +1,12 @@
 import { dearmorAndDecrypt, encryptAndArmor } from "@samuelthomas2774/saltpack";
-import { hash, randomBytes } from "./crypto";
-import { Buffer } from "buffer";
+import { hash, randomBytes, secureErase } from "./crypto";
+import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
 import * as bip32fix from "@stricahq/bip32ed25519";
+import { createHmac } from "crypto";
 
-//@ts-ignore
+//@ts-expect-error fix for wrong way of exporting bip32ed25519
 const bip32 = bip32fix.default ?? bip32fix;
 
 const LEVEL_ROOT = 1;
@@ -65,7 +66,7 @@ export default class KeyManager {
   level: number = 1;
   version: 0 | 1 = 1;
   capability: "private" | "public" = "private";
-  entropy!: Buffer;
+  entropy: Buffer | undefined;
   proof!: Buffer;
   proofKey!: KeyPair;
   signer!: KeyPair;
@@ -98,7 +99,7 @@ export default class KeyManager {
       secretKey: privateKey.toBytes(),
     };
     const swapIndexBuffer = Buffer.alloc(8);
-    swapIndexBuffer.writeBigInt64LE(BigInt(swapIndex));
+    swapIndexBuffer.writeBigInt64LE(BigInt(swapIndex) as unknown as number, 0);
     const seed2 = sha256(Buffer.concat([seed.slice(32, 64), swapIndexBuffer]));
     const cypher = nacl.box.keyPair.fromSecretKey(seed2);
     km.cypher = {
@@ -123,6 +124,29 @@ export default class KeyManager {
           e: this.cypher.publicKey,
         }),
       );
+  }
+
+  async getCypher() {
+    // todo fetch secretKey here
+    const cypher = this.cypher;
+    return {
+      hmac: (message: string) =>
+        cypher.secretKey
+          ? Buffer.from(
+              createHmac("sha256", Buffer.from(cypher.secretKey).toString("hex"))
+                .update("VaultysID/" + message + "/end")
+                .digest(),
+            )
+          : undefined,
+      signcrypt: async (plaintext: string, publicKeys: Buffer[]) => encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys),
+      decrypt: async (encryptedMessage: string, senderKey?: Buffer | null) => dearmorAndDecrypt(encryptedMessage, cypher as BoxKeyPair, senderKey),
+    };
+  }
+
+  async getSigner() {
+    // todo fetch secretKey here
+    const secretKey = this.signer.secretKey!;
+    return new bip32.Bip32PrivateKey(secretKey).toPrivateKey();
   }
 
   getSecret() {
@@ -188,10 +212,11 @@ export default class KeyManager {
 
   async sign(data: Buffer) {
     if (this.capability == "public") return null;
-    return new bip32.Bip32PrivateKey(this.signer.secretKey!).toPrivateKey().sign(data);
+    const signer = await this.getSigner();
+    return signer.sign(data);
   }
 
-  verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean) {
+  verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean {
     return bip32.Bip32PublicKey.fromBytes(this.signer.publicKey).toPublicKey().verify(signature, data);
   }
 
@@ -216,7 +241,7 @@ export default class KeyManager {
   // }
 
   async createSwapingCertificate() {
-    if (this.level === LEVEL_ROOT) {
+    if (this.level === LEVEL_ROOT && this.entropy) {
       const newKey = await KeyManager.create_Id25519_fromEntropy(this.entropy, this.swapIndex + 1);
 
       const hiscp: HISCP = {
@@ -226,7 +251,7 @@ export default class KeyManager {
         signature: Buffer.from([]),
       };
       const timestampBuffer = Buffer.alloc(8);
-      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp));
+      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
       const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
       hiscp.signature = new bip32.Bip32PrivateKey(this.proofKey.secretKey!).toPrivateKey().sign(hiscpBuffer);
       return hiscp;
@@ -238,7 +263,7 @@ export default class KeyManager {
     const proof = hash("sha256", hiscp.proofKey).toString("hex");
     if (proof === this.proof.toString("hex")) {
       const timestampBuffer = Buffer.alloc(8);
-      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp));
+      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
       const newKey = KeyManager.fromId(hiscp.newId);
       const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
       const proofVerifier = bip32.Bip32PublicKey.fromBytes(hiscp.proofKey);
@@ -248,19 +273,36 @@ export default class KeyManager {
     }
   }
 
-  async encrypt(plaintext: string, recipientIds: Buffer[]) {
-    if (this.capability == "private") {
-      const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
-      return await encryptAndArmor(plaintext, this.cypher as BoxKeyPair, publicKeys);
-    } else {
-      return null;
+  cleanSecureData() {
+    if (this.cypher?.secretKey) {
+      secureErase(this.cypher.secretKey);
+      delete this.cypher.secretKey;
+    }
+    if (this.signer?.secretKey) {
+      secureErase(this.signer.secretKey);
+      delete this.signer.secretKey;
+    }
+    if (this.entropy) {
+      secureErase(this.entropy);
+      delete this.entropy;
     }
   }
 
+  static async encrypt(plaintext: string, recipientIds: Buffer[]) {
+    const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
+    return await encryptAndArmor(plaintext, null, publicKeys);
+  }
+
+  async signcrypt(plaintext: string, recipientIds: Buffer[]) {
+    const publicKeys = recipientIds.map(KeyManager.fromId).map((km: KeyManager) => km.cypher.publicKey);
+    const cypher = await this.getCypher();
+    return await cypher.signcrypt(plaintext, publicKeys);
+  }
+
   async decrypt(encryptedMessage: string, senderId: Buffer | null = null) {
-    if (this.capability == "public") return null;
+    const cypher = await this.getCypher();
     const senderKey = senderId ? KeyManager.fromId(senderId).cypher.publicKey : null;
-    const message = await dearmorAndDecrypt(encryptedMessage, this.cypher as BoxKeyPair, senderKey);
+    const message = await cypher.decrypt(encryptedMessage, senderKey);
     return message.toString();
   }
 

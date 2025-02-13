@@ -1,8 +1,7 @@
 {
-  "extends": [
-      "prettier",
-      "plugin:@typescript-eslint/recommended",
-      "prettier/@typescript-eslint"
-  ],
+  "extends": ["prettier", "plugin:@typescript-eslint/recommended"],
+  "globals": {
+    "chrome": true
+  },
   "parser": "@typescript-eslint/parser"
 }

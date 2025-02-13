@@ -1,6 +1,7 @@
 // TODO: to revamp and optimize
 import crypto from "crypto";
-import { randomBytes, hash as myhash, fromUTF8 } from "./crypto";
+import { Buffer } from "buffer/";
+import { randomBytes, hash as myhash, fromUTF8 } from "../crypto";
 import cbor from "cbor";
 import { ed25519 } from "@noble/curves/ed25519";
 import { p256 } from "@noble/curves/p256";
@@ -140,7 +141,7 @@ const parseAuthData = (buffer: Buffer) => {
   };
 };
 
-const verifyPackedAttestation = async (response: AuthenticatorAttestationResponse, userVerification = false) => {
+const verifyPackedAttestation = (response: AuthenticatorAttestationResponse, userVerification = false) => {
   const attestationBuffer = Buffer.from(response.attestationObject);
   const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
   if (attestationStruct.fmt == "none") return false;
@@ -264,9 +265,10 @@ export default class SoftCredentials {
   }
 
   // credentials request payload
-  static createRequest(alg: number) {
-    let challenge = Buffer.from(randomBytes(32).toString("base64"));
-    return {
+  static createRequest(alg: number, prf = false) {
+    const challenge = Buffer.from(randomBytes(32).toString("base64"));
+
+    const result: CredentialCreationOptions = {
       publicKey: {
         challenge,
         rp: {
@@ -280,12 +282,18 @@ export default class SoftCredentials {
         },
         pubKeyCredParams: [
           {
-            type: "public-key" as "public-key",
+            type: "public-key" as const,
             alg,
           },
         ],
       },
     };
+
+    if (prf) {
+      result.publicKey!.extensions = { prf: { eval: { first: randomBytes(32) } } };
+    }
+
+    return result;
   }
 
   static getCertificateInfo(response: AuthenticatorAttestationResponse) {
@@ -298,11 +306,12 @@ export default class SoftCredentials {
     }
   }
 
-  static async create({ publicKey }: { publicKey: PublicKeyCredentialCreationOptions }, origin = "test"): Promise<PublicKeyCredential> {
+  static async create(options: CredentialCreationOptions, origin = "test"): Promise<PublicKeyCredential> {
     const credential = new SoftCredentials();
+    const publicKey = options.publicKey!;
     credential.options = publicKey;
     credential.rpId = publicKey.rp.id!;
-    credential.userHandle = Buffer.from(publicKey.user.id as ArrayBuffer);
+    credential.userHandle = Buffer.from(publicKey.user.id.toString(), "base64");
     credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
     credential.alg = publicKey.pubKeyCredParams[0].alg;
     if (credential.alg === -8) {
@@ -342,9 +351,9 @@ export default class SoftCredentials {
     const rpIdHash = myhash("sha256", Buffer.from(credential.rpId, "ascii"));
     const flags = Buffer.from("41", "hex"); // attested_data + user_present
     const signCount = Buffer.allocUnsafe(4);
-    signCount.writeUInt32BE(credential.signCount);
+    signCount.writeUInt32BE(credential.signCount, 0);
     const rawIdLength = Buffer.allocUnsafe(2);
-    rawIdLength.writeUInt16BE(credential.rawId.length);
+    rawIdLength.writeUInt16BE(credential.rawId.length, 0);
     const coseKey = cbor.encode(credential.coseKey);
     const attestationObject = {
       authData: Buffer.concat([rpIdHash, flags, signCount, credential.aaguid, rawIdLength, credential.rawId, coseKey]),
@@ -352,14 +361,19 @@ export default class SoftCredentials {
       attStmt: {},
     };
 
-    const pkCredentials: PublicKeyCredential = {
+    const pkCredentials = {
       id: credential.rawId.toString("base64"),
-      rawId: credential.rawId,
+      rawId: credential.rawId as unknown as ArrayBuffer,
       authenticatorAttachment: null,
       type: "public-key",
       getClientExtensionResults: () => {
-        return {};
+        if (publicKey.extensions?.prf?.eval?.first) {
+          return { prf: { enabled: true } };
+        } else {
+          return {};
+        }
       },
+      toJSON() {},
       response: {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         attestationObject: cbor.encode(attestationObject),
@@ -367,14 +381,14 @@ export default class SoftCredentials {
         getAuthenticatorData: () => attestationObject.authData,
         getPublicKey: () => coseKey,
         getPublicKeyAlgorithm: () => -7,
-      } as AuthenticatorAttestationResponse,
+      } as unknown as AuthenticatorAttestationResponse,
     };
 
     return pkCredentials;
   }
 
   static simpleVerify(COSEPublicKey: Buffer, response: AuthenticatorAssertionResponse, userVerification = false) {
-    const ckey = cbor.decode(COSEPublicKey);
+    const ckey = cbor.decode(COSEPublicKey, { extendedResults: true }).value;
     const rpIdHash = response.authenticatorData.slice(0, 32);
     const flagsInt = Buffer.from(response.authenticatorData)[32];
     const counter = response.authenticatorData.slice(33, 37);
@@ -411,7 +425,7 @@ export default class SoftCredentials {
     return verifyPackedAttestation(attestation, userVerification);
   }
 
-  static verify(attestation: PublicKeyCredential, assertion: PublicKeyCredential, userVerifiation = false) {
+  static verify(attestation: PublicKeyCredential, assertion: PublicKeyCredential, userVerifiation = false): boolean {
     //if (assertion.id !== attestation.id) return false;
     const hash = myhash("sha256", Buffer.from(assertion.response.clientDataJSON));
     const ass = assertion.response as AuthenticatorAssertionResponse;
@@ -438,9 +452,10 @@ export default class SoftCredentials {
       const pubKey = Buffer.concat([Buffer.from("04", "hex"), x, y]);
       return verifyECDSA(data, pubKey, Buffer.from(ass.signature));
     }
+    return false;
   }
 
-  static extractChallenge(clientDataJSON: Buffer) {
+  static extractChallenge(clientDataJSON: ArrayBuffer) {
     const clientData = JSON.parse(clientDataJSON.toString());
     const m = clientData.challenge.length % 4;
     return clientData.challenge
@@ -452,7 +467,7 @@ export default class SoftCredentials {
   static async get({ publicKey }: { publicKey: PublicKeyCredentialRequestOptions }, origin = "test"): Promise<PublicKeyCredential> {
     if (!publicKey.allowCredentials) throw new Error();
     const id = Buffer.from(publicKey.allowCredentials[0].id as ArrayBuffer).toString("base64");
-    let credential = credentials[id];
+    const credential = credentials[id];
     credential.signCount += 1;
     // prepare signature
     const clientData = {
@@ -464,9 +479,9 @@ export default class SoftCredentials {
     const rpIdHash = myhash("sha256", Buffer.from(credential.rpId, "utf-8"));
     const flags = Buffer.from("05", "hex"); // user verification
     const signCount = Buffer.allocUnsafe(4);
-    signCount.writeUInt32BE(credential.signCount);
+    signCount.writeUInt32BE(credential.signCount, 0);
     const authenticatorData = Buffer.concat([rpIdHash, flags, signCount]);
-    let toSign = Buffer.concat([authenticatorData, clientDataHash]);
+    const toSign = Buffer.concat([authenticatorData, clientDataHash]);
     let signature: Uint8Array = new Uint8Array();
     if (credential.alg === -7) {
       signature = p256.sign(toSign, credential.keyPair.privateKey, { prehash: true }).toDERRawBytes();
@@ -476,18 +491,24 @@ export default class SoftCredentials {
 
     const pkCredentials: PublicKeyCredential = {
       id,
-      rawId: Buffer.from(id, "base64"),
+      rawId: Buffer.from(id, "base64").buffer,
       type: "public-key",
       authenticatorAttachment: null,
       getClientExtensionResults: () => {
-        return {};
+        if (publicKey.extensions?.prf?.eval?.first) {
+          // unsafe and not following w3c recommendation. for testing purpose only
+          return { prf: { results: { first: hash("sha256", publicKey.extensions?.prf?.eval?.first as Buffer) } } };
+        } else {
+          return {};
+        }
       },
+      toJSON() {},
       response: {
         authenticatorData,
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         signature: signature,
         userHandle: credential.userHandle,
-      } as AuthenticatorAssertionResponse,
+      } as unknown as AuthenticatorAssertionResponse,
     };
 
     return pkCredentials;

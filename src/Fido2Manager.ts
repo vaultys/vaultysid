@@ -1,9 +1,11 @@
 import { hash, randomBytes } from "./crypto";
 import cbor from "cbor";
 import nacl from "tweetnacl";
-import SoftCredentials from "./SoftCredentials";
+import { getWebAuthnProvider, WebAuthnProvider } from "./platform/webauthn";
 import KeyManager, { KeyPair } from "./KeyManager";
 import { decode, encode } from "@msgpack/msgpack";
+import SoftCredentials from "./platform/SoftCredentials";
+import { Buffer } from "buffer/";
 
 const sha512 = (data: Buffer) => hash("sha512", data);
 const sha256 = (data: Buffer) => hash("sha256", data);
@@ -15,14 +17,14 @@ declare global {
 }
 
 type Fido2Signature = {
-  s: Buffer;
-  c: Buffer;
-  a: Buffer;
+  s: ArrayBuffer;
+  c: ArrayBuffer;
+  a: ArrayBuffer;
 };
 
 type ExportFIDO2Data = {
   v?: 0 | 1;
-  f: Buffer;
+  f: Buffer | string;
   t: number;
   c: Buffer;
   e: Buffer;
@@ -46,7 +48,7 @@ const serializeID_v0 = (km: Fido2Manager) => {
   return Buffer.concat([version, ckey, cypher]);
 };
 
-const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]);
+const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]) as AuthenticatorTransport[];
 const fromTransports = (transports: string[]): number => transports.reduceRight((memo, i) => memo + (lookup[i as LookupType] ? lookup[i as LookupType] : 0), 0);
 
 const getAuthTypeFromCkey = (ckey: Buffer) => {
@@ -67,6 +69,7 @@ const getSignerFromCkey = (ckey: Buffer) => {
 };
 
 export default class Fido2Manager extends KeyManager {
+  webAuthn: WebAuthnProvider;
   fid!: Buffer;
   _transports: number = 0;
   ckey!: Buffer;
@@ -75,6 +78,7 @@ export default class Fido2Manager extends KeyManager {
     super();
     this.level = 1; // ROOT, no Proof Management
     this.encType = "X25519KeyAgreementKey2019";
+    this.webAuthn = getWebAuthnProvider();
   }
 
   get transports(): AuthenticatorTransport[] {
@@ -141,7 +145,7 @@ export default class Fido2Manager extends KeyManager {
     const f2m = new Fido2Manager();
     f2m.version = data.v ?? 0;
     f2m.capability = "private";
-    f2m.fid = data.f;
+    f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : data.f;
     f2m._transports = data.t ? data.t : 15;
     f2m.ckey = data.c;
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
@@ -159,7 +163,7 @@ export default class Fido2Manager extends KeyManager {
     const f2m = new Fido2Manager();
     f2m.version = obj.version ?? 0;
     f2m.level = obj.level;
-    f2m.fid = obj.fid;
+    f2m.fid = typeof obj.fid === "string" ? Buffer.from(obj.fid, "base64") : obj.fid;
     f2m._transports = obj.t ? obj.t : 15;
     f2m.ckey = obj.ckey.data ? Buffer.from(obj.ckey.data) : Buffer.from(obj.ckey);
     f2m.signer = getSignerFromCkey(f2m.ckey);
@@ -175,7 +179,7 @@ export default class Fido2Manager extends KeyManager {
     const f2m = new Fido2Manager();
     f2m.version = data.v ?? 0;
     f2m.capability = "public";
-    f2m.fid = data.f;
+    f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : data.f;
     f2m.ckey = data.c;
     f2m.signer = getSignerFromCkey(data.c);
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
@@ -185,47 +189,50 @@ export default class Fido2Manager extends KeyManager {
     return f2m;
   }
 
-  async sign(data: Buffer) {
-    if (this.capability == "public") return null;
-    // need fido2 credentials mounted
-    if (!navigator.credentials) return null;
-    // ugly request userinteraction (needed for Safari and iOS)
-    try {
-      await window?.CredentialUserInteractionRequest();
-    } catch (error) {}
-    const challenge = hash("sha256", data);
-    const publicKey: PublicKeyCredentialRequestOptions = {
-      challenge,
-      userVerification: "preferred",
-      allowCredentials: [
-        {
-          type: "public-key",
-          id: this.fid,
-          transports: getTransports(this._transports) as AuthenticatorTransport[],
-        },
-      ],
+  async getSigner() {
+    return {
+      sign: async (data: Buffer) => {
+        if (!navigator.credentials) return null;
+        // ugly request userinteraction (needed for Safari and iOS)
+        try {
+          await window?.CredentialUserInteractionRequest();
+        } catch (error) {}
+        const challenge = hash("sha256", data);
+        const publicKey: PublicKeyCredentialRequestOptions = {
+          challenge,
+          userVerification: "preferred",
+          allowCredentials: [
+            {
+              type: "public-key",
+              id: this.fid,
+              transports: getTransports(this._transports),
+            },
+          ],
+        };
+        const { response } = (await this.webAuthn.get(publicKey)) as PublicKeyCredential;
+        const publicKeyResponse = response as AuthenticatorAssertionResponse;
+        const output: Fido2Signature = {
+          s: Buffer.from(publicKeyResponse.signature),
+          c: Buffer.from(publicKeyResponse.clientDataJSON),
+          a: Buffer.from(publicKeyResponse.authenticatorData),
+        };
+        return Buffer.from(encode(output));
+      },
     };
-    const { response } = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential;
-    const publicKeyResponse = response as AuthenticatorAssertionResponse;
-    const output: Fido2Signature = {
-      s: Buffer.from(publicKeyResponse.signature),
-      c: Buffer.from(publicKeyResponse.clientDataJSON),
-      a: Buffer.from(publicKeyResponse.authenticatorData),
-    };
-    return Buffer.from(encode(output));
   }
 
-  verify(data: Buffer, signature: Buffer, userVerification: boolean = false) {
-    const decoded = decode(signature) as Fido2Signature;
-    const response: AuthenticatorAssertionResponse = {
+  verify(data: Buffer, signature: Buffer | Uint8Array, userVerification: boolean = false) {
+    const signatureBuffer = Buffer.from(signature);
+    const decoded = decode(signatureBuffer) as Fido2Signature;
+    const response = {
       signature: decoded.s,
       clientDataJSON: decoded.c,
       authenticatorData: decoded.a,
-      userHandle: Buffer.from([]),
+      userHandle: Buffer.from([]).buffer,
     };
     const challenge = hash("sha256", data).toString("base64");
-    const extractedChallenge = SoftCredentials.extractChallenge(response.clientDataJSON as Buffer);
-    if (challenge != extractedChallenge) {
+    const extractedChallenge = SoftCredentials.extractChallenge(response.clientDataJSON);
+    if (challenge !== extractedChallenge) {
       return false;
     }
     return SoftCredentials.simpleVerify(this.ckey, response, userVerification);
@@ -244,8 +251,8 @@ export default class Fido2Manager extends KeyManager {
     return SoftCredentials.simpleVerify(this.ckey, response, userVerification);
   }
 
-  async createRevocationCertificate(newId: string) {
-    // impossible
+  async createRevocationCertificate() {
+    // TODO use an external id
     return null;
   }
 }

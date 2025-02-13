@@ -1,27 +1,33 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <title>Mocha</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="../node_modules/mocha/mocha.css">
-    <script src="../node_modules/mocha/mocha.js"></script>
-<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/chai/4.2.0/chai.min.js"></script> -->
-
-    <script type="module" class="mocha-init">
-        mocha.setup('bdd');
-    </script>
-
-    <!-- ------------------------------------ -->
-    <script type="module" src="../dist/test/keymanager.test.js"></script>  
-    <script type="module" src="./html.js"></script>  
-    <!-- ------------------------------------ -->
-
-    <script type="module">
-        mocha.run();
-    </script>
-</head>
-<body>
+<!doctype html>
+<html>
+  <head>
+    <title>Channel PeerJS Tests</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../node_modules/mocha/mocha.css" />
+  </head>
+  <body>
     <div id="mocha"></div>
-</body>
+    <!-- Load dependencies before your test bundle -->
+    <script src="../node_modules/mocha/mocha.js"></script>
+
+    <!-- Initialize mocha -->
+    <script>
+      mocha.setup({
+        ui: "bdd",
+        timeout: 10000,
+        checkLeaks: true,
+        reporter: "spec",
+      });
+      //window.assert = chai.assert;
+    </script>
+    <script src="./assets/test-bundle.js"></script>
+    <script class="mocha-exec">
+      mocha.run(function (failures) {
+        window.mochaResults = {
+          failures: failures,
+          suites: mocha.suite.suites,
+        };
+      });
+    </script>
+  </body>
 </html>

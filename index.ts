@@ -3,14 +3,14 @@ import IdManager from "./src/IdManager";
 import KeyManager from "./src/KeyManager";
 import VaultysId from "./src/VaultysId";
 import { Channel, MemoryChannel } from "./src/MemoryChannel";
-import { MemoryStorage, Store } from "./src/MemoryStorage";
+import { MemoryStorage, Store, LocalStorage } from "./src/MemoryStorage";
 import GameOfLifeIcon from "./src/GameOfLifeIcon";
 import CryptoChannel from "./src/cryptoChannel";
 
 //utils
 import * as crypto from "./src/crypto";
 
-export { crypto, VaultysId, Challenger, MemoryChannel, MemoryStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
+export { crypto, VaultysId, Challenger, MemoryChannel, MemoryStorage, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
 
 export type { Channel, Store };
 

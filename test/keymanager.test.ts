@@ -1,9 +1,12 @@
 import assert from "assert";
+import { Buffer } from "buffer/";
 import { randomBytes } from "crypto";
-import KeyManager, { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
+import { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
 import * as bip32 from "@stricahq/bip32ed25519";
+import { VaultysId, KeyManager } from "../";
+import { createRandomVaultysId } from "./utils";
 
-//@ts-ignore
+// @ts-expect-error weird import for @stricahq/bip32ed25519
 const bip32fix = bip32.default ?? bip32;
 
 const writeVector = (km: KeyManager) => {
@@ -71,7 +74,7 @@ describe("KeyManager tests", () => {
     const signature = await signer.sign(message);
     if (!signature) assert.fail();
     assert.notEqual(signature, null);
-    assert.ok(await verifier.verify(message, signature));
+    assert.ok(verifier.verify(message, signature));
   });
 
   it("create and verify a HISCP Certificate", async () => {
@@ -105,8 +108,27 @@ describe("KeyManager tests", () => {
     assert.ok(publicKM.verifySwapingCertificate(hiscp));
 
     // create the new Keymanager iterating on the index
+    if (!km.entropy) assert.fail();
     const newkm = await KeyManager.create_Id25519_fromEntropy(km.entropy, 1);
     assert.equal(newkm.id.toString("hex"), hiscp?.newId.toString("hex"));
+  });
+
+  it("signcrypt and decrypt messages", async () => {
+    const alice = await KeyManager.generate_Id25519();
+    const bob = await KeyManager.generate_Id25519();
+    const eve = await KeyManager.generate_Id25519();
+    const plaintext = "This message is authentic!";
+    const recipients = [bob.id, eve.id, alice.id];
+    const ENCRYPTED = await alice.signcrypt(plaintext, recipients);
+    if (!ENCRYPTED) assert.fail();
+    assert.equal(ENCRYPTED.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    if (!ENCRYPTED) assert.fail();
+    const decryptedBob = await bob.decrypt(ENCRYPTED, alice.id);
+    const decryptedEve = await eve.decrypt(ENCRYPTED, alice.id);
+    const decryptedAlice = await alice.decrypt(ENCRYPTED, alice.id);
+    assert.equal(decryptedEve, plaintext);
+    assert.equal(decryptedEve, decryptedBob);
+    assert.equal(decryptedEve, decryptedAlice);
   });
 
   it("encrypt and decrypt messages", async () => {
@@ -115,32 +137,95 @@ describe("KeyManager tests", () => {
     const eve = await KeyManager.generate_Id25519();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
-    const encrypted = await alice.encrypt(plaintext, recipients);
-    if (!encrypted) assert.fail();
-    assert.equal(encrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
-    if (!encrypted) assert.fail();
-    const decryptedBob = await bob.decrypt(encrypted, alice.id);
-    const decryptedEve = await eve.decrypt(encrypted, alice.id);
-    const decryptedAlice = await alice.decrypt(encrypted, alice.id);
+    const ENCRYPTED = await KeyManager.encrypt(plaintext, recipients);
+    if (!ENCRYPTED) assert.fail();
+    assert.equal(ENCRYPTED.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    if (!ENCRYPTED) assert.fail();
+    const decryptedBob = await bob.decrypt(ENCRYPTED);
+    const decryptedEve = await eve.decrypt(ENCRYPTED);
+    const decryptedAlice = await alice.decrypt(ENCRYPTED);
     assert.equal(decryptedEve, plaintext);
     assert.equal(decryptedEve, decryptedBob);
     assert.equal(decryptedEve, decryptedAlice);
   });
 
-  it("encrypt and blind decrypt messages", async () => {
+  it("signcrypt and blind decrypt messages", async () => {
     const alice = await KeyManager.generate_Id25519();
     const bob = await KeyManager.generate_Id25519();
     const eve = await KeyManager.generate_Id25519();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
-    const encrypted = await alice.encrypt(plaintext, recipients);
-    if (!encrypted) assert.fail();
-    assert.equal(encrypted.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
-    const decryptedBob = await bob.decrypt(encrypted);
-    const decryptedEve = await eve.decrypt(encrypted);
-    const decryptedAlice = await alice.decrypt(encrypted);
+    const ENCRYPTED = await alice.signcrypt(plaintext, recipients);
+    if (!ENCRYPTED) assert.fail();
+    assert.equal(ENCRYPTED.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    const decryptedBob = await bob.decrypt(ENCRYPTED);
+    const decryptedEve = await eve.decrypt(ENCRYPTED);
+    const decryptedAlice = await alice.decrypt(ENCRYPTED);
     assert.equal(decryptedEve, plaintext);
     assert.equal(decryptedEve, decryptedBob);
     assert.equal(decryptedEve, decryptedAlice);
+  });
+
+  it("VaultysId: signcrypt and decrypt messages", async () => {
+    const alice = await createRandomVaultysId();
+    const bob = await createRandomVaultysId();
+    const eve = await createRandomVaultysId();
+    const plaintext = "This message is authentic!";
+    const recipients = [bob.id, eve.id, alice.id];
+    const ENCRYPTED = await alice.signcrypt(plaintext, recipients);
+    if (!ENCRYPTED) assert.fail();
+    assert.equal(ENCRYPTED.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    if (!ENCRYPTED) assert.fail();
+    const decryptedBob = await bob.decrypt(ENCRYPTED, alice.id);
+    const decryptedEve = await eve.decrypt(ENCRYPTED, alice.id);
+    const decryptedAlice = await alice.decrypt(ENCRYPTED, alice.id);
+    assert.equal(decryptedEve, plaintext);
+    assert.equal(decryptedEve, decryptedBob);
+    assert.equal(decryptedEve, decryptedAlice);
+  });
+
+  it("VaultysId: encrypt and decrypt messages", async () => {
+    const alice = await createRandomVaultysId();
+    const bob = await createRandomVaultysId();
+    const eve = await createRandomVaultysId();
+    const plaintext = "This message is authentic!";
+    const recipients = [bob.id, eve.id, alice.id];
+    const ENCRYPTED = await VaultysId.encrypt(plaintext, recipients);
+    if (!ENCRYPTED) assert.fail();
+    assert.equal(ENCRYPTED.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    if (!ENCRYPTED) assert.fail();
+    const decryptedBob = await bob.decrypt(ENCRYPTED);
+    const decryptedEve = await eve.decrypt(ENCRYPTED);
+    const decryptedAlice = await alice.decrypt(ENCRYPTED);
+    assert.equal(decryptedEve, plaintext);
+    assert.equal(decryptedEve, decryptedBob);
+    assert.equal(decryptedEve, decryptedAlice);
+  });
+
+  it("VaultysId: signcrypt and blind decrypt messages", async () => {
+    const alice = await createRandomVaultysId();
+    const bob = await createRandomVaultysId();
+    const eve = await createRandomVaultysId();
+    const plaintext = "This message is authentic!";
+    const recipients = [bob.id, eve.id, alice.id];
+    const ENCRYPTED = await alice.signcrypt(plaintext, recipients);
+    if (!ENCRYPTED) assert.fail();
+    assert.equal(ENCRYPTED.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
+    const decryptedBob = await bob.decrypt(ENCRYPTED);
+    const decryptedEve = await eve.decrypt(ENCRYPTED);
+    const decryptedAlice = await alice.decrypt(ENCRYPTED);
+    assert.equal(decryptedEve, plaintext);
+    assert.equal(decryptedEve, decryptedBob);
+    assert.equal(decryptedEve, decryptedAlice);
+  });
+
+  it("Decrypt a sample encrypted message", async () => {
+    // const bob = await createRandomVaultysId();
+    // console.log(await VaultysId.encrypt("test", [bob.id]));
+    // console.log(bob.getSecret("base64"));
+    const message = "BEGIN SALTPACK ENCRYPTED MESSAGE. keDIDMQWYvVR58B FTfTeD305hcoHcr Wi4X4pWBmPExHwE WaBDIrIPJ7pgJVE 2Yaxiu3jYK3Osf2 uhjKjQeNaUshMjT QrZdWGFObOEKXZS u5ZF9IyxzRQiBF8 vtIJhLH1kKcDJj4 IQGkhxNTmUljHeo ulEUOyGRt0K3CrR gVkJxxehI8H0GJy 0iJTgCMM7DEX4Jk qmUWofh3hNbfZcs G171PLnJVJ484sS ozpRNJIRMYpHD4g lEdwwVM3NfIoSW3 Cg6FKTrtiNoDgtN gvXoqM96taPvEal dAjNjMgXFcuPT2b U0CFssYXxGKzAnJ gevNrFwrZGLd78h. END SALTPACK ENCRYPTED MESSAGE.";
+    const id = VaultysId.fromSecret("AIShdgGhcMQg3KBa7NhKclRHgvQL/51gDBKkVt9ndZurKDM+wDY4uBSheMRgIEM+lQwxORCD8hOul7keOXea5fMYYghYYL2inBxdB1Uop0p+SGS0ju18I7OOTiMDGGKo7wzTR0xj5xxE9qpTHqHAbWi6fPFaYOXNTK1t6NwVTiNkJDrvqK1OvVrzHnOGoWXEIJRd5AQLlhofk5h7yIGMHzJt5kWUX/J+sTH4gQhGtW1S", "base64");
+    const decrypted = await id.decrypt(message);
+    assert.equal(decrypted, "test");
   });
 });
