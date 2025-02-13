@@ -2,7 +2,6 @@ node_modules
 .DS_Store
 rust
 stats.json
-dist/
 test/assets/streamed_file.png
 test/assets/streamed_file_encrypted.png
 test/assets/streamed_file_signcrypted.png
