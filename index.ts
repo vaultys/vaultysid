@@ -2,15 +2,16 @@ import Challenger from "./src/Challenger";
 import IdManager from "./src/IdManager";
 import KeyManager from "./src/KeyManager";
 import VaultysId from "./src/VaultysId";
-import { Channel, MemoryChannel } from "./src/MemoryChannel";
+import { Channel, MemoryChannel, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable } from "./src/MemoryChannel";
 import { MemoryStorage, Store, LocalStorage } from "./src/MemoryStorage";
 import GameOfLifeIcon from "./src/GameOfLifeIcon";
 import CryptoChannel from "./src/cryptoChannel";
 
 //utils
 import * as crypto from "./src/crypto";
+const Buffer = crypto.Buffer;
 
-export { crypto, VaultysId, Challenger, MemoryChannel, MemoryStorage, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
+export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
 
 export type { Channel, Store };
 

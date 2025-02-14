@@ -2,11 +2,13 @@ const path = require("path");
 const webpack = require("webpack");
 
 module.exports = {
-  mode: "development",
+  mode: "production",
   entry: ["./index.ts"],
   output: {
     path: path.resolve(__dirname, "dist/browser"),
     filename: "vaultysid.min.js",
+    libraryTarget: "umd",
+    globalObject: "this",
   },
   module: {
     rules: [
