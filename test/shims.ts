@@ -1,3 +1,11 @@
+// Polyfill for Symbol.dispose
+if (typeof Symbol.dispose === "undefined") {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  Symbol.dispose = Symbol("Symbol.dispose");
+}
+
+
 // nodejs polyfill
 import SoftCredentials from "../src/platform/SoftCredentials";
 if (typeof window !== "undefined") {
