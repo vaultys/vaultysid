@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CryptoChannel = exports.GameOfLifeIcon = exports.KeyManager = exports.IdManager = exports.LocalStorage = exports.MemoryStorage = exports.MemoryChannel = exports.Challenger = exports.VaultysId = exports.crypto = void 0;
+exports.CryptoChannel = exports.GameOfLifeIcon = exports.KeyManager = exports.IdManager = exports.LocalStorage = exports.convertWebWritableStreamToNodeWritable = exports.convertWebReadableStreamToNodeReadable = exports.StreamChannel = exports.MemoryStorage = exports.MemoryChannel = exports.Challenger = exports.VaultysId = exports.Buffer = exports.crypto = void 0;
 const Challenger_1 = __importDefault(require("./src/Challenger"));
 exports.Challenger = Challenger_1.default;
 const IdManager_1 = __importDefault(require("./src/IdManager"));
@@ -47,6 +47,9 @@ const VaultysId_1 = __importDefault(require("./src/VaultysId"));
 exports.VaultysId = VaultysId_1.default;
 const MemoryChannel_1 = require("./src/MemoryChannel");
 Object.defineProperty(exports, "MemoryChannel", { enumerable: true, get: function () { return MemoryChannel_1.MemoryChannel; } });
+Object.defineProperty(exports, "StreamChannel", { enumerable: true, get: function () { return MemoryChannel_1.StreamChannel; } });
+Object.defineProperty(exports, "convertWebReadableStreamToNodeReadable", { enumerable: true, get: function () { return MemoryChannel_1.convertWebReadableStreamToNodeReadable; } });
+Object.defineProperty(exports, "convertWebWritableStreamToNodeWritable", { enumerable: true, get: function () { return MemoryChannel_1.convertWebWritableStreamToNodeWritable; } });
 const MemoryStorage_1 = require("./src/MemoryStorage");
 Object.defineProperty(exports, "MemoryStorage", { enumerable: true, get: function () { return MemoryStorage_1.MemoryStorage; } });
 Object.defineProperty(exports, "LocalStorage", { enumerable: true, get: function () { return MemoryStorage_1.LocalStorage; } });
@@ -57,3 +60,5 @@ exports.CryptoChannel = cryptoChannel_1.default;
 //utils
 const crypto = __importStar(require("./src/crypto"));
 exports.crypto = crypto;
+const Buffer = crypto.Buffer;
+exports.Buffer = Buffer;

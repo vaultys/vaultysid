@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/id",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "exports": {
     ".": {
       "browser": "./dist/browser/vaultys.min.js",
@@ -13,7 +13,7 @@
   "types": "./dist/index.d.ts",
   "description": "the most advanced decentralised id framework",
   "scripts": {
-    "build": "npm run build:node && npm run build:browser && npm run build:types",
+    "build": "npm run build:node && npm run build:browser",
     "build:node": "tsc -p tsconfig.node.json",
     "build:browser": "webpack --config webpack.config.js",
     "prettier": "find src -name \"*.ts\" | xargs prettier --write",
