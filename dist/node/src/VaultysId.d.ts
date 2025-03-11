@@ -49,6 +49,14 @@ export default class VaultysId {
     isPerson(): boolean;
     getOTPHmac(timelock?: number): string;
     getOTP(prefix?: string, timelock?: number): string;
+    performDiffieHellman(otherVaultysId: VaultysId): Promise<Buffer | null>;
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two VaultysId instances
+     * @param vaultysId1 First VaultysId instance
+     * @param vaultysId2 Second VaultysId instance
+     * @returns A shared secret that both parties can derive
+     */
+    static diffieHellman(vaultysId1: VaultysId, vaultysId2: VaultysId): Promise<Buffer | null>;
     signChallenge(challenge: Buffer | string): Promise<Buffer>;
     verifyChallenge(challenge: Buffer | string, signature: Buffer | string, userVerification: boolean): boolean;
     signcrypt(plaintext: string, recipientIds: (Buffer | string)[]): Promise<string>;

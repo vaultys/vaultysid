@@ -309,6 +309,51 @@ export default class VaultysId {
     throw new Error("no certificate, cannot derive OTP");
   }
 
+  async performDiffieHellman(otherVaultysId: VaultysId): Promise<Buffer | null> {
+    return this.keyManager.performDiffieHellman(otherVaultysId.keyManager);
+  }
+
+  /**
+   * Static method to perform a Diffie-Hellman key exchange between two VaultysId instances
+   * @param vaultysId1 First VaultysId instance
+   * @param vaultysId2 Second VaultysId instance
+   * @returns A shared secret that both parties can derive
+   */
+  static async diffieHellman(vaultysId1: VaultysId, vaultysId2: VaultysId): Promise<Buffer | null> {
+    return vaultysId1.performDiffieHellman(vaultysId2);
+  }
+
+  /**
+   * Encrypt a message using DHIES for a recipient
+   * @param message Message to encrypt
+   * @param recipientId Recipient's VaultysId ID
+   * @returns Encrypted message or null if encryption fails
+   */
+  async dhiesEncrypt(message: string | Buffer, recipientId: Buffer | string): Promise<Buffer | null> {
+    let cleanId: Buffer;
+    if (typeof recipientId === "string") {
+      cleanId = Buffer.from(recipientId.slice(2), "hex");
+    } else {
+      cleanId = recipientId.slice(1);
+    }
+    return this.keyManager.dhiesEncrypt(message, cleanId);
+  }
+
+  /**
+   * Decrypt a message encrypted with DHIES
+   * @param encryptedMessage Encrypted message from dhiesEncrypt
+   * @returns Decrypted message as Buffer or null if decryption fails
+   */
+  async dhiesDecrypt(encryptedMessage: Buffer, senderId: Buffer | string): Promise<Buffer | null> {
+    let cleanId: Buffer;
+    if (typeof senderId === "string") {
+      cleanId = Buffer.from(senderId.slice(2), "hex");
+    } else {
+      cleanId = senderId.slice(1);
+    }
+    return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
+  }
+
   async signChallenge(challenge: Buffer | string): Promise<Buffer> {
     if (typeof challenge == "string") {
       challenge = Buffer.from(challenge, "hex");

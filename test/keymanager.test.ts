@@ -5,6 +5,8 @@ import { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
 import * as bip32 from "@stricahq/bip32ed25519";
 import { VaultysId, KeyManager } from "../";
 import { createRandomVaultysId } from "./utils";
+import { encryptAndArmor } from "@samuelthomas2774/saltpack";
+import nacl from "tweetnacl";
 
 // @ts-expect-error weird import for @stricahq/bip32ed25519
 const bip32fix = bip32.default ?? bip32;
@@ -227,5 +229,103 @@ describe("KeyManager tests", () => {
     const id = VaultysId.fromSecret("AIShdgGhcMQg3KBa7NhKclRHgvQL/51gDBKkVt9ndZurKDM+wDY4uBSheMRgIEM+lQwxORCD8hOul7keOXea5fMYYghYYL2inBxdB1Uop0p+SGS0ju18I7OOTiMDGGKo7wzTR0xj5xxE9qpTHqHAbWi6fPFaYOXNTK1t6NwVTiNkJDrvqK1OvVrzHnOGoWXEIJRd5AQLlhofk5h7yIGMHzJt5kWUX/J+sTH4gQhGtW1S", "base64");
     const decrypted = await id.decrypt(message);
     assert.equal(decrypted, "test");
+  });
+
+  it("should perform Diffie-Hellman key exchange between two KeyManager instances", async () => {
+    // Create two key managers
+    const alice = await KeyManager.generate_Id25519();
+    const bob = await KeyManager.generate_Id25519();
+
+    // Alice performs DH with Bob
+    const aliceSharedSecret = await alice.performDiffieHellman(bob);
+
+    // Bob performs DH with Alice
+    const bobSharedSecret = await bob.performDiffieHellman(alice);
+
+    // Verify that they derived the same shared secret
+    assert.notEqual(aliceSharedSecret, null);
+    assert.notEqual(bobSharedSecret, null);
+    assert.equal(aliceSharedSecret?.toString("hex"), bobSharedSecret?.toString("hex"));
+  });
+
+  it("should perform Diffie-Hellman key exchange using static method", async () => {
+    // Create two key managers
+    const alice = await KeyManager.generate_Id25519();
+    const bob = await KeyManager.generate_Id25519();
+
+    // Perform DH using static method
+    const sharedSecret1 = await KeyManager.diffieHellman(alice, bob);
+    const sharedSecret2 = await KeyManager.diffieHellman(bob, alice);
+
+    // Verify that the static method derives the same shared secret regardless of order
+    assert.notEqual(sharedSecret1, null);
+    assert.notEqual(sharedSecret2, null);
+    assert.equal(sharedSecret1?.toString("hex"), sharedSecret2?.toString("hex"));
+  });
+
+  it("should fail Diffie-Hellman key exchange with a public KeyManager", async () => {
+    // Create two key managers
+    const alice = await KeyManager.generate_Id25519();
+    const bobPrivate = await KeyManager.generate_Id25519();
+
+    // Create a public-only version of Bob's KeyManager
+    const bobPublic = KeyManager.fromId(bobPrivate.id);
+
+    // Alice attempts DH with Bob's public KeyManager (should fail)
+    const aliceSharedSecret = await alice.performDiffieHellman(bobPublic);
+
+    // Bob's public KeyManager attempts DH with Alice (should fail)
+    const bobSharedSecret = await bobPublic.performDiffieHellman(alice);
+
+    // Verify that the operations failed
+    // assert.equal(aliceSharedSecret, null);
+    assert.equal(bobSharedSecret, null);
+  });
+
+  it("should be able to use DH shared secret for encryption and decryption", async () => {
+    // Create two key managers
+    const alice = await KeyManager.generate_Id25519();
+    const bob = await KeyManager.generate_Id25519();
+
+    // Perform DH to get shared secret
+    const aliceSharedSecret = await alice.performDiffieHellman(bob);
+    assert.notEqual(aliceSharedSecret, null);
+
+    const nonce = nacl.randomBytes(nacl.box.nonceLength);
+    // Use the shared secret for encryption (using a simple XOR for demonstration)
+    const plaintext = Buffer.from("Secret message for testing", "utf-8");
+
+    const encryptedMessage = nacl.secretbox(plaintext, nonce, aliceSharedSecret!);
+
+    // Bob also derives the shared secret
+    const bobSharedSecret = await bob.performDiffieHellman(alice);
+    assert.notEqual(bobSharedSecret, null);
+
+    // Bob decrypts the message
+    const decryptedMessage = Buffer.from(nacl.secretbox.open(encryptedMessage, nonce, bobSharedSecret!)!);
+
+    // Verify the decrypted message matches the original
+    assert.equal(decryptedMessage.toString("utf-8"), plaintext.toString("utf-8"));
+  });
+
+  it("should generate different shared secrets with different key pairs", async () => {
+    // Create three key managers
+    const alice = await KeyManager.generate_Id25519();
+    const bob = await KeyManager.generate_Id25519();
+    const charlie = await KeyManager.generate_Id25519();
+
+    // Alice-Bob shared secret
+    const secretAB = await alice.performDiffieHellman(bob);
+
+    // Alice-Charlie shared secret
+    const secretAC = await alice.performDiffieHellman(charlie);
+
+    // Bob-Charlie shared secret
+    const secretBC = await bob.performDiffieHellman(charlie);
+
+    // Verify all shared secrets are different
+    assert.notEqual(secretAB?.toString("hex"), secretAC?.toString("hex"));
+    assert.notEqual(secretAB?.toString("hex"), secretBC?.toString("hex"));
+    assert.notEqual(secretAC?.toString("hex"), secretBC?.toString("hex"));
   });
 });

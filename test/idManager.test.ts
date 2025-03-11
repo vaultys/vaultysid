@@ -250,6 +250,30 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
+  it("perform decrypt over Channel", async () => {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
+      const channel = MemoryChannel.createEncryptedBidirectionnal();
+      if (!channel.otherend) assert.fail();
+      // channel.setLogger((data) => console.log(data.toString("utf-8")));
+      const s1 = MemoryStorage(() => "");
+      const s2 = MemoryStorage(() => "");
+      const manager1 = new IdManager(id1, s1);
+      const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
+
+      const message = "test decrypt on demand";
+
+      const toDecrypt = await VaultysId.encrypt(message, [manager1.vaultysId.id]);
+
+      manager1.acceptDecrypt(channel);
+
+      //console.log(toDecrypt);
+      const result = await manager2.requestDecrypt(channel.otherend, Buffer.from(toDecrypt, "utf-8"));
+
+      assert.deepEqual(result?.toString("utf-8"), message);
+    }
+  });
+
   it("perform migration from version 0 to 1", async () => {
     const ids: IdManager[] = [];
     for (let i = 0; i < 2; i++) {

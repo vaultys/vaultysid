@@ -49,7 +49,7 @@ export default class IdManager {
     sync(channel: Channel, initiator?: boolean): Promise<void>;
     upload(channel: Channel, stream: Readable): Promise<void>;
     download(channel: Channel, stream: Writable): Promise<void>;
-    requestDecrypt(channel: Channel, toDecrypt: Buffer): Promise<Buffer | undefined>;
+    requestDecrypt(channel: Channel, toDecrypt: Buffer): Promise<Buffer | null | undefined>;
     acceptDecrypt(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>): Promise<void>;
     requestSignFile(channel: Channel, file: File): Promise<FileSignature | undefined>;
     acceptSignFile(channel: Channel, accept?: (contact: VaultysId, file: File) => Promise<boolean>): Promise<void>;

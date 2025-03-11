@@ -144,6 +144,7 @@ class KeyManager {
                 : undefined,
             signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
             decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
+            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
         };
     }
     async getSigner() {
@@ -278,6 +279,35 @@ class KeyManager {
             (0, crypto_1.secureErase)(this.entropy);
             delete this.entropy;
         }
+    }
+    /**
+     * Performs a Diffie-Hellman key exchange with another KeyManager instance
+     * @param otherKeyManager The other party's KeyManager instance
+     * @returns A shared secret that can be used for symmetric encryption
+     */
+    async performDiffieHellman(otherKeyManager) {
+        if (this.capability === "public" || !this.cypher.secretKey) {
+            console.error("Cannot perform DH key exchange with a public key capability");
+            return null;
+        }
+        const cypher = await this.getCypher();
+        const otherKey = otherKeyManager.cypher.publicKey;
+        // Perform the X25519 scalar multiplication to derive the shared secret
+        const sharedSecret = await cypher.diffieHellman(otherKey);
+        // Hash the shared secret for better security (to derive a symmetric key)
+        const derivedKey = sha256(sharedSecret);
+        // Securely erase the shared secret from memory
+        (0, crypto_1.secureErase)(sharedSecret);
+        return derivedKey;
+    }
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two KeyManager instances
+     * @param keyManager1 First KeyManager instance
+     * @param keyManager2 Second KeyManager instance
+     * @returns A shared secret that both parties can derive
+     */
+    static async diffieHellman(keyManager1, keyManager2) {
+        return keyManager1.performDiffieHellman(keyManager2);
     }
     static async encrypt(plaintext, recipientIds) {
         const publicKeys = recipientIds.map(KeyManager.fromId).map((km) => km.cypher.publicKey);

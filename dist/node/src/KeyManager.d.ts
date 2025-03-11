@@ -32,6 +32,7 @@ export default class KeyManager {
         hmac: (message: string) => Buffer | undefined;
         signcrypt: (plaintext: string, publicKeys: Buffer[]) => Promise<string>;
         decrypt: (encryptedMessage: string, senderKey?: Buffer | null) => Promise<import("@samuelthomas2774/saltpack").DearmorAndDecryptResult>;
+        diffieHellman: (publicKey: Buffer) => Promise<Buffer>;
     }>;
     getSigner(): Promise<any>;
     getSecret(): Buffer;
@@ -43,6 +44,19 @@ export default class KeyManager {
     createSwapingCertificate(): Promise<HISCP | null>;
     verifySwapingCertificate(hiscp: HISCP): Promise<any>;
     cleanSecureData(): void;
+    /**
+     * Performs a Diffie-Hellman key exchange with another KeyManager instance
+     * @param otherKeyManager The other party's KeyManager instance
+     * @returns A shared secret that can be used for symmetric encryption
+     */
+    performDiffieHellman(otherKeyManager: KeyManager): Promise<Buffer | null>;
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two KeyManager instances
+     * @param keyManager1 First KeyManager instance
+     * @param keyManager2 Second KeyManager instance
+     * @returns A shared secret that both parties can derive
+     */
+    static diffieHellman(keyManager1: KeyManager, keyManager2: KeyManager): Promise<Buffer | null>;
     static encrypt(plaintext: string, recipientIds: Buffer[]): Promise<string>;
     signcrypt(plaintext: string, recipientIds: Buffer[]): Promise<string>;
     decrypt(encryptedMessage: string, senderId?: Buffer | null): Promise<string>;

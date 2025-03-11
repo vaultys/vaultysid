@@ -212,6 +212,18 @@ class VaultysId {
         }
         throw new Error("no certificate, cannot derive OTP");
     }
+    async performDiffieHellman(otherVaultysId) {
+        return this.keyManager.performDiffieHellman(otherVaultysId.keyManager);
+    }
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two VaultysId instances
+     * @param vaultysId1 First VaultysId instance
+     * @param vaultysId2 Second VaultysId instance
+     * @returns A shared secret that both parties can derive
+     */
+    static async diffieHellman(vaultysId1, vaultysId2) {
+        return vaultysId1.performDiffieHellman(vaultysId2);
+    }
     async signChallenge(challenge) {
         if (typeof challenge == "string") {
             challenge = buffer_1.Buffer.from(challenge, "hex");

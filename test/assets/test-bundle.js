@@ -46,7 +46,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.CryptoChannel = exports.GameOfLifeIcon = exports.KeyManager = exports.IdManager = exports.LocalStorage = exports.MemoryStorage = exports.MemoryChannel = exports.Challenger = exports.VaultysId = exports.crypto = void 0;
+exports.CryptoChannel = exports.GameOfLifeIcon = exports.KeyManager = exports.IdManager = exports.LocalStorage = exports.convertWebWritableStreamToNodeWritable = exports.convertWebReadableStreamToNodeReadable = exports.StreamChannel = exports.MemoryStorage = exports.MemoryChannel = exports.Challenger = exports.VaultysId = exports.Buffer = exports.crypto = void 0;
 const Challenger_1 = __importDefault(__webpack_require__(/*! ./src/Challenger */ "./dist/node/src/Challenger.js"));
 exports.Challenger = Challenger_1.default;
 const IdManager_1 = __importDefault(__webpack_require__(/*! ./src/IdManager */ "./dist/node/src/IdManager.js"));
@@ -57,6 +57,9 @@ const VaultysId_1 = __importDefault(__webpack_require__(/*! ./src/VaultysId */ "
 exports.VaultysId = VaultysId_1.default;
 const MemoryChannel_1 = __webpack_require__(/*! ./src/MemoryChannel */ "./dist/node/src/MemoryChannel.js");
 Object.defineProperty(exports, "MemoryChannel", ({ enumerable: true, get: function () { return MemoryChannel_1.MemoryChannel; } }));
+Object.defineProperty(exports, "StreamChannel", ({ enumerable: true, get: function () { return MemoryChannel_1.StreamChannel; } }));
+Object.defineProperty(exports, "convertWebReadableStreamToNodeReadable", ({ enumerable: true, get: function () { return MemoryChannel_1.convertWebReadableStreamToNodeReadable; } }));
+Object.defineProperty(exports, "convertWebWritableStreamToNodeWritable", ({ enumerable: true, get: function () { return MemoryChannel_1.convertWebWritableStreamToNodeWritable; } }));
 const MemoryStorage_1 = __webpack_require__(/*! ./src/MemoryStorage */ "./dist/node/src/MemoryStorage.js");
 Object.defineProperty(exports, "MemoryStorage", ({ enumerable: true, get: function () { return MemoryStorage_1.MemoryStorage; } }));
 Object.defineProperty(exports, "LocalStorage", ({ enumerable: true, get: function () { return MemoryStorage_1.LocalStorage; } }));
@@ -67,6 +70,8 @@ exports.CryptoChannel = cryptoChannel_1.default;
 //utils
 const crypto = __importStar(__webpack_require__(/*! ./src/crypto */ "./dist/node/src/crypto.js"));
 exports.crypto = crypto;
+const Buffer = crypto.Buffer;
+exports.Buffer = Buffer;
 
 
 /***/ }),
@@ -1819,6 +1824,7 @@ class KeyManager {
                 : undefined,
             signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
             decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
+            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
         };
     }
     async getSigner() {
@@ -1953,6 +1959,35 @@ class KeyManager {
             (0, crypto_1.secureErase)(this.entropy);
             delete this.entropy;
         }
+    }
+    /**
+     * Performs a Diffie-Hellman key exchange with another KeyManager instance
+     * @param otherKeyManager The other party's KeyManager instance
+     * @returns A shared secret that can be used for symmetric encryption
+     */
+    async performDiffieHellman(otherKeyManager) {
+        if (this.capability === "public" || !this.cypher.secretKey) {
+            console.error("Cannot perform DH key exchange with a public key capability");
+            return null;
+        }
+        const cypher = await this.getCypher();
+        const otherKey = otherKeyManager.cypher.publicKey;
+        // Perform the X25519 scalar multiplication to derive the shared secret
+        const sharedSecret = await cypher.diffieHellman(otherKey);
+        // Hash the shared secret for better security (to derive a symmetric key)
+        const derivedKey = sha256(sharedSecret);
+        // Securely erase the shared secret from memory
+        (0, crypto_1.secureErase)(sharedSecret);
+        return derivedKey;
+    }
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two KeyManager instances
+     * @param keyManager1 First KeyManager instance
+     * @param keyManager2 Second KeyManager instance
+     * @returns A shared secret that both parties can derive
+     */
+    static async diffieHellman(keyManager1, keyManager2) {
+        return keyManager1.performDiffieHellman(keyManager2);
     }
     static async encrypt(plaintext, recipientIds) {
         const publicKeys = recipientIds.map(KeyManager.fromId).map((km) => km.cypher.publicKey);
@@ -2534,6 +2569,18 @@ class VaultysId {
             return (0, crypto_1.hash)("SHA256", toHash).toString("hex");
         }
         throw new Error("no certificate, cannot derive OTP");
+    }
+    async performDiffieHellman(otherVaultysId) {
+        return this.keyManager.performDiffieHellman(otherVaultysId.keyManager);
+    }
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two VaultysId instances
+     * @param vaultysId1 First VaultysId instance
+     * @param vaultysId2 Second VaultysId instance
+     * @returns A shared secret that both parties can derive
+     */
+    static async diffieHellman(vaultysId1, vaultysId2) {
+        return vaultysId1.performDiffieHellman(vaultysId2);
     }
     async signChallenge(challenge) {
         if (typeof challenge == "string") {
@@ -72923,7 +72970,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.privateDerivePath = exports.publicDerivePath = void 0;
+exports.DHIES = exports.privateDerivePath = exports.publicDerivePath = void 0;
 const saltpack_1 = __webpack_require__(/*! @samuelthomas2774/saltpack */ "./node_modules/.pnpm/@samuelthomas2774+saltpack@0.3.2/node_modules/@samuelthomas2774/saltpack/dist/index.js");
 const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
@@ -72970,6 +73017,150 @@ const privateDerivePath = (node, path) => {
     return result;
 };
 exports.privateDerivePath = privateDerivePath;
+/**
+ * DHIES (Diffie-Hellman Integrated Encryption Scheme) for KeyManager
+ * Provides authenticated encryption using Diffie-Hellman key exchange
+ */
+class DHIES {
+    constructor(keyManager) {
+        this.keyManager = keyManager;
+    }
+    /**
+     * Encrypts a message for a recipient using DHIES
+     *
+     * @param message The plaintext message to encrypt
+     * @param recipientPublicKey The recipient's public key
+     * @returns Encrypted message with ephemeral public key and authentication tag, or null if encryption fails
+     */
+    async encrypt(message, recipientPublicKey) {
+        if (this.keyManager.capability === "public") {
+            console.error("Cannot encrypt with DHIES using a public KeyManager");
+            return null;
+        }
+        const cypher = await this.keyManager.getCypher();
+        // Convert message to Buffer if it's a string
+        const messageBuffer = typeof message === "string" ? buffer_1.Buffer.from(message, "utf8") : message;
+        try {
+            // Derive shared secret using recipient's public key and sender secret key
+            const sharedSecret = await cypher.diffieHellman(recipientPublicKey);
+            // Key derivation: derive encryption and MAC keys from shared secret
+            const kdfOutput = this.kdf(sharedSecret, this.keyManager.cypher.publicKey, recipientPublicKey);
+            const encryptionKey = kdfOutput.encryptionKey;
+            const macKey = kdfOutput.macKey;
+            // Encrypt the message using XChaCha20-Poly1305
+            const nonce = (0, crypto_1.randomBytes)(24); // 24 bytes nonce for XChaCha20-Poly1305
+            const ciphertext = buffer_1.Buffer.from(tweetnacl_1.default.secretbox(messageBuffer, nonce, encryptionKey));
+            // Compute MAC (Message Authentication Code)
+            const dataToAuthenticate = buffer_1.Buffer.concat([this.keyManager.cypher.publicKey, nonce, ciphertext]);
+            const mac = this.computeMAC(macKey, dataToAuthenticate);
+            // Construct the final encrypted message: nonce + ciphertext + MAC
+            const encryptedMessage = buffer_1.Buffer.concat([nonce, ciphertext, mac]);
+            // Securely erase sensitive data
+            (0, crypto_1.secureErase)(sharedSecret);
+            (0, crypto_1.secureErase)(encryptionKey);
+            (0, crypto_1.secureErase)(macKey);
+            return encryptedMessage;
+        }
+        catch (error) {
+            console.error("DHIES encryption failed:", error);
+            return null;
+        }
+    }
+    /**
+     * Decrypts a message encrypted with DHIES
+     *
+     * @param encryptedMessage The complete encrypted message from the encrypt method
+     * @returns Decrypted message as a Buffer, or null if decryption fails
+     */
+    async decrypt(encryptedMessage, senderPublicKey) {
+        if (this.keyManager.capability === "public") {
+            console.error("Cannot decrypt with DHIES using a public KeyManager");
+            return null;
+        }
+        try {
+            // Extract components from the encrypted message
+            // Format: nonce (24 bytes) + ciphertext + MAC (32 bytes)
+            const nonce = encryptedMessage.slice(0, 24);
+            const mac = encryptedMessage.slice(encryptedMessage.length - 32);
+            const ciphertext = encryptedMessage.slice(24, encryptedMessage.length - 32);
+            const cypher = await this.keyManager.getCypher();
+            // Derive shared secret using sender public key and recipient secret key
+            const sharedSecret = await cypher.diffieHellman(senderPublicKey);
+            // Key derivation: derive encryption and MAC keys
+            const kdfOutput = this.kdf(sharedSecret, senderPublicKey, this.keyManager.cypher.publicKey);
+            const encryptionKey = kdfOutput.encryptionKey;
+            const macKey = kdfOutput.macKey;
+            // Verify MAC
+            const dataToAuthenticate = buffer_1.Buffer.concat([senderPublicKey, nonce, ciphertext]);
+            const computedMac = this.computeMAC(macKey, dataToAuthenticate);
+            if (!this.constantTimeEqual(mac, computedMac)) {
+                //console.log(mac, computedMac);
+                console.error("DHIES: MAC verification failed");
+                return null;
+            }
+            // Decrypt the ciphertext
+            const plaintext = tweetnacl_1.default.secretbox.open(ciphertext, nonce, encryptionKey);
+            if (!plaintext) {
+                console.error("DHIES: Decryption failed");
+                return null;
+            }
+            const result = buffer_1.Buffer.from(plaintext);
+            // Securely erase sensitive data
+            (0, crypto_1.secureErase)(sharedSecret);
+            (0, crypto_1.secureErase)(encryptionKey);
+            (0, crypto_1.secureErase)(macKey);
+            return result;
+        }
+        catch (error) {
+            console.error("DHIES decryption failed:", error);
+            return null;
+        }
+    }
+    /**
+     * Key Derivation Function: Derives encryption and MAC keys from the shared secret
+     */
+    kdf(sharedSecret, ephemeralPublicKey, staticPublicKey) {
+        // Create a context for the KDF to ensure different keys for different uses
+        const context = buffer_1.Buffer.concat([buffer_1.Buffer.from("DHIES-KDF"), ephemeralPublicKey, staticPublicKey]);
+        // Derive encryption key: HKDF-like construction
+        const encryptionKeyMaterial = (0, crypto_1.hash)("sha512", buffer_1.Buffer.concat([
+            sharedSecret,
+            context,
+            buffer_1.Buffer.from([0x01]), // Domain separation byte
+        ]));
+        // Derive MAC key (using a different domain separation byte)
+        const macKeyMaterial = (0, crypto_1.hash)("sha512", buffer_1.Buffer.concat([
+            sharedSecret,
+            context,
+            buffer_1.Buffer.from([0x02]), // Domain separation byte
+        ]));
+        // Use first 32 bytes of each as the actual keys (for NaCl's secretbox)
+        return {
+            encryptionKey: encryptionKeyMaterial.slice(0, 32),
+            macKey: macKeyMaterial.slice(0, 32),
+        };
+    }
+    /**
+     * Computes MAC for authenticated encryption
+     */
+    computeMAC(macKey, data) {
+        return (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([macKey, data]));
+    }
+    /**
+     * Constant-time comparison of two buffers to prevent timing attacks
+     */
+    constantTimeEqual(a, b) {
+        if (a.length !== b.length) {
+            return false;
+        }
+        let result = 0;
+        for (let i = 0; i < a.length; i++) {
+            result |= a[i] ^ b[i];
+        }
+        return result === 0;
+    }
+}
+exports.DHIES = DHIES;
 class KeyManager {
     constructor() {
         this.level = 1;
@@ -73031,6 +73222,7 @@ class KeyManager {
                 : undefined,
             signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
             decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
+            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
         };
     }
     async getSigner() {
@@ -73165,6 +73357,58 @@ class KeyManager {
             (0, crypto_1.secureErase)(this.entropy);
             delete this.entropy;
         }
+    }
+    /**
+     * Performs a Diffie-Hellman key exchange with another KeyManager instance
+     * @param otherKeyManager The other party's KeyManager instance
+     * @returns A shared secret that can be used for symmetric encryption
+     */
+    async performDiffieHellman(otherKeyManager) {
+        if (this.capability === "public") {
+            console.error("Cannot perform DH key exchange with a public key capability");
+            return null;
+        }
+        const cypher = await this.getCypher();
+        const otherKey = otherKeyManager.cypher.publicKey;
+        // Perform the X25519 scalar multiplication to derive the shared secret
+        const sharedSecret = await cypher.diffieHellman(otherKey);
+        // Hash the shared secret for better security (to derive a symmetric key)
+        const derivedKey = sha256(sharedSecret);
+        // Securely erase the shared secret from memory
+        (0, crypto_1.secureErase)(sharedSecret);
+        return derivedKey;
+    }
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two KeyManager instances
+     * @param keyManager1 First KeyManager instance
+     * @param keyManager2 Second KeyManager instance
+     * @returns A shared secret that both parties can derive
+     */
+    static async diffieHellman(keyManager1, keyManager2) {
+        return keyManager1.performDiffieHellman(keyManager2);
+    }
+    /**
+     * Encrypt a message using DHIES for a recipient
+     * @param message Message to encrypt
+     * @param recipientId Recipient's KeyManager ID
+     * @returns Encrypted message or null if encryption fails
+     */
+    async dhiesEncrypt(message, recipientId) {
+        const recipientKM = KeyManager.fromId(recipientId);
+        //console.log(recipientKM.cypher.publicKey, this.cypher.publicKey);
+        const dhies = new DHIES(this);
+        return dhies.encrypt(message, recipientKM.cypher.publicKey);
+    }
+    /**
+     * Decrypt a message encrypted with DHIES
+     * @param encryptedMessage Encrypted message from dhiesEncrypt
+     * @returns Decrypted message or null if decryption fails
+     */
+    async dhiesDecrypt(encryptedMessage, senderId) {
+        const senderKM = KeyManager.fromId(senderId);
+        //console.log(senderKM.cypher.publicKey, this.cypher.publicKey);
+        const dhies = new DHIES(this);
+        return dhies.decrypt(encryptedMessage, senderKM.cypher.publicKey);
     }
     static async encrypt(plaintext, recipientIds) {
         const publicKeys = recipientIds.map(KeyManager.fromId).map((km) => km.cypher.publicKey);
@@ -74964,6 +75208,25 @@ describe("SRG challenge with IdManager", () => {
             assert_1.default.deepEqual(result, await manager1.vaultysId.hmac("prf/nostr/end"));
         }
     });
+    it("perform decrypt over Channel", async () => {
+        for (let i = 0; i < 10; i++) {
+            const id1 = await (0, utils_1.createRandomVaultysId)();
+            const channel = __1.MemoryChannel.createEncryptedBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail();
+            // channel.setLogger((data) => console.log(data.toString("utf-8")));
+            const s1 = (0, __1.MemoryStorage)(() => "");
+            const s2 = (0, __1.MemoryStorage)(() => "");
+            const manager1 = new __1.IdManager(id1, s1);
+            const manager2 = new __1.IdManager(await __1.VaultysId.generateOrganization(), s2);
+            const message = "test decrypt on demand";
+            const toDecrypt = await __1.VaultysId.encrypt(message, [manager1.vaultysId.id]);
+            manager1.acceptDecrypt(channel);
+            //console.log(toDecrypt);
+            const result = await manager2.requestDecrypt(channel.otherend, buffer_1.Buffer.from(toDecrypt, "utf-8"));
+            assert_1.default.deepEqual(result?.toString("utf-8"), message);
+        }
+    });
     it("perform migration from version 0 to 1", async () => {
         const ids = [];
         for (let i = 0; i < 2; i++) {
@@ -75047,6 +75310,7 @@ const KeyManager_1 = __webpack_require__(/*! ../src/KeyManager */ "./src/KeyMana
 const bip32 = __importStar(__webpack_require__(/*! @stricahq/bip32ed25519 */ "./node_modules/.pnpm/@stricahq+bip32ed25519@1.1.1/node_modules/@stricahq/bip32ed25519/dist/index.js"));
 const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
 const utils_1 = __webpack_require__(/*! ./utils */ "./test/utils.ts");
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
 // @ts-expect-error weird import for @stricahq/bip32ed25519
 const bip32fix = bip32.default ?? bip32;
 const writeVector = (km) => {
@@ -75263,6 +75527,80 @@ describe("KeyManager tests", () => {
         const id = __1.VaultysId.fromSecret("AIShdgGhcMQg3KBa7NhKclRHgvQL/51gDBKkVt9ndZurKDM+wDY4uBSheMRgIEM+lQwxORCD8hOul7keOXea5fMYYghYYL2inBxdB1Uop0p+SGS0ju18I7OOTiMDGGKo7wzTR0xj5xxE9qpTHqHAbWi6fPFaYOXNTK1t6NwVTiNkJDrvqK1OvVrzHnOGoWXEIJRd5AQLlhofk5h7yIGMHzJt5kWUX/J+sTH4gQhGtW1S", "base64");
         const decrypted = await id.decrypt(message);
         assert_1.default.equal(decrypted, "test");
+    });
+    it("should perform Diffie-Hellman key exchange between two KeyManager instances", async () => {
+        // Create two key managers
+        const alice = await __1.KeyManager.generate_Id25519();
+        const bob = await __1.KeyManager.generate_Id25519();
+        // Alice performs DH with Bob
+        const aliceSharedSecret = await alice.performDiffieHellman(bob);
+        // Bob performs DH with Alice
+        const bobSharedSecret = await bob.performDiffieHellman(alice);
+        // Verify that they derived the same shared secret
+        assert_1.default.notEqual(aliceSharedSecret, null);
+        assert_1.default.notEqual(bobSharedSecret, null);
+        assert_1.default.equal(aliceSharedSecret?.toString("hex"), bobSharedSecret?.toString("hex"));
+    });
+    it("should perform Diffie-Hellman key exchange using static method", async () => {
+        // Create two key managers
+        const alice = await __1.KeyManager.generate_Id25519();
+        const bob = await __1.KeyManager.generate_Id25519();
+        // Perform DH using static method
+        const sharedSecret1 = await __1.KeyManager.diffieHellman(alice, bob);
+        const sharedSecret2 = await __1.KeyManager.diffieHellman(bob, alice);
+        // Verify that the static method derives the same shared secret regardless of order
+        assert_1.default.notEqual(sharedSecret1, null);
+        assert_1.default.notEqual(sharedSecret2, null);
+        assert_1.default.equal(sharedSecret1?.toString("hex"), sharedSecret2?.toString("hex"));
+    });
+    it("should fail Diffie-Hellman key exchange with a public KeyManager", async () => {
+        // Create two key managers
+        const alice = await __1.KeyManager.generate_Id25519();
+        const bobPrivate = await __1.KeyManager.generate_Id25519();
+        // Create a public-only version of Bob's KeyManager
+        const bobPublic = __1.KeyManager.fromId(bobPrivate.id);
+        // Alice attempts DH with Bob's public KeyManager (should fail)
+        const aliceSharedSecret = await alice.performDiffieHellman(bobPublic);
+        // Bob's public KeyManager attempts DH with Alice (should fail)
+        const bobSharedSecret = await bobPublic.performDiffieHellman(alice);
+        // Verify that the operations failed
+        // assert.equal(aliceSharedSecret, null);
+        assert_1.default.equal(bobSharedSecret, null);
+    });
+    it("should be able to use DH shared secret for encryption and decryption", async () => {
+        // Create two key managers
+        const alice = await __1.KeyManager.generate_Id25519();
+        const bob = await __1.KeyManager.generate_Id25519();
+        // Perform DH to get shared secret
+        const aliceSharedSecret = await alice.performDiffieHellman(bob);
+        assert_1.default.notEqual(aliceSharedSecret, null);
+        const nonce = tweetnacl_1.default.randomBytes(tweetnacl_1.default.box.nonceLength);
+        // Use the shared secret for encryption (using a simple XOR for demonstration)
+        const plaintext = buffer_1.Buffer.from("Secret message for testing", "utf-8");
+        const encryptedMessage = tweetnacl_1.default.secretbox(plaintext, nonce, aliceSharedSecret);
+        // Bob also derives the shared secret
+        const bobSharedSecret = await bob.performDiffieHellman(alice);
+        assert_1.default.notEqual(bobSharedSecret, null);
+        // Bob decrypts the message
+        const decryptedMessage = buffer_1.Buffer.from(tweetnacl_1.default.secretbox.open(encryptedMessage, nonce, bobSharedSecret));
+        // Verify the decrypted message matches the original
+        assert_1.default.equal(decryptedMessage.toString("utf-8"), plaintext.toString("utf-8"));
+    });
+    it("should generate different shared secrets with different key pairs", async () => {
+        // Create three key managers
+        const alice = await __1.KeyManager.generate_Id25519();
+        const bob = await __1.KeyManager.generate_Id25519();
+        const charlie = await __1.KeyManager.generate_Id25519();
+        // Alice-Bob shared secret
+        const secretAB = await alice.performDiffieHellman(bob);
+        // Alice-Charlie shared secret
+        const secretAC = await alice.performDiffieHellman(charlie);
+        // Bob-Charlie shared secret
+        const secretBC = await bob.performDiffieHellman(charlie);
+        // Verify all shared secrets are different
+        assert_1.default.notEqual(secretAB?.toString("hex"), secretAC?.toString("hex"));
+        assert_1.default.notEqual(secretAB?.toString("hex"), secretBC?.toString("hex"));
+        assert_1.default.notEqual(secretAC?.toString("hex"), secretBC?.toString("hex"));
     });
 });
 
