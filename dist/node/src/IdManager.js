@@ -358,8 +358,8 @@ class IdManager {
         if (challenger.isComplete()) {
             channel.send(toDecrypt);
             const new_encrypted = await channel.receive();
-            const decrypted = await this.vaultysId.decrypt(new_encrypted.toString("utf-8"));
-            return buffer_1.Buffer.from(decrypted ?? "", "utf-8");
+            const decrypted = await this.vaultysId.dhiesDecrypt(new_encrypted, challenger.getContactId().id);
+            return decrypted;
         }
         else
             channel.send(buffer_1.Buffer.from([0]));
@@ -371,8 +371,8 @@ class IdManager {
                 const toDecrypt = await channel.receive();
                 const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
                 if (decrypted) {
-                    const encrypted = await this.vaultysId.encrypt(decrypted, [challenger.getContactId().id]);
-                    channel.send(buffer_1.Buffer.from(encrypted ?? "", "utf-8"));
+                    const encrypted = await this.vaultysId.dhiesEncrypt(decrypted, challenger.getContactId().id);
+                    channel.send(encrypted ?? buffer_1.Buffer.from([0]));
                 }
                 else
                     channel.send(buffer_1.Buffer.from([0]));

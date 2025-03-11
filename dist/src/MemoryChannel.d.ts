@@ -1,4 +1,4 @@
-import { Readable, Writable } from "stream";
+import { Readable, Stream, Writable } from "stream";
 import { Buffer } from "buffer/";
 export type Channel = {
     start(): Promise<void>;
@@ -10,13 +10,13 @@ export type Channel = {
 };
 export declare function StreamChannel(channel: Channel): {
     getReadStream: () => Readable;
-    getWriteStream: () => Writable;
+    getWriteStream: () => Stream.Writable;
     upload: (stream: Readable) => Promise<void>;
     uploadData: (data: Buffer) => Promise<void>;
     download: (stream: Writable) => Promise<void>;
     downloadData: () => Promise<Buffer>;
 };
-export declare function convertWebWritableStreamToNodeWritable(webWritableStream: WritableStream): Writable;
+export declare function convertWebWritableStreamToNodeWritable(webWritableStream: WritableStream): Stream.Writable;
 export declare function convertWebReadableStreamToNodeReadable(webReadableStream: ReadableStream): Readable;
 export declare class MemoryChannel implements Channel {
     name?: string;

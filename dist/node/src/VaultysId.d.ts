@@ -57,6 +57,19 @@ export default class VaultysId {
      * @returns A shared secret that both parties can derive
      */
     static diffieHellman(vaultysId1: VaultysId, vaultysId2: VaultysId): Promise<Buffer | null>;
+    /**
+     * Encrypt a message using DHIES for a recipient
+     * @param message Message to encrypt
+     * @param recipientId Recipient's VaultysId ID
+     * @returns Encrypted message or null if encryption fails
+     */
+    dhiesEncrypt(message: string | Buffer, recipientId: Buffer | string): Promise<Buffer | null>;
+    /**
+     * Decrypt a message encrypted with DHIES
+     * @param encryptedMessage Encrypted message from dhiesEncrypt
+     * @returns Decrypted message as Buffer or null if decryption fails
+     */
+    dhiesDecrypt(encryptedMessage: Buffer, senderId: Buffer | string): Promise<Buffer | null>;
     signChallenge(challenge: Buffer | string): Promise<Buffer>;
     verifyChallenge(challenge: Buffer | string, signature: Buffer | string, userVerification: boolean): boolean;
     signcrypt(plaintext: string, recipientIds: (Buffer | string)[]): Promise<string>;

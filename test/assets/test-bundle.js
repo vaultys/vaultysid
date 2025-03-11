@@ -1428,8 +1428,8 @@ class IdManager {
         if (challenger.isComplete()) {
             channel.send(toDecrypt);
             const new_encrypted = await channel.receive();
-            const decrypted = await this.vaultysId.decrypt(new_encrypted.toString("utf-8"));
-            return buffer_1.Buffer.from(decrypted ?? "", "utf-8");
+            const decrypted = await this.vaultysId.dhiesDecrypt(new_encrypted, challenger.getContactId().id);
+            return decrypted;
         }
         else
             channel.send(buffer_1.Buffer.from([0]));
@@ -1441,8 +1441,8 @@ class IdManager {
                 const toDecrypt = await channel.receive();
                 const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
                 if (decrypted) {
-                    const encrypted = await this.vaultysId.encrypt(decrypted, [challenger.getContactId().id]);
-                    channel.send(buffer_1.Buffer.from(encrypted ?? "", "utf-8"));
+                    const encrypted = await this.vaultysId.dhiesEncrypt(decrypted, challenger.getContactId().id);
+                    channel.send(encrypted ?? buffer_1.Buffer.from([0]));
                 }
                 else
                     channel.send(buffer_1.Buffer.from([0]));
@@ -1716,7 +1716,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.privateDerivePath = exports.publicDerivePath = void 0;
+exports.DHIES = exports.privateDerivePath = exports.publicDerivePath = void 0;
 const saltpack_1 = __webpack_require__(/*! @samuelthomas2774/saltpack */ "./node_modules/.pnpm/@samuelthomas2774+saltpack@0.3.2/node_modules/@samuelthomas2774/saltpack/dist/index.js");
 const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
@@ -1763,6 +1763,150 @@ const privateDerivePath = (node, path) => {
     return result;
 };
 exports.privateDerivePath = privateDerivePath;
+/**
+ * DHIES (Diffie-Hellman Integrated Encryption Scheme) for KeyManager
+ * Provides authenticated encryption using Diffie-Hellman key exchange
+ */
+class DHIES {
+    constructor(keyManager) {
+        this.keyManager = keyManager;
+    }
+    /**
+     * Encrypts a message for a recipient using DHIES
+     *
+     * @param message The plaintext message to encrypt
+     * @param recipientPublicKey The recipient's public key
+     * @returns Encrypted message with ephemeral public key and authentication tag, or null if encryption fails
+     */
+    async encrypt(message, recipientPublicKey) {
+        if (this.keyManager.capability === "public") {
+            console.error("Cannot encrypt with DHIES using a public KeyManager");
+            return null;
+        }
+        const cypher = await this.keyManager.getCypher();
+        // Convert message to Buffer if it's a string
+        const messageBuffer = typeof message === "string" ? buffer_1.Buffer.from(message, "utf8") : message;
+        try {
+            // Derive shared secret using recipient's public key and sender secret key
+            const sharedSecret = await cypher.diffieHellman(recipientPublicKey);
+            // Key derivation: derive encryption and MAC keys from shared secret
+            const kdfOutput = this.kdf(sharedSecret, this.keyManager.cypher.publicKey, recipientPublicKey);
+            const encryptionKey = kdfOutput.encryptionKey;
+            const macKey = kdfOutput.macKey;
+            // Encrypt the message using XChaCha20-Poly1305
+            const nonce = (0, crypto_1.randomBytes)(24); // 24 bytes nonce for XChaCha20-Poly1305
+            const ciphertext = buffer_1.Buffer.from(tweetnacl_1.default.secretbox(messageBuffer, nonce, encryptionKey));
+            // Compute MAC (Message Authentication Code)
+            const dataToAuthenticate = buffer_1.Buffer.concat([this.keyManager.cypher.publicKey, nonce, ciphertext]);
+            const mac = this.computeMAC(macKey, dataToAuthenticate);
+            // Construct the final encrypted message: nonce + ciphertext + MAC
+            const encryptedMessage = buffer_1.Buffer.concat([nonce, ciphertext, mac]);
+            // Securely erase sensitive data
+            (0, crypto_1.secureErase)(sharedSecret);
+            (0, crypto_1.secureErase)(encryptionKey);
+            (0, crypto_1.secureErase)(macKey);
+            return encryptedMessage;
+        }
+        catch (error) {
+            console.error("DHIES encryption failed:", error);
+            return null;
+        }
+    }
+    /**
+     * Decrypts a message encrypted with DHIES
+     *
+     * @param encryptedMessage The complete encrypted message from the encrypt method
+     * @returns Decrypted message as a Buffer, or null if decryption fails
+     */
+    async decrypt(encryptedMessage, senderPublicKey) {
+        if (this.keyManager.capability === "public") {
+            console.error("Cannot decrypt with DHIES using a public KeyManager");
+            return null;
+        }
+        try {
+            // Extract components from the encrypted message
+            // Format: nonce (24 bytes) + ciphertext + MAC (32 bytes)
+            const nonce = encryptedMessage.slice(0, 24);
+            const mac = encryptedMessage.slice(encryptedMessage.length - 32);
+            const ciphertext = encryptedMessage.slice(24, encryptedMessage.length - 32);
+            const cypher = await this.keyManager.getCypher();
+            // Derive shared secret using sender public key and recipient secret key
+            const sharedSecret = await cypher.diffieHellman(senderPublicKey);
+            // Key derivation: derive encryption and MAC keys
+            const kdfOutput = this.kdf(sharedSecret, senderPublicKey, this.keyManager.cypher.publicKey);
+            const encryptionKey = kdfOutput.encryptionKey;
+            const macKey = kdfOutput.macKey;
+            // Verify MAC
+            const dataToAuthenticate = buffer_1.Buffer.concat([senderPublicKey, nonce, ciphertext]);
+            const computedMac = this.computeMAC(macKey, dataToAuthenticate);
+            if (!this.constantTimeEqual(mac, computedMac)) {
+                //console.log(mac, computedMac);
+                console.error("DHIES: MAC verification failed");
+                return null;
+            }
+            // Decrypt the ciphertext
+            const plaintext = tweetnacl_1.default.secretbox.open(ciphertext, nonce, encryptionKey);
+            if (!plaintext) {
+                console.error("DHIES: Decryption failed");
+                return null;
+            }
+            const result = buffer_1.Buffer.from(plaintext);
+            // Securely erase sensitive data
+            (0, crypto_1.secureErase)(sharedSecret);
+            (0, crypto_1.secureErase)(encryptionKey);
+            (0, crypto_1.secureErase)(macKey);
+            return result;
+        }
+        catch (error) {
+            console.error("DHIES decryption failed:", error);
+            return null;
+        }
+    }
+    /**
+     * Key Derivation Function: Derives encryption and MAC keys from the shared secret
+     */
+    kdf(sharedSecret, ephemeralPublicKey, staticPublicKey) {
+        // Create a context for the KDF to ensure different keys for different uses
+        const context = buffer_1.Buffer.concat([buffer_1.Buffer.from("DHIES-KDF"), ephemeralPublicKey, staticPublicKey]);
+        // Derive encryption key: HKDF-like construction
+        const encryptionKeyMaterial = (0, crypto_1.hash)("sha512", buffer_1.Buffer.concat([
+            sharedSecret,
+            context,
+            buffer_1.Buffer.from([0x01]), // Domain separation byte
+        ]));
+        // Derive MAC key (using a different domain separation byte)
+        const macKeyMaterial = (0, crypto_1.hash)("sha512", buffer_1.Buffer.concat([
+            sharedSecret,
+            context,
+            buffer_1.Buffer.from([0x02]), // Domain separation byte
+        ]));
+        // Use first 32 bytes of each as the actual keys (for NaCl's secretbox)
+        return {
+            encryptionKey: encryptionKeyMaterial.slice(0, 32),
+            macKey: macKeyMaterial.slice(0, 32),
+        };
+    }
+    /**
+     * Computes MAC for authenticated encryption
+     */
+    computeMAC(macKey, data) {
+        return (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([macKey, data]));
+    }
+    /**
+     * Constant-time comparison of two buffers to prevent timing attacks
+     */
+    constantTimeEqual(a, b) {
+        if (a.length !== b.length) {
+            return false;
+        }
+        let result = 0;
+        for (let i = 0; i < a.length; i++) {
+            result |= a[i] ^ b[i];
+        }
+        return result === 0;
+    }
+}
+exports.DHIES = DHIES;
 class KeyManager {
     constructor() {
         this.level = 1;
@@ -1966,7 +2110,7 @@ class KeyManager {
      * @returns A shared secret that can be used for symmetric encryption
      */
     async performDiffieHellman(otherKeyManager) {
-        if (this.capability === "public" || !this.cypher.secretKey) {
+        if (this.capability === "public") {
             console.error("Cannot perform DH key exchange with a public key capability");
             return null;
         }
@@ -1988,6 +2132,29 @@ class KeyManager {
      */
     static async diffieHellman(keyManager1, keyManager2) {
         return keyManager1.performDiffieHellman(keyManager2);
+    }
+    /**
+     * Encrypt a message using DHIES for a recipient
+     * @param message Message to encrypt
+     * @param recipientId Recipient's KeyManager ID
+     * @returns Encrypted message or null if encryption fails
+     */
+    async dhiesEncrypt(message, recipientId) {
+        const recipientKM = KeyManager.fromId(recipientId);
+        //console.log(recipientKM.cypher.publicKey, this.cypher.publicKey);
+        const dhies = new DHIES(this);
+        return dhies.encrypt(message, recipientKM.cypher.publicKey);
+    }
+    /**
+     * Decrypt a message encrypted with DHIES
+     * @param encryptedMessage Encrypted message from dhiesEncrypt
+     * @returns Decrypted message or null if decryption fails
+     */
+    async dhiesDecrypt(encryptedMessage, senderId) {
+        const senderKM = KeyManager.fromId(senderId);
+        //console.log(senderKM.cypher.publicKey, this.cypher.publicKey);
+        const dhies = new DHIES(this);
+        return dhies.decrypt(encryptedMessage, senderKM.cypher.publicKey);
     }
     static async encrypt(plaintext, recipientIds) {
         const publicKeys = recipientIds.map(KeyManager.fromId).map((km) => km.cypher.publicKey);
@@ -2581,6 +2748,37 @@ class VaultysId {
      */
     static async diffieHellman(vaultysId1, vaultysId2) {
         return vaultysId1.performDiffieHellman(vaultysId2);
+    }
+    /**
+     * Encrypt a message using DHIES for a recipient
+     * @param message Message to encrypt
+     * @param recipientId Recipient's VaultysId ID
+     * @returns Encrypted message or null if encryption fails
+     */
+    async dhiesEncrypt(message, recipientId) {
+        let cleanId;
+        if (typeof recipientId === "string") {
+            cleanId = buffer_1.Buffer.from(recipientId.slice(2), "hex");
+        }
+        else {
+            cleanId = recipientId.slice(1);
+        }
+        return this.keyManager.dhiesEncrypt(message, cleanId);
+    }
+    /**
+     * Decrypt a message encrypted with DHIES
+     * @param encryptedMessage Encrypted message from dhiesEncrypt
+     * @returns Decrypted message as Buffer or null if decryption fails
+     */
+    async dhiesDecrypt(encryptedMessage, senderId) {
+        let cleanId;
+        if (typeof senderId === "string") {
+            cleanId = buffer_1.Buffer.from(senderId.slice(2), "hex");
+        }
+        else {
+            cleanId = senderId.slice(1);
+        }
+        return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
     }
     async signChallenge(challenge) {
         if (typeof challenge == "string") {
@@ -41698,7 +41896,7 @@ module.exports = typeof Reflect !== 'undefined' && Reflect && Reflect.apply;
 "use strict";
 
 
-var GetIntrinsic = __webpack_require__(/*! get-intrinsic */ "./node_modules/.pnpm/get-intrinsic@1.2.7/node_modules/get-intrinsic/index.js");
+var GetIntrinsic = __webpack_require__(/*! get-intrinsic */ "./node_modules/.pnpm/get-intrinsic@1.3.0/node_modules/get-intrinsic/index.js");
 
 var callBind = __webpack_require__(/*! ./ */ "./node_modules/.pnpm/call-bind@1.0.8/node_modules/call-bind/index.js");
 
@@ -41750,16 +41948,16 @@ if ($defineProperty) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/call-bound@1.0.3/node_modules/call-bound/index.js":
+/***/ "./node_modules/.pnpm/call-bound@1.0.4/node_modules/call-bound/index.js":
 /*!******************************************************************************!*\
-  !*** ./node_modules/.pnpm/call-bound@1.0.3/node_modules/call-bound/index.js ***!
+  !*** ./node_modules/.pnpm/call-bound@1.0.4/node_modules/call-bound/index.js ***!
   \******************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 "use strict";
 
 
-var GetIntrinsic = __webpack_require__(/*! get-intrinsic */ "./node_modules/.pnpm/get-intrinsic@1.2.7/node_modules/get-intrinsic/index.js");
+var GetIntrinsic = __webpack_require__(/*! get-intrinsic */ "./node_modules/.pnpm/get-intrinsic@1.3.0/node_modules/get-intrinsic/index.js");
 
 var callBindBasic = __webpack_require__(/*! call-bind-apply-helpers */ "./node_modules/.pnpm/call-bind-apply-helpers@1.0.2/node_modules/call-bind-apply-helpers/index.js");
 
@@ -41768,10 +41966,11 @@ var $indexOf = callBindBasic([GetIntrinsic('%String.prototype.indexOf%')]);
 
 /** @type {import('.')} */
 module.exports = function callBoundIntrinsic(name, allowMissing) {
-	// eslint-disable-next-line no-extra-parens
-	var intrinsic = /** @type {Parameters<typeof callBindBasic>[0][0]} */ (GetIntrinsic(name, !!allowMissing));
+	/* eslint no-extra-parens: 0 */
+
+	var intrinsic = /** @type {(this: unknown, ...args: unknown[]) => unknown} */ (GetIntrinsic(name, !!allowMissing));
 	if (typeof intrinsic === 'function' && $indexOf(name, '.prototype.') > -1) {
-		return callBindBasic([intrinsic]);
+		return callBindBasic(/** @type {const} */ ([intrinsic]));
 	}
 	return intrinsic;
 };
@@ -53090,9 +53289,9 @@ module.exports = Function.prototype.bind || implementation;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/get-intrinsic@1.2.7/node_modules/get-intrinsic/index.js":
+/***/ "./node_modules/.pnpm/get-intrinsic@1.3.0/node_modules/get-intrinsic/index.js":
 /*!************************************************************************************!*\
-  !*** ./node_modules/.pnpm/get-intrinsic@1.2.7/node_modules/get-intrinsic/index.js ***!
+  !*** ./node_modules/.pnpm/get-intrinsic@1.3.0/node_modules/get-intrinsic/index.js ***!
   \************************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
@@ -53189,6 +53388,7 @@ var INTRINSICS = {
 	'%Error%': $Error,
 	'%eval%': eval, // eslint-disable-line no-eval
 	'%EvalError%': $EvalError,
+	'%Float16Array%': typeof Float16Array === 'undefined' ? undefined : Float16Array,
 	'%Float32Array%': typeof Float32Array === 'undefined' ? undefined : Float32Array,
 	'%Float64Array%': typeof Float64Array === 'undefined' ? undefined : Float64Array,
 	'%FinalizationRegistry%': typeof FinalizationRegistry === 'undefined' ? undefined : FinalizationRegistry,
@@ -55495,7 +55695,7 @@ if (typeof Object.create === 'function') {
 
 
 var hasToStringTag = __webpack_require__(/*! has-tostringtag/shams */ "./node_modules/.pnpm/has-tostringtag@1.0.2/node_modules/has-tostringtag/shams.js")();
-var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.3/node_modules/call-bound/index.js");
+var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.4/node_modules/call-bound/index.js");
 
 var $toString = callBound('Object.prototype.toString');
 
@@ -55661,7 +55861,7 @@ module.exports = reflectApply
 "use strict";
 
 
-var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.3/node_modules/call-bound/index.js");
+var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.4/node_modules/call-bound/index.js");
 var safeRegexTest = __webpack_require__(/*! safe-regex-test */ "./node_modules/.pnpm/safe-regex-test@1.1.0/node_modules/safe-regex-test/index.js");
 var isFnRegex = safeRegexTest(/^\s*(?:function)?\*/);
 var hasToStringTag = __webpack_require__(/*! has-tostringtag/shams */ "./node_modules/.pnpm/has-tostringtag@1.0.2/node_modules/has-tostringtag/shams.js")();
@@ -55816,7 +56016,7 @@ module.exports = function shimNumberIsNaN() {
 "use strict";
 
 
-var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.3/node_modules/call-bound/index.js");
+var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.4/node_modules/call-bound/index.js");
 var hasToStringTag = __webpack_require__(/*! has-tostringtag/shams */ "./node_modules/.pnpm/has-tostringtag@1.0.2/node_modules/has-tostringtag/shams.js")();
 var hasOwn = __webpack_require__(/*! hasown */ "./node_modules/.pnpm/hasown@2.0.2/node_modules/hasown/index.js");
 var gOPD = __webpack_require__(/*! gopd */ "./node_modules/.pnpm/gopd@1.2.0/node_modules/gopd/index.js");
@@ -55896,7 +56096,7 @@ module.exports = fn;
 "use strict";
 
 
-var whichTypedArray = __webpack_require__(/*! which-typed-array */ "./node_modules/.pnpm/which-typed-array@1.1.18/node_modules/which-typed-array/index.js");
+var whichTypedArray = __webpack_require__(/*! which-typed-array */ "./node_modules/.pnpm/which-typed-array@1.1.19/node_modules/which-typed-array/index.js");
 
 /** @type {import('.')} */
 module.exports = function isTypedArray(value) {
@@ -58276,7 +58476,7 @@ module.exports = function isArguments(value) {
 // modified from https://github.com/es-shims/es6-shim
 var objectKeys = __webpack_require__(/*! object-keys */ "./node_modules/.pnpm/object-keys@1.1.1/node_modules/object-keys/index.js");
 var hasSymbols = __webpack_require__(/*! has-symbols/shams */ "./node_modules/.pnpm/has-symbols@1.1.0/node_modules/has-symbols/shams.js")();
-var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.3/node_modules/call-bound/index.js");
+var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.4/node_modules/call-bound/index.js");
 var $Object = __webpack_require__(/*! es-object-atoms */ "./node_modules/.pnpm/es-object-atoms@1.1.1/node_modules/es-object-atoms/index.js");
 var $push = callBound('Array.prototype.push');
 var $propIsEnumerable = callBound('Object.prototype.propertyIsEnumerable');
@@ -65488,7 +65688,7 @@ SafeBuffer.allocUnsafeSlow = function (size) {
 "use strict";
 
 
-var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.3/node_modules/call-bound/index.js");
+var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.4/node_modules/call-bound/index.js");
 var isRegex = __webpack_require__(/*! is-regex */ "./node_modules/.pnpm/is-regex@1.2.1/node_modules/is-regex/index.js");
 
 var $exec = callBound('RegExp.prototype.exec');
@@ -65516,7 +65716,7 @@ module.exports = function regexTester(regex) {
 "use strict";
 
 
-var GetIntrinsic = __webpack_require__(/*! get-intrinsic */ "./node_modules/.pnpm/get-intrinsic@1.2.7/node_modules/get-intrinsic/index.js");
+var GetIntrinsic = __webpack_require__(/*! get-intrinsic */ "./node_modules/.pnpm/get-intrinsic@1.3.0/node_modules/get-intrinsic/index.js");
 var define = __webpack_require__(/*! define-data-property */ "./node_modules/.pnpm/define-data-property@1.1.4/node_modules/define-data-property/index.js");
 var hasDescriptors = __webpack_require__(/*! has-property-descriptors */ "./node_modules/.pnpm/has-property-descriptors@1.0.2/node_modules/has-property-descriptors/index.js")();
 var gOPD = __webpack_require__(/*! gopd */ "./node_modules/.pnpm/gopd@1.2.0/node_modules/gopd/index.js");
@@ -71546,7 +71746,7 @@ module.exports = function isBuffer(arg) {
 
 var isArgumentsObject = __webpack_require__(/*! is-arguments */ "./node_modules/.pnpm/is-arguments@1.2.0/node_modules/is-arguments/index.js");
 var isGeneratorFunction = __webpack_require__(/*! is-generator-function */ "./node_modules/.pnpm/is-generator-function@1.1.0/node_modules/is-generator-function/index.js");
-var whichTypedArray = __webpack_require__(/*! which-typed-array */ "./node_modules/.pnpm/which-typed-array@1.1.18/node_modules/which-typed-array/index.js");
+var whichTypedArray = __webpack_require__(/*! which-typed-array */ "./node_modules/.pnpm/which-typed-array@1.1.19/node_modules/which-typed-array/index.js");
 var isTypedArray = __webpack_require__(/*! is-typed-array */ "./node_modules/.pnpm/is-typed-array@1.1.15/node_modules/is-typed-array/index.js");
 
 function uncurryThis(f) {
@@ -72755,9 +72955,9 @@ exports.createContext = Script.createContext = function (context) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/which-typed-array@1.1.18/node_modules/which-typed-array/index.js":
+/***/ "./node_modules/.pnpm/which-typed-array@1.1.19/node_modules/which-typed-array/index.js":
 /*!*********************************************************************************************!*\
-  !*** ./node_modules/.pnpm/which-typed-array@1.1.18/node_modules/which-typed-array/index.js ***!
+  !*** ./node_modules/.pnpm/which-typed-array@1.1.19/node_modules/which-typed-array/index.js ***!
   \*********************************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
@@ -72767,10 +72967,10 @@ exports.createContext = Script.createContext = function (context) {
 var forEach = __webpack_require__(/*! for-each */ "./node_modules/.pnpm/for-each@0.3.5/node_modules/for-each/index.js");
 var availableTypedArrays = __webpack_require__(/*! available-typed-arrays */ "./node_modules/.pnpm/available-typed-arrays@1.0.7/node_modules/available-typed-arrays/index.js");
 var callBind = __webpack_require__(/*! call-bind */ "./node_modules/.pnpm/call-bind@1.0.8/node_modules/call-bind/index.js");
-var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.3/node_modules/call-bound/index.js");
+var callBound = __webpack_require__(/*! call-bound */ "./node_modules/.pnpm/call-bound@1.0.4/node_modules/call-bound/index.js");
 var gOPD = __webpack_require__(/*! gopd */ "./node_modules/.pnpm/gopd@1.2.0/node_modules/gopd/index.js");
+var getProto = __webpack_require__(/*! get-proto */ "./node_modules/.pnpm/get-proto@1.0.1/node_modules/get-proto/index.js");
 
-/** @type {(O: object) => string} */
 var $toString = callBound('Object.prototype.toString');
 var hasToStringTag = __webpack_require__(/*! has-tostringtag/shams */ "./node_modules/.pnpm/has-tostringtag@1.0.2/node_modules/has-tostringtag/shams.js")();
 
@@ -72778,7 +72978,6 @@ var g = typeof globalThis === 'undefined' ? __webpack_require__.g : globalThis;
 var typedArrays = availableTypedArrays();
 
 var $slice = callBound('String.prototype.slice');
-var getPrototypeOf = Object.getPrototypeOf; // require('getprototypeof');
 
 /** @type {<T = unknown>(array: readonly T[], value: unknown) => number} */
 var $indexOf = callBound('Array.prototype.indexOf', true) || function indexOf(array, value) {
@@ -72790,18 +72989,18 @@ var $indexOf = callBound('Array.prototype.indexOf', true) || function indexOf(ar
 	return -1;
 };
 
-/** @typedef {(receiver: import('.').TypedArray) => string | typeof Uint8Array.prototype.slice.call | typeof Uint8Array.prototype.set.call} Getter */
-/** @type {{ [k in `\$${import('.').TypedArrayName}`]?: Getter } & { __proto__: null }} */
+/** @typedef {import('./types').Getter} Getter */
+/** @type {import('./types').Cache} */
 var cache = { __proto__: null };
-if (hasToStringTag && gOPD && getPrototypeOf) {
+if (hasToStringTag && gOPD && getProto) {
 	forEach(typedArrays, function (typedArray) {
 		var arr = new g[typedArray]();
-		if (Symbol.toStringTag in arr) {
-			var proto = getPrototypeOf(arr);
+		if (Symbol.toStringTag in arr && getProto) {
+			var proto = getProto(arr);
 			// @ts-expect-error TS won't narrow inside a closure
 			var descriptor = gOPD(proto, Symbol.toStringTag);
-			if (!descriptor) {
-				var superProto = getPrototypeOf(proto);
+			if (!descriptor && proto) {
+				var superProto = getProto(proto);
 				// @ts-expect-error TS won't narrow inside a closure
 				descriptor = gOPD(superProto, Symbol.toStringTag);
 			}
@@ -72814,8 +73013,12 @@ if (hasToStringTag && gOPD && getPrototypeOf) {
 		var arr = new g[typedArray]();
 		var fn = arr.slice || arr.set;
 		if (fn) {
-			// @ts-expect-error TODO: fix
-			cache['$' + typedArray] = callBind(fn);
+			cache[
+				/** @type {`$${import('.').TypedArrayName}`} */ ('$' + typedArray)
+			] = /** @type {import('./types').BoundSlice | import('./types').BoundSet} */ (
+				// @ts-expect-error TODO FIXME
+				callBind(fn)
+			);
 		}
 	});
 }
@@ -72824,15 +73027,14 @@ if (hasToStringTag && gOPD && getPrototypeOf) {
 var tryTypedArrays = function tryAllTypedArrays(value) {
 	/** @type {ReturnType<typeof tryAllTypedArrays>} */ var found = false;
 	forEach(
-		// eslint-disable-next-line no-extra-parens
-		/** @type {Record<`\$${TypedArrayName}`, Getter>} */ /** @type {any} */ (cache),
+		/** @type {Record<`\$${import('.').TypedArrayName}`, Getter>} */ (cache),
 		/** @type {(getter: Getter, name: `\$${import('.').TypedArrayName}`) => void} */
 		function (getter, typedArray) {
 			if (!found) {
 				try {
-				// @ts-expect-error TODO: fix
+					// @ts-expect-error a throw is fine here
 					if ('$' + getter(value) === typedArray) {
-						found = $slice(typedArray, 1);
+						found = /** @type {import('.').TypedArrayName} */ ($slice(typedArray, 1));
 					}
 				} catch (e) { /**/ }
 			}
@@ -72845,14 +73047,13 @@ var tryTypedArrays = function tryAllTypedArrays(value) {
 var trySlices = function tryAllSlices(value) {
 	/** @type {ReturnType<typeof tryAllSlices>} */ var found = false;
 	forEach(
-		// eslint-disable-next-line no-extra-parens
-		/** @type {Record<`\$${TypedArrayName}`, Getter>} */ /** @type {any} */ (cache),
-		/** @type {(getter: typeof cache, name: `\$${import('.').TypedArrayName}`) => void} */ function (getter, name) {
+		/** @type {Record<`\$${import('.').TypedArrayName}`, Getter>} */(cache),
+		/** @type {(getter: Getter, name: `\$${import('.').TypedArrayName}`) => void} */ function (getter, name) {
 			if (!found) {
 				try {
-					// @ts-expect-error TODO: fix
+					// @ts-expect-error a throw is fine here
 					getter(value);
-					found = $slice(name, 1);
+					found = /** @type {import('.').TypedArrayName} */ ($slice(name, 1));
 				} catch (e) { /**/ }
 			}
 		}

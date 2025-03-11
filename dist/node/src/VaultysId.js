@@ -224,6 +224,37 @@ class VaultysId {
     static async diffieHellman(vaultysId1, vaultysId2) {
         return vaultysId1.performDiffieHellman(vaultysId2);
     }
+    /**
+     * Encrypt a message using DHIES for a recipient
+     * @param message Message to encrypt
+     * @param recipientId Recipient's VaultysId ID
+     * @returns Encrypted message or null if encryption fails
+     */
+    async dhiesEncrypt(message, recipientId) {
+        let cleanId;
+        if (typeof recipientId === "string") {
+            cleanId = buffer_1.Buffer.from(recipientId.slice(2), "hex");
+        }
+        else {
+            cleanId = recipientId.slice(1);
+        }
+        return this.keyManager.dhiesEncrypt(message, cleanId);
+    }
+    /**
+     * Decrypt a message encrypted with DHIES
+     * @param encryptedMessage Encrypted message from dhiesEncrypt
+     * @returns Decrypted message as Buffer or null if decryption fails
+     */
+    async dhiesDecrypt(encryptedMessage, senderId) {
+        let cleanId;
+        if (typeof senderId === "string") {
+            cleanId = buffer_1.Buffer.from(senderId.slice(2), "hex");
+        }
+        else {
+            cleanId = senderId.slice(1);
+        }
+        return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
+    }
     async signChallenge(challenge) {
         if (typeof challenge == "string") {
             challenge = buffer_1.Buffer.from(challenge, "hex");
