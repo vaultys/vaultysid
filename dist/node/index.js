@@ -62,3 +62,8 @@ const crypto = __importStar(require("./src/crypto"));
 exports.crypto = crypto;
 const Buffer = crypto.Buffer;
 exports.Buffer = Buffer;
+if (typeof Symbol.dispose === "undefined") {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    Symbol.dispose = Symbol("Symbol.dispose");
+}

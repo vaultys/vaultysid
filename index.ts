@@ -11,6 +11,12 @@ import CryptoChannel from "./src/cryptoChannel";
 import * as crypto from "./src/crypto";
 const Buffer = crypto.Buffer;
 
+if (typeof Symbol.dispose === "undefined") {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  Symbol.dispose = Symbol("Symbol.dispose");
+}
+
 export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
 
 export type { Channel, Store };
