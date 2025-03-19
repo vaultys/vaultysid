@@ -175,6 +175,9 @@ class MemoryChannel {
         output.setChannel(input);
         return input;
     }
+    onConnected(callback) {
+        this._onConnected = callback;
+    }
     static createEncryptedBidirectionnal(key = cryptoChannel_1.default.generateKey()) {
         const input = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
         const output = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
@@ -206,6 +209,8 @@ class MemoryChannel {
         this.lock = true;
         const receiver = this.otherend.receiver;
         delete this.otherend.receiver;
+        this.otherend._onConnected?.();
+        delete this.otherend._onConnected;
         if (this.logger)
             this.logger(data);
         if (this.injector) {

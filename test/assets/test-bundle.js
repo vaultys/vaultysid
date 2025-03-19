@@ -72,6 +72,11 @@ const crypto = __importStar(__webpack_require__(/*! ./src/crypto */ "./dist/node
 exports.crypto = crypto;
 const Buffer = crypto.Buffer;
 exports.Buffer = Buffer;
+if (typeof Symbol.dispose === "undefined") {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    Symbol.dispose = Symbol("Symbol.dispose");
+}
 
 
 /***/ }),
@@ -2366,6 +2371,9 @@ class MemoryChannel {
         output.setChannel(input);
         return input;
     }
+    onConnected(callback) {
+        this._onConnected = callback;
+    }
     static createEncryptedBidirectionnal(key = cryptoChannel_1.default.generateKey()) {
         const input = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
         const output = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
@@ -2397,6 +2405,8 @@ class MemoryChannel {
         this.lock = true;
         const receiver = this.otherend.receiver;
         delete this.otherend.receiver;
+        this.otherend._onConnected?.();
+        delete this.otherend._onConnected;
         if (this.logger)
             this.logger(data);
         if (this.injector) {
@@ -73242,8 +73252,10 @@ class DHIES {
         // Convert message to Buffer if it's a string
         const messageBuffer = typeof message === "string" ? buffer_1.Buffer.from(message, "utf8") : message;
         try {
+            const ephemeralKey = (0, crypto_1.randomBytes)(32); // Generate a random 32-byte key for ephemeral key
             // Derive shared secret using recipient's public key and sender secret key
-            const sharedSecret = await cypher.diffieHellman(recipientPublicKey);
+            const dh = await cypher.diffieHellman(recipientPublicKey);
+            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKey, dh));
             // Key derivation: derive encryption and MAC keys from shared secret
             const kdfOutput = this.kdf(sharedSecret, this.keyManager.cypher.publicKey, recipientPublicKey);
             const encryptionKey = kdfOutput.encryptionKey;
@@ -73254,10 +73266,11 @@ class DHIES {
             // Compute MAC (Message Authentication Code)
             const dataToAuthenticate = buffer_1.Buffer.concat([this.keyManager.cypher.publicKey, nonce, ciphertext]);
             const mac = this.computeMAC(macKey, dataToAuthenticate);
-            // Construct the final encrypted message: nonce + ciphertext + MAC
-            const encryptedMessage = buffer_1.Buffer.concat([nonce, ciphertext, mac]);
+            // Construct the final encrypted message: nonce + ephemeralKey + ciphertext + MAC
+            const encryptedMessage = buffer_1.Buffer.concat([nonce, ephemeralKey, ciphertext, mac]);
             // Securely erase sensitive data
             (0, crypto_1.secureErase)(sharedSecret);
+            (0, crypto_1.secureErase)(dh);
             (0, crypto_1.secureErase)(encryptionKey);
             (0, crypto_1.secureErase)(macKey);
             return encryptedMessage;
@@ -73280,13 +73293,15 @@ class DHIES {
         }
         try {
             // Extract components from the encrypted message
-            // Format: nonce (24 bytes) + ciphertext + MAC (32 bytes)
+            // Format: nonce (24 bytes) + ephemeralKey (32 bytes) + ciphertext + MAC (32 bytes)
             const nonce = encryptedMessage.slice(0, 24);
+            const ephemeralKey = encryptedMessage.slice(24, 56);
             const mac = encryptedMessage.slice(encryptedMessage.length - 32);
-            const ciphertext = encryptedMessage.slice(24, encryptedMessage.length - 32);
+            const ciphertext = encryptedMessage.slice(56, encryptedMessage.length - 32);
             const cypher = await this.keyManager.getCypher();
             // Derive shared secret using sender public key and recipient secret key
-            const sharedSecret = await cypher.diffieHellman(senderPublicKey);
+            const dh = await cypher.diffieHellman(senderPublicKey);
+            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKey, dh));
             // Key derivation: derive encryption and MAC keys
             const kdfOutput = this.kdf(sharedSecret, senderPublicKey, this.keyManager.cypher.publicKey);
             const encryptionKey = kdfOutput.encryptionKey;
@@ -73821,6 +73836,9 @@ class MemoryChannel {
         output.setChannel(input);
         return input;
     }
+    onConnected(callback) {
+        this._onConnected = callback;
+    }
     static createEncryptedBidirectionnal(key = cryptoChannel_1.default.generateKey()) {
         const input = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
         const output = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
@@ -73852,6 +73870,8 @@ class MemoryChannel {
         this.lock = true;
         const receiver = this.otherend.receiver;
         delete this.otherend.receiver;
+        this.otherend._onConnected?.();
+        delete this.otherend._onConnected;
         if (this.logger)
             this.logger(data);
         if (this.injector) {
@@ -75938,7 +75958,8 @@ const createRequest = (alg) => {
         },
     };
 };
-let attestation, attestationSafe;
+let attestation;
+let attestationSafe;
 describe("SoftCredentials", () => {
     it("create attestation (ECDSA)", async () => {
         attestation = await SoftCredentials_1.default.create(createRequest(-7));

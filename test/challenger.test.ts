@@ -3,7 +3,6 @@ import { Buffer } from "buffer/";
 import assert from "assert";
 import "./shims";
 import { randomBytes } from "../src/crypto";
-import SoftCredentials from "../src/platform/SoftCredentials";
 import { createRandomVaultysId } from "./utils";
 
 const testCertificate = (rogueCert: Buffer) => {

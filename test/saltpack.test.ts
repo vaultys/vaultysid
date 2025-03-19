@@ -1,4 +1,3 @@
-import { VaultysId } from "../";
 import assert from "assert";
 import "./shims";
 import { createRandomVaultysId } from "./utils";

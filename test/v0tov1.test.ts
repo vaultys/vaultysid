@@ -1,5 +1,4 @@
 import { Buffer } from "buffer/";
-import SoftCredentials from "../src/platform/SoftCredentials";
 import { VaultysId, Challenger, IdManager, MemoryChannel, MemoryStorage } from "../";
 import assert from "assert";
 import "./shims";

@@ -9,6 +9,7 @@ export type Channel = {
   close(): Promise<void>;
   send(data: Buffer): Promise<void>;
   receive(): Promise<Buffer>;
+  onConnected(callback: () => void): void;
   getConnectionString(): string;
   fromConnectionString(conn: string, options?: any): Channel | null;
 };
@@ -181,6 +182,7 @@ export class MemoryChannel implements Channel {
   receiver?: (data: Buffer) => void;
   logger?: (data: Buffer) => void;
   injector?: (data: Buffer) => Promise<Buffer> | Buffer;
+  _onConnected?: () => void;
 
   setChannel(chan: MemoryChannel, name?: string) {
     this.name = name;
@@ -193,6 +195,10 @@ export class MemoryChannel implements Channel {
     input.setChannel(output);
     output.setChannel(input);
     return input;
+  }
+
+  onConnected(callback: () => void) {
+    this._onConnected = callback;
   }
 
   static createEncryptedBidirectionnal(key: Buffer = cc.generateKey()) {
@@ -232,6 +238,8 @@ export class MemoryChannel implements Channel {
     this.lock = true;
     const receiver = this.otherend.receiver;
     delete this.otherend.receiver;
+    this.otherend._onConnected?.();
+    delete this.otherend._onConnected;
     if (this.logger) this.logger(data);
     if (this.injector) {
       const injected = await this.injector(data);

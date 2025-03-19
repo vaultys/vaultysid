@@ -2,7 +2,7 @@ import { Buffer } from "buffer/";
 import Fido2Manager from "../src/Fido2Manager";
 import SoftCredentials from "../src/platform/SoftCredentials";
 import assert from "assert";
-import { KeyManager, VaultysId } from "../";
+import { VaultysId } from "../";
 import "./shims";
 import nacl from "tweetnacl";
 

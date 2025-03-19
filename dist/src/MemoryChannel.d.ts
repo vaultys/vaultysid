@@ -5,6 +5,7 @@ export type Channel = {
     close(): Promise<void>;
     send(data: Buffer): Promise<void>;
     receive(): Promise<Buffer>;
+    onConnected(callback: () => void): void;
     getConnectionString(): string;
     fromConnectionString(conn: string, options?: any): Channel | null;
 };
@@ -25,8 +26,10 @@ export declare class MemoryChannel implements Channel {
     receiver?: (data: Buffer) => void;
     logger?: (data: Buffer) => void;
     injector?: (data: Buffer) => Promise<Buffer> | Buffer;
+    _onConnected?: () => void;
     setChannel(chan: MemoryChannel, name?: string): void;
     static createBidirectionnal(): MemoryChannel;
+    onConnected(callback: () => void): void;
     static createEncryptedBidirectionnal(key?: Buffer): MemoryChannel;
     getConnectionString(): string;
     fromConnectionString(string: string): MemoryChannel | null;

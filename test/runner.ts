@@ -15,7 +15,10 @@ describe("Browser Tests on Chromium", () => {
   let server: http.Server;
   const PORT = 8740;
 
-  before(async () => {
+  before(async function () {
+    // Set timeout for before hook
+    this.timeout(30000);
+
     // Set up Express app
     const app = express();
     app.use(express.static(path.join(__dirname, "..")));
@@ -53,7 +56,10 @@ describe("Browser Tests on Chromium", () => {
     });
   });
 
-  after(async () => {
+  after(async function () {
+    // Set timeout for after hook
+    this.timeout(10000);
+
     await browser.close();
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
@@ -85,7 +91,10 @@ describe("Browser Tests on Firefox", () => {
   let server: http.Server;
   const PORT = 8740;
 
-  before(async () => {
+  before(async function () {
+    // Set timeout for before hook
+    this.timeout(30000);
+
     // Set up Express app
     const app = express();
     app.use(express.static(path.join(__dirname, "..")));
@@ -123,7 +132,10 @@ describe("Browser Tests on Firefox", () => {
     });
   });
 
-  after(async () => {
+  after(async function () {
+    // Set timeout for after hook
+    this.timeout(10000);
+
     await browser.close();
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
@@ -155,7 +167,10 @@ describe("Browser Tests on Webkit", () => {
   let server: http.Server;
   const PORT = 8740;
 
-  before(async () => {
+  before(async function () {
+    // Set timeout for before hook
+    this.timeout(30000);
+
     // Set up Express app
     const app = express();
     app.use(express.static(path.join(__dirname, "..")));
@@ -193,7 +208,10 @@ describe("Browser Tests on Webkit", () => {
     });
   });
 
-  after(async () => {
+  after(async function () {
+    // Set timeout for after hook
+    this.timeout(10000);
+
     await browser.close();
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
