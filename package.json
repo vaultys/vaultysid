@@ -13,7 +13,7 @@
   "types": "./dist/index.d.ts",
   "description": "the most advanced decentralised id framework",
   "scripts": {
-    "build": "npm run build:node && npm run build:browser && npm run build:types",
+    "build": "npm run build:node && npm run build:browser && cd cli && npm run build",
     "build:node": "tsc -p tsconfig.node.json",
     "build:browser": "webpack --config webpack.config.js",
     "build:types": "tsc -p tsconfig.types.json",

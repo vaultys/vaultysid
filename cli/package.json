@@ -1,0 +1,44 @@
+{
+  "name": "vaultysid-cli",
+  "version": "1.0.0",
+  "description": "",
+  "main": "out/cli.js",
+  "bin": {
+    "vaultysid-cli": "./out/cli.js"
+  },
+  "scripts": {
+    "build": "webpack && pkg .",
+    "start": "node out/cli.js",
+    "test": "mocha test/vaultysid-cli.test.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
+    "@types/node": "^22.7.5",
+    "@types/yargs": "^17.0.33",
+    "mocha": "^10.7.3",
+    "pkg": "^5.8.1",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.6.2",
+    "webpack": "^5.95.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "@vaultys/id": "link:..",
+    "buffer": "^6.0.3",
+    "yargs": "^17.7.2"
+  },
+  "pkg": {
+    "scripts": "out/cli.js",
+    "targets": [
+      "node18-linux-x64",
+      "node18-macos-x64",
+      "node18-win-x64",
+      "node18-win-arm64"
+    ],
+    "outputPath": "bin"
+  },
+  "packageManager": "pnpm@9.11.0+sha256.1c0e33f70e5df9eede84a357bdfa0b1f9dba6e58194628d48a1055756f553754"
+}
