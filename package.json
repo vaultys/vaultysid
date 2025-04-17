@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/id",
-  "version": "2.4.1",
+  "version": "2.4.2",
   "exports": {
     ".": {
       "browser": "./dist/browser/vaultys.min.js",
