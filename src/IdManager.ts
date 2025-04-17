@@ -6,10 +6,11 @@ import { Channel, StreamChannel } from "./MemoryChannel";
 import { Store } from "./MemoryStorage";
 import SoftCredentials from "./platform/SoftCredentials";
 import VaultysId from "./VaultysId";
-import { hash, randomBytes } from "./crypto";
+import { hash, randomBytes, secureErase } from "./crypto";
 import Fido2PRFManager from "./Fido2PRFManager";
 import { decode, encode } from "@msgpack/msgpack";
 import { Buffer } from "buffer/";
+import nacl from "tweetnacl";
 
 const getSignatureType = (challenge: string) => {
   if (challenge.startsWith("vaultys://connect?")) {
@@ -21,13 +22,13 @@ const getSignatureType = (challenge: string) => {
   }
 };
 
-type StoredContact = {
+export type StoredContact = {
   type: number;
   keyManager: KeyManager;
   certificate: Buffer;
 };
 
-type StoredApp = {
+export type StoredApp = {
   site: string;
   serverId: string;
   certificate: Buffer;
@@ -38,9 +39,17 @@ export type FileSignature = {
   signature: Buffer;
 };
 
-type File = {
+export type File = {
   arrayBuffer: Buffer;
   type: string;
+  name?: string;
+};
+
+export type EncryptedFile = {
+  arrayBuffer: Buffer;
+  nonce: string;
+  type: string;
+  name?: string;
 };
 
 const instanciateContact = (c: StoredContact) => {
@@ -306,6 +315,64 @@ export default class IdManager {
     return false;
   }
 
+  async decryptFile(toDecrypt: EncryptedFile) {
+    const prf = await this.vaultysId.hmac("file_encryption/prf|" + toDecrypt.nonce + "|prf/file_encryption");
+    if (prf && prf.length === 32) {
+      // Use sha256 hash of the PRF as the secretbox key (must be 32 bytes)
+      const secretKey = hash("sha256", prf);
+      secureErase(prf);
+
+      // Extract nonce and ciphertext from arrayBuffer
+      // Assuming first 24 bytes are the nonce followed by ciphertext
+      const data = new Uint8Array(toDecrypt.arrayBuffer);
+      const nonceBytes = data.slice(0, nacl.secretbox.nonceLength);
+      const ciphertext = data.slice(nacl.secretbox.nonceLength);
+
+      // Decrypt using nacl.secretbox.open
+      const decrypted = nacl.secretbox.open(ciphertext, nonceBytes, secretKey);
+      secureErase(secretKey);
+
+      if (!decrypted) {
+        throw new Error("Decryption failed");
+      }
+
+      return {
+        name: toDecrypt.name,
+        type: toDecrypt.type,
+        arrayBuffer: Buffer.from(decrypted),
+      } as File;
+    }
+  }
+
+  async encryptFile(toEncrypt: File) {
+    const nonce = randomBytes(32).toString("hex");
+    const prf = await this.vaultysId.hmac("file_encryption/prf|" + nonce + "|prf/file_encryption");
+    if (prf && prf.length === 32) {
+      // Use sha256 hash of the PRF as the secretbox key (must be 32 bytes)
+      const secretKey = hash("sha256", prf);
+      secureErase(prf);
+
+      // Generate a random nonce for secretbox
+      const nonceBytes = nacl.randomBytes(nacl.secretbox.nonceLength);
+
+      // Encrypt using nacl.secretbox
+      const ciphertext = nacl.secretbox(new Uint8Array(toEncrypt.arrayBuffer), nonceBytes, secretKey);
+      secureErase(secretKey);
+
+      // Combine nonce and ciphertext into a single buffer
+      const result = new Uint8Array(nonceBytes.length + ciphertext.length);
+      result.set(nonceBytes);
+      result.set(ciphertext, nonceBytes.length);
+
+      return {
+        name: toEncrypt.name,
+        nonce,
+        type: toEncrypt.type,
+        arrayBuffer: Buffer.from(result),
+      } as EncryptedFile;
+    } else return null;
+  }
+
   getSignatures() {
     const store = this.store.substore("signatures");
     return store
@@ -420,6 +487,75 @@ export default class IdManager {
     } else channel.send(Buffer.from([0]));
   }
 
+  async requestDecryptFile(channel: Channel, toDecrypt: EncryptedFile) {
+    const prf = await this.requestPRF(channel, "file_encryption/" + toDecrypt.nonce + "/file_encryption");
+    if (prf && prf.length === 32) {
+      // Use sha256 hash of the PRF as the secretbox key (must be 32 bytes)
+      const secretKey = hash("sha256", prf);
+      secureErase(prf);
+      // Extract nonce and ciphertext from arrayBuffer
+      // Assuming first 24 bytes are the nonce followed by ciphertext
+      const data = new Uint8Array(toDecrypt.arrayBuffer);
+      const nonceBytes = data.slice(0, nacl.secretbox.nonceLength);
+      const ciphertext = data.slice(nacl.secretbox.nonceLength);
+
+      // Decrypt using nacl.secretbox.open
+      const decrypted = nacl.secretbox.open(ciphertext, nonceBytes, secretKey);
+      secureErase(secretKey);
+
+      if (!decrypted) {
+        throw new Error("Decryption failed");
+      }
+
+      return {
+        name: toDecrypt.name,
+        type: toDecrypt.type,
+        arrayBuffer: Buffer.from(decrypted),
+      } as File;
+    }
+  }
+
+  async requestEncryptFile(channel: Channel, toEncrypt: File) {
+    const nonce = randomBytes(32).toString("hex");
+    const prf = await this.requestPRF(channel, "file_encryption/" + nonce + "/file_encryption");
+    if (prf && prf.length === 32) {
+      // Use sha256 hash of the PRF as the secretbox key (must be 32 bytes)
+      const secretKey = hash("sha256", prf);
+      secureErase(prf);
+
+      // Generate a random nonce for secretbox
+      const nonceBytes = nacl.randomBytes(nacl.secretbox.nonceLength);
+
+      // Encrypt using nacl.secretbox
+      const ciphertext = nacl.secretbox(new Uint8Array(toEncrypt.arrayBuffer), nonceBytes, secretKey);
+      secureErase(secretKey);
+
+      // Combine nonce and ciphertext into a single buffer
+      const result = new Uint8Array(nonceBytes.length + ciphertext.length);
+      result.set(nonceBytes);
+      result.set(ciphertext, nonceBytes.length);
+
+      return {
+        name: toEncrypt.name,
+        nonce,
+        type: toEncrypt.type,
+        arrayBuffer: Buffer.from(result),
+      } as EncryptedFile;
+    } else return null;
+  }
+
+  async acceptDecryptFile(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) {
+    await this.acceptPRF(channel, (contact: VaultysId, appid: string) => {
+      if (appid.length > 63 && appid.startsWith("file_encryption/") && appid.endsWith("/file_encryption")) {
+        //TODO: maybe by default should be in web of trust?
+        return accept?.(contact) || Promise.resolve(true);
+      } else return Promise.resolve(false);
+    });
+  }
+
+  // alias since this is symetric key encryption
+  acceptEncryptFile = this.acceptDecryptFile;
+
   async requestSignFile(channel: Channel, file: File) {
     const challenger = await this.acceptSRP(channel, "p2p", "signfile");
     if (challenger.isComplete()) {
@@ -440,7 +576,7 @@ export default class IdManager {
       if (!accept || (await accept(challenger.getContactId(), file))) {
         const result = await this.signFile(file);
         channel.send(Buffer.from(encode(result)));
-      }
+      } else channel.send(Buffer.from([0]));
     } else channel.send(Buffer.from([0]));
   }
 
@@ -448,8 +584,8 @@ export default class IdManager {
     if (appid.length < 3) {
       throw new Error("appid is too short, less than 3 characters");
     }
-    if (appid.split("-").length > 1) {
-      throw new Error("appid contains illegal character /");
+    if (appid.split("|").length > 1) {
+      throw new Error("appid contains illegal character |");
     }
     const challenger = await this.acceptSRP(channel, "p2p", "prf");
     if (challenger.isComplete()) {
@@ -464,13 +600,14 @@ export default class IdManager {
     if (challenger.isComplete()) {
       const result = await channel.receive();
       const appid = result.toString("utf-8");
-      if (appid.length < 3 || appid.split("-").length > 1) {
-        // error if appid is too short of contains illegal character
+      if (appid.length < 3 || appid.split("|").length > 1) {
+        // error if appid is too short or contains illegal character
         channel.send(Buffer.from([0]));
       } else if (!accept || (await accept(challenger.getContactId(), appid))) {
-        const hmac = (await this.vaultysId.hmac("prf/" + appid + "/end")) ?? Buffer.from([0]);
+        const hmac = (await this.vaultysId.hmac("prf|" + appid + "|prf")) ?? Buffer.from([0]);
         channel.send(hmac);
-      }
+        secureErase(hmac);
+      } else channel.send(Buffer.from([0]));
     } else channel.send(Buffer.from([0]));
   }
 

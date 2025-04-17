@@ -1,5 +1,5 @@
 import Challenger from "./src/Challenger";
-import IdManager from "./src/IdManager";
+import IdManager, { File, EncryptedFile, FileSignature, StoredApp, StoredContact } from "./src/IdManager";
 import KeyManager from "./src/KeyManager";
 import VaultysId from "./src/VaultysId";
 import { Channel, MemoryChannel, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable } from "./src/MemoryChannel";
@@ -19,7 +19,7 @@ if (typeof Symbol.dispose === "undefined") {
 
 export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
 
-export type { Channel, Store };
+export type { Channel, Store, File, EncryptedFile, StoredApp, StoredContact };
 
 export type ChallengeType = {
   protocol: string;

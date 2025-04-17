@@ -1,16 +1,34 @@
 import { Readable, Writable } from "stream";
 import Challenger from "./Challenger";
+import KeyManager from "./KeyManager";
 import { Channel } from "./MemoryChannel";
 import { Store } from "./MemoryStorage";
 import VaultysId from "./VaultysId";
 import { Buffer } from "buffer/";
+export type StoredContact = {
+    type: number;
+    keyManager: KeyManager;
+    certificate: Buffer;
+};
+export type StoredApp = {
+    site: string;
+    serverId: string;
+    certificate: Buffer;
+};
 export type FileSignature = {
     challenge: Buffer;
     signature: Buffer;
 };
-type File = {
+export type File = {
     arrayBuffer: Buffer;
     type: string;
+    name?: string;
+};
+export type EncryptedFile = {
+    arrayBuffer: Buffer;
+    nonce: string;
+    type: string;
+    name?: string;
 };
 export default class IdManager {
     vaultysId: VaultysId;
@@ -38,6 +56,8 @@ export default class IdManager {
     signChallenge(challenge: Buffer): Promise<Buffer>;
     signFile(file: File): Promise<FileSignature>;
     verifyFile(file: File, fileSignature: FileSignature, contactId: VaultysId, userVerifiation?: boolean): boolean;
+    decryptFile(toDecrypt: EncryptedFile): Promise<File | undefined>;
+    encryptFile(toEncrypt: File): Promise<EncryptedFile | null>;
     getSignatures(): {
         date: string;
         payload: any;
@@ -51,6 +71,10 @@ export default class IdManager {
     download(channel: Channel, stream: Writable): Promise<void>;
     requestDecrypt(channel: Channel, toDecrypt: Buffer): Promise<Buffer | null | undefined>;
     acceptDecrypt(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>): Promise<void>;
+    requestDecryptFile(channel: Channel, toDecrypt: EncryptedFile): Promise<File | undefined>;
+    requestEncryptFile(channel: Channel, toEncrypt: File): Promise<EncryptedFile | null>;
+    acceptDecryptFile(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>): Promise<void>;
+    acceptEncryptFile: (channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) => Promise<void>;
     requestSignFile(channel: Channel, file: File): Promise<FileSignature | undefined>;
     acceptSignFile(channel: Channel, accept?: (contact: VaultysId, file: File) => Promise<boolean>): Promise<void>;
     requestPRF(channel: Channel, appid: string): Promise<Buffer | undefined>;
@@ -67,4 +91,3 @@ export default class IdManager {
     askMyself(channel: Channel): Promise<boolean>;
     acceptMyself(channel: Channel): Promise<boolean>;
 }
-export {};

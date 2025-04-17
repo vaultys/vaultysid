@@ -1,7 +1,7 @@
 import assert from "assert";
-import { Buffer } from "buffer/";
+import { Buffer } from "..";
 import { FileSignature } from "../src/IdManager";
-import { IdManager, VaultysId, MemoryChannel, MemoryStorage } from "..";
+import { IdManager, VaultysId, MemoryChannel, MemoryStorage, File, crypto } from "..";
 import "./shims";
 import { hash } from "../src/crypto";
 import { createRandomVaultysId } from "./utils";
@@ -101,7 +101,7 @@ describe("IdManager", () => {
     for (let i = 0; i < 10; i++) {
       const id1 = await createRandomVaultysId();
       const s = MemoryStorage(() => "");
-      const file = { arrayBuffer: Buffer.from(randomBytes(1024)), type: "random" };
+      const file = { arrayBuffer: Buffer.from(randomBytes(1024)), type: "random" } as File;
       const h = hash("sha256", file.arrayBuffer);
       const manager = new IdManager(id1, s);
       const payload = await manager.signFile(file);
@@ -246,7 +246,7 @@ describe("SRG challenge with IdManager", () => {
 
       manager1.acceptPRF(channel);
       const result = await manager2.requestPRF(channel.otherend, "nostr");
-      assert.deepEqual(result, await manager1.vaultysId.hmac("prf/nostr/end"));
+      assert.deepEqual(result, await manager1.vaultysId.hmac("prf|nostr|prf"));
     }
   });
 
@@ -272,6 +272,184 @@ describe("SRG challenge with IdManager", () => {
 
       assert.deepEqual(result?.toString("utf-8"), message);
     }
+  });
+
+  describe("IdManager File Encryption/Decryption", () => {
+    it("should encrypt and decrypt a file between two IdManagers", async () => {
+      let channel = MemoryChannel.createEncryptedBidirectionnal();
+
+      const s1 = MemoryStorage(() => "");
+      const s2 = MemoryStorage(() => "");
+      const manager1 = new IdManager(await createRandomVaultysId(), s1);
+      const manager2 = new IdManager(await createRandomVaultysId(), s2);
+
+      // Create a sample file
+      const fileContent = randomBytes(1024);
+      const originalFile = {
+        arrayBuffer: crypto.Buffer.from(fileContent),
+        type: "application/octet-stream",
+        name: "test.bin",
+      };
+
+      // Set up the decryption handler on manager2
+      manager2.acceptDecryptFile(channel.otherend!);
+
+      // Request encryption from manager1 to manager2
+      const encryptedFile = await manager1.requestEncryptFile(channel, originalFile);
+
+      assert.ok(encryptedFile, "Encryption failed");
+      assert.equal(encryptedFile.type, originalFile.type, "File type should be preserved");
+      assert.equal(encryptedFile.name, originalFile.name, "File name should be preserved");
+      assert.ok(encryptedFile.nonce, "Nonce should be present");
+      assert.ok(encryptedFile.arrayBuffer, "Encrypted data should be present");
+      assert.notDeepEqual(encryptedFile.arrayBuffer, originalFile.arrayBuffer, "Encrypted data should be different from original");
+
+      // Now decrypt the file
+      channel = MemoryChannel.createEncryptedBidirectionnal();
+      manager2.acceptDecryptFile(channel.otherend!);
+
+      const decryptedFile = await manager1.requestDecryptFile(channel, encryptedFile);
+      assert.ok(decryptedFile, "Decryption failed");
+      assert.equal(decryptedFile.type, originalFile.type, "File type should be preserved after decryption");
+      assert.equal(decryptedFile.name, originalFile.name, "File name should be preserved after decryption");
+      assert.deepEqual(decryptedFile.arrayBuffer, originalFile.arrayBuffer, "Decrypted file should match the original");
+    });
+
+    it("should work with different file types and sizes", async () => {
+      const channel = MemoryChannel.createEncryptedBidirectionnal();
+      if (!channel.otherend) assert.fail("Channel creation failed");
+      const s1 = MemoryStorage(() => "");
+      const s2 = MemoryStorage(() => "");
+      const manager1 = new IdManager(await createRandomVaultysId(), s1);
+      const manager2 = new IdManager(await createRandomVaultysId(), s2);
+
+      // Test with different file types and sizes
+      const testCases = [
+        { size: 10, type: "text/plain", name: "small.txt" },
+        { size: 1024, type: "application/pdf", name: "medium.pdf" },
+        { size: 4096, type: "image/jpeg", name: "large.jpg" },
+      ];
+
+      for (const testCase of testCases) {
+        const fileContent = randomBytes(testCase.size);
+        const originalFile = {
+          arrayBuffer: Buffer.from(fileContent),
+          type: testCase.type,
+          name: testCase.name,
+        };
+
+        manager2.acceptEncryptFile(channel.otherend);
+
+        const encryptedFile = await manager1.requestEncryptFile(channel, originalFile);
+        assert.ok(encryptedFile, `Encryption failed for ${testCase.name}`);
+
+        manager2.acceptDecryptFile(channel.otherend);
+
+        const decryptedFile = await manager1.requestDecryptFile(channel, encryptedFile);
+        assert.ok(decryptedFile, `Decryption failed for ${testCase.name}`);
+        assert.equal(decryptedFile.type, originalFile.type, `File type should be preserved for ${testCase.name}`);
+        assert.equal(decryptedFile.name, originalFile.name, `File name should be preserved for ${testCase.name}`);
+        assert.deepEqual(decryptedFile.arrayBuffer, originalFile.arrayBuffer, `Decrypted content should match original for ${testCase.name}`);
+      }
+    });
+
+    it("should handle acceptDecryptFile with custom acceptance function", async () => {
+      const channel = MemoryChannel.createEncryptedBidirectionnal();
+      if (!channel.otherend) assert.fail("Channel creation failed");
+
+      const s1 = MemoryStorage(() => "");
+      const s2 = MemoryStorage(() => "");
+      const manager1 = new IdManager(await createRandomVaultysId(), s1);
+      const manager2 = new IdManager(await createRandomVaultysId(), s2);
+
+      // First establish contact between the managers
+      const contactChannel = MemoryChannel.createBidirectionnal();
+      if (!contactChannel.otherend) assert.fail("Contact channel creation failed");
+
+      await Promise.all([manager1.askContact(contactChannel), manager2.acceptContact(contactChannel.otherend)]);
+
+      // Create a sample file
+      const originalFile = {
+        arrayBuffer: Buffer.from(randomBytes(512)),
+        type: "text/plain",
+        name: "test.txt",
+      };
+
+      // Test with accepting function that returns true
+      let acceptCalled = false;
+      manager2.acceptDecryptFile(channel.otherend, async (contact) => {
+        acceptCalled = true;
+        assert.equal(contact.toVersion(1).fingerprint, manager1.vaultysId.fingerprint);
+        return true;
+      });
+
+      const encryptedFile = await manager1.requestEncryptFile(channel, originalFile);
+
+      assert.ok(encryptedFile, "Encryption should succeed when accept returns true");
+      assert.ok(acceptCalled, "Accept function should be called");
+
+      // Test with accepting function that returns false
+
+      acceptCalled = false;
+      manager2.acceptDecryptFile(channel.otherend, async () => {
+        acceptCalled = true;
+        return false;
+      });
+
+      const failedResult = await manager1.requestEncryptFile(channel, originalFile);
+      assert.ok(acceptCalled, "Accept function should be called even when rejecting");
+      assert.equal(failedResult, null, "Encryption should fail when accept returns false");
+    });
+
+    it("should handle acceptEncryptFile with custom acceptance function", async () => {
+      const channel = MemoryChannel.createEncryptedBidirectionnal();
+      if (!channel.otherend) assert.fail("Channel creation failed");
+
+      const s1 = MemoryStorage(() => "");
+      const s2 = MemoryStorage(() => "");
+      const manager1 = new IdManager(await createRandomVaultysId(), s1);
+      const manager2 = new IdManager(await createRandomVaultysId(), s2);
+
+      // First establish contact between the managers
+      const contactChannel = MemoryChannel.createBidirectionnal();
+      if (!contactChannel.otherend) assert.fail("Contact channel creation failed");
+
+      await Promise.all([manager1.askContact(contactChannel), manager2.acceptContact(contactChannel.otherend)]);
+
+      // Create an encrypted file
+      let acceptCalled = false;
+      manager2.acceptEncryptFile(channel.otherend, async (contact) => {
+        acceptCalled = true;
+        assert.equal(contact.toVersion(1).fingerprint, manager1.vaultysId.fingerprint);
+        return true;
+      });
+
+      // Create a sample file and encrypt it
+      const originalFile = {
+        arrayBuffer: Buffer.from(randomBytes(256)),
+        type: "application/json",
+        name: "data.json",
+      };
+
+      const encryptedFile = await manager1.requestEncryptFile(channel, originalFile);
+      assert.ok(encryptedFile, "Encryption should succeed when accept returns true");
+      assert.ok(acceptCalled, "Accept function should be called");
+
+      // Verify we can decrypt it back
+      manager2.acceptDecryptFile(channel.otherend);
+
+      const decryptedFile = await manager1.requestDecryptFile(channel, encryptedFile);
+      assert.ok(decryptedFile, "Decryption should succeed");
+      assert.deepEqual(decryptedFile.arrayBuffer, originalFile.arrayBuffer, "Decrypted content should match original");
+    });
+
+    it("should verify that acceptEncryptFile and acceptDecryptFile are the same function", async () => {
+      const manager = new IdManager(
+        await createRandomVaultysId(),
+        MemoryStorage(() => ""),
+      );
+      assert.strictEqual(manager.acceptEncryptFile, manager.acceptDecryptFile, "acceptEncryptFile should be an alias of acceptDecryptFile");
+    });
   });
 
   it("perform migration from version 0 to 1", async () => {
