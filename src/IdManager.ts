@@ -545,12 +545,15 @@ export default class IdManager {
   }
 
   async acceptDecryptFile(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) {
+    let result_contact = null;
     await this.acceptPRF(channel, (contact: VaultysId, appid: string) => {
       if (appid.length > 63 && appid.startsWith("file_encryption/") && appid.endsWith("/file_encryption")) {
+        result_contact = contact;
         //TODO: maybe by default should be in web of trust?
         return accept?.(contact) || Promise.resolve(true);
       } else return Promise.resolve(false);
     });
+    return result_contact;
   }
 
   // alias since this is symetric key encryption
