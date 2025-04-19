@@ -5,7 +5,7 @@ export default function ResultDisplay({ result, onDownload }) {
     <div className="mt-8 pt-6 border-t border-gray-300">
       <h3 className="text-xl font-medium mb-4">{result.type === "encrypted" ? "File Encrypted Successfully" : "File Decrypted Successfully"}</h3>
 
-      <button onClick={onDownload} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors">
+      <button onClick={onDownload} className="cursor-pointer w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-lg transition-colors">
         Download {result.type === "encrypted" ? "Encrypted" : "Decrypted"} File
       </button>
 

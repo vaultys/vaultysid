@@ -6,21 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@vaultys/channel-peerjs": "^2.4.1",
-    "@vaultys/id": "^2.4.2",
+    "@vaultys/id": "^2.4.3",
     "file-saver": "^2.0.5",
     "next": "^15.3.1",
     "qrcode": "^1.5.4",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
     "@tailwindcss/postcss": "^4.1.4",
-    "eslint": "^9.24.0",
+    "@tauri-apps/cli": "^2",
+    "eslint": "^9.25.0",
     "eslint-config-next": "^15.3.1",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react": "^7.37.5",
