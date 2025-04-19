@@ -8,6 +8,7 @@ import TabNavigation from "../components/TabNavigation";
 import QRCodeModal from "../components/QRCodeModal";
 import ResultDisplay from "../components/ResultDisplay";
 import { initVaultysId, resetIdentity, setupPeerJsChannel } from "../lib/vaultysIdHelper";
+import { saveAs } from "file-saver";
 
 export default function EncryptPage() {
   const [idManager, setIdManager] = useState(null);
@@ -104,16 +105,9 @@ export default function EncryptPage() {
       channel.close();
 
       if (result) {
-        const nonceBuffer = Buffer.from(result.nonce, "hex");
-        // Create a new buffer with nonce prepended to the encrypted data
-        const combinedBuffer = Buffer.concat([nonceBuffer, Buffer.from(result.arrayBuffer)]);
-
         setResult({
           type: "encrypted",
-          file: {
-            ...result,
-            arrayBuffer: combinedBuffer,
-          },
+          file: result,
         });
 
         setProcessingStatus("File encrypted successfully!");
@@ -141,27 +135,21 @@ export default function EncryptPage() {
   function downloadResult() {
     if (!result) return;
 
-    const blob = new Blob([result.file.arrayBuffer], { type: result.file.type || "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-
     // Create appropriate filename
     let filename = result.file.name || "file";
-    if (!filename.includes("encrypted")) {
+    if (result.type === "encrypted" && !filename.includes("encrypted")) {
       filename = `encrypted-${filename}`;
+    } else if (result.type === "decrypted" && filename.includes("encrypted-")) {
+      filename = filename.replace("encrypted-", "");
     }
 
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
+    // Create blob with proper MIME type
+    const blob = new Blob([result.file.arrayBuffer], {
+      type: result.file.type || "application/octet-stream",
+    });
 
-    // Clean up
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+    // Use FileSaver to handle the download
+    saveAs(blob, filename);
   }
 
   if (loading && !isChannelOpen) {

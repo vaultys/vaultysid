@@ -1,5 +1,5 @@
 import Challenger from "./src/Challenger";
-import IdManager, { File, EncryptedFile, StoredApp, StoredContact } from "./src/IdManager";
+import IdManager, { File, FileSignature, StoredApp, StoredContact } from "./src/IdManager";
 import KeyManager from "./src/KeyManager";
 import VaultysId from "./src/VaultysId";
 import { Channel, MemoryChannel, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable } from "./src/MemoryChannel";
@@ -9,7 +9,7 @@ import CryptoChannel from "./src/cryptoChannel";
 import * as crypto from "./src/crypto";
 declare const Buffer: typeof crypto.Buffer;
 export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
-export type { Channel, Store, File, EncryptedFile, StoredApp, StoredContact };
+export type { Channel, Store, File, StoredApp, StoredContact, FileSignature };
 export type ChallengeType = {
     protocol: string;
     service: string;

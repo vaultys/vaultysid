@@ -300,7 +300,6 @@ describe("SRG challenge with IdManager", () => {
       assert.ok(encryptedFile, "Encryption failed");
       assert.equal(encryptedFile.type, originalFile.type, "File type should be preserved");
       assert.equal(encryptedFile.name, originalFile.name, "File name should be preserved");
-      assert.ok(encryptedFile.nonce, "Nonce should be present");
       assert.ok(encryptedFile.arrayBuffer, "Encrypted data should be present");
       assert.notDeepEqual(encryptedFile.arrayBuffer, originalFile.arrayBuffer, "Encrypted data should be different from original");
 

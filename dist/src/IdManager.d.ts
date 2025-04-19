@@ -24,12 +24,6 @@ export type File = {
     type: string;
     name?: string;
 };
-export type EncryptedFile = {
-    arrayBuffer: Buffer;
-    nonce: string;
-    type: string;
-    name?: string;
-};
 export default class IdManager {
     vaultysId: VaultysId;
     store: Store;
@@ -56,8 +50,8 @@ export default class IdManager {
     signChallenge(challenge: Buffer): Promise<Buffer>;
     signFile(file: File): Promise<FileSignature>;
     verifyFile(file: File, fileSignature: FileSignature, contactId: VaultysId, userVerifiation?: boolean): boolean;
-    decryptFile(toDecrypt: EncryptedFile): Promise<File | undefined>;
-    encryptFile(toEncrypt: File): Promise<EncryptedFile | null>;
+    decryptFile(toDecrypt: File): Promise<File>;
+    encryptFile(toEncrypt: File): Promise<File | null>;
     getSignatures(): {
         date: string;
         payload: any;
@@ -71,10 +65,10 @@ export default class IdManager {
     download(channel: Channel, stream: Writable): Promise<void>;
     requestDecrypt(channel: Channel, toDecrypt: Buffer): Promise<Buffer | null | undefined>;
     acceptDecrypt(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>): Promise<void>;
-    requestDecryptFile(channel: Channel, toDecrypt: EncryptedFile): Promise<File | undefined>;
-    requestEncryptFile(channel: Channel, toEncrypt: File): Promise<EncryptedFile | null>;
-    acceptDecryptFile(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>): Promise<void>;
-    acceptEncryptFile: (channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) => Promise<void>;
+    requestDecryptFile(channel: Channel, toDecrypt: File): Promise<File>;
+    requestEncryptFile(channel: Channel, toEncrypt: File): Promise<File | null>;
+    acceptDecryptFile(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>): Promise<null>;
+    acceptEncryptFile: (channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) => Promise<null>;
     requestSignFile(channel: Channel, file: File): Promise<FileSignature | undefined>;
     acceptSignFile(channel: Channel, accept?: (contact: VaultysId, file: File) => Promise<boolean>): Promise<void>;
     requestPRF(channel: Channel, appid: string): Promise<Buffer | undefined>;

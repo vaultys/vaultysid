@@ -8,6 +8,7 @@ import TabNavigation from "../components/TabNavigation";
 import QRCodeModal from "../components/QRCodeModal";
 import ResultDisplay from "../components/ResultDisplay";
 import { initVaultysId, resetIdentity, setupPeerJsChannel } from "../lib/vaultysIdHelper";
+import { saveAs } from "file-saver";
 
 export default function DecryptPage() {
   const [idManager, setIdManager] = useState(null);
@@ -80,21 +81,13 @@ export default function DecryptPage() {
       setLoading(true);
       setError("");
 
-      const fileBuffer = Buffer.from(file.arrayBuffer);
+      const encryptedContent = Buffer.from(file.arrayBuffer);
 
-      // Extract nonce from the beginning of the file (first 32 bytes)
-      if (fileBuffer.length < 32) {
+      if (encryptedContent.length < 32) {
         setError("This file is too small to be a valid encrypted file.");
         setLoading(false);
         return;
       }
-
-      // Extract nonce as hex string from the first 32 bytes
-      const nonceBuffer = fileBuffer.subarray(0, 32);
-      const nonce = nonceBuffer.toString("hex");
-
-      // Extract the actual encrypted content (everything after the nonce)
-      const encryptedContent = fileBuffer.subarray(32);
 
       setProcessingStatus("Setting up secure channel...");
 
@@ -116,7 +109,6 @@ export default function DecryptPage() {
         name: file.name,
         type: file.type || "application/octet-stream",
         arrayBuffer: encryptedContent,
-        nonce: nonce,
       });
 
       channel.close();
@@ -151,27 +143,21 @@ export default function DecryptPage() {
   function downloadResult() {
     if (!result) return;
 
-    const blob = new Blob([result.file.arrayBuffer], { type: result.file.type || "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-
     // Create appropriate filename
     let filename = result.file.name || "file";
-    if (filename.includes("encrypted-")) {
+    if (result.type === "encrypted" && !filename.includes("encrypted")) {
+      filename = `encrypted-${filename}`;
+    } else if (result.type === "decrypted" && filename.includes("encrypted-")) {
       filename = filename.replace("encrypted-", "");
     }
 
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
+    // Create blob with proper MIME type
+    const blob = new Blob([result.file.arrayBuffer], {
+      type: result.file.type || "application/octet-stream",
+    });
 
-    // Clean up
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+    // Use FileSaver to handle the download
+    saveAs(blob, filename);
   }
 
   if (loading && !isChannelOpen) {
