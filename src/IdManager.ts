@@ -12,6 +12,8 @@ import { decode, encode } from "@msgpack/msgpack";
 import { Buffer } from "buffer/";
 import nacl from "tweetnacl";
 
+// "vaultys/encryption/" + version = 0x01
+const ENCRYPTION_HEADER = Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
 const PRF_NONCE_LENGTH = 32;
 
 const getSignatureType = (challenge: string) => {
@@ -310,14 +312,18 @@ export default class IdManager {
     return false;
   }
 
-  async decryptFile(toDecrypt: File) {
+  async decryptFile(toDecrypt: File, channel?: Channel) {
     // Extract nonce and ciphertext from arrayBuffer
     const data = new Uint8Array(toDecrypt.arrayBuffer);
-    const prfNonceBytes = data.slice(0, PRF_NONCE_LENGTH);
-    const nonceBytes = data.slice(PRF_NONCE_LENGTH, PRF_NONCE_LENGTH + nacl.secretbox.nonceLength);
-    const ciphertext = data.slice(PRF_NONCE_LENGTH + nacl.secretbox.nonceLength);
+    const header = data.slice(0, ENCRYPTION_HEADER.length);
+    if (Buffer.from(header).toString("hex") !== ENCRYPTION_HEADER.toString("hex")) {
+      throw new Error("Invalid header for encrypted file");
+    }
+    const prfNonceBytes = data.slice(ENCRYPTION_HEADER.length, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH);
+    const nonceBytes = data.slice(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + nacl.secretbox.nonceLength);
+    const ciphertext = data.slice(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + nacl.secretbox.nonceLength);
 
-    const prf = await this.vaultysId.hmac("file_encryption/prf|" + Buffer.from(prfNonceBytes).toString("hex") + "|prf/file_encryption");
+    const prf = channel ? await this.requestPRF(channel, "encryption/" + Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("prf|encryption/" + Buffer.from(prfNonceBytes).toString("hex") + "/encryption|prf");
     if (prf?.length !== PRF_NONCE_LENGTH) {
       throw new Error("Invalid PRF generated");
     }
@@ -341,12 +347,11 @@ export default class IdManager {
     } as File;
   }
 
-  async encryptFile(toEncrypt: File) {
+  async encryptFile(toEncrypt: File, channel?: Channel) {
     // Generate a secure random nonce for both the PRF and the secretbox
     const prfNonceBytes = randomBytes(PRF_NONCE_LENGTH);
-    const nonceBytes = nacl.randomBytes(nacl.secretbox.nonceLength);
 
-    const prf = await this.vaultysId.hmac("file_encryption/prf|" + prfNonceBytes.toString("hex") + "|prf/file_encryption");
+    const prf = channel ? await this.requestPRF(channel, "encryption/" + Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("prf|encryption/" + prfNonceBytes.toString("hex") + "/encryption|prf");
     if (prf?.length !== PRF_NONCE_LENGTH) {
       return null;
     }
@@ -355,20 +360,24 @@ export default class IdManager {
     const secretKey = hash("sha256", prf);
     secureErase(prf);
 
+    // Generate a random nonce for secretbox encryption
+    const nonceBytes = nacl.randomBytes(nacl.secretbox.nonceLength);
+
     // Encrypt using nacl.secretbox
     const ciphertext = nacl.secretbox(new Uint8Array(toEncrypt.arrayBuffer), nonceBytes, secretKey);
     secureErase(secretKey);
 
-    // Combine nonce and ciphertext into a single buffer
-    const result = new Uint8Array(PRF_NONCE_LENGTH + nonceBytes.length + ciphertext.length);
-    result.set(prfNonceBytes);
-    result.set(nonceBytes, PRF_NONCE_LENGTH);
-    result.set(ciphertext, PRF_NONCE_LENGTH + nonceBytes.length);
+    // Combine encryption nonce and ciphertext into a single buffer
+    const result = new Uint8Array(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + nonceBytes.length + ciphertext.length);
+    result.set(ENCRYPTION_HEADER);
+    result.set(prfNonceBytes, ENCRYPTION_HEADER.length);
+    result.set(nonceBytes, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH);
+    result.set(ciphertext, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + nonceBytes.length);
 
     return {
       name: toEncrypt.name,
       type: toEncrypt.type,
-      arrayBuffer: Buffer.from(result), // Buffer contains the secretbox nonce + ciphertext
+      arrayBuffer: Buffer.from(result), // Buffer contains secretbox nonce + ciphertext
     } as File;
   }
 
@@ -487,74 +496,17 @@ export default class IdManager {
   }
 
   async requestDecryptFile(channel: Channel, toDecrypt: File) {
-    // Assuming toDecrypt.nonce contains the PRF nonce used during encryption
-    const data = new Uint8Array(toDecrypt.arrayBuffer);
-    const prfNonceBytes = data.slice(0, PRF_NONCE_LENGTH);
-    const nonceBytes = data.slice(PRF_NONCE_LENGTH, PRF_NONCE_LENGTH + nacl.secretbox.nonceLength);
-    const ciphertext = data.slice(PRF_NONCE_LENGTH + nacl.secretbox.nonceLength);
-
-    const prf = await this.requestPRF(channel, "file_encryption/" + Buffer.from(prfNonceBytes).toString("hex") + "/file_encryption");
-    if (prf?.length !== PRF_NONCE_LENGTH) {
-      throw new Error("Invalid PRF generated");
-    }
-
-    // Use sha256 hash of the PRF as the secretbox key (must be 32 bytes)
-    const secretKey = hash("sha256", prf);
-    secureErase(prf);
-
-    // Decrypt using nacl.secretbox.open
-    const decrypted = nacl.secretbox.open(ciphertext, nonceBytes, secretKey);
-    secureErase(secretKey);
-
-    if (!decrypted) {
-      throw new Error("Decryption failed");
-    }
-
-    return {
-      name: toDecrypt.name,
-      type: toDecrypt.type,
-      arrayBuffer: Buffer.from(decrypted),
-    } as File;
+    return this.decryptFile(toDecrypt, channel);
   }
 
   async requestEncryptFile(channel: Channel, toEncrypt: File) {
-    // Generate a secure random nonce for the PRF
-    const prfNonceBytes = randomBytes(PRF_NONCE_LENGTH);
-
-    // Request PRF using the channel and generated nonce
-    const prf = await this.requestPRF(channel, "file_encryption/" + prfNonceBytes.toString("hex") + "/file_encryption");
-    if (prf?.length !== PRF_NONCE_LENGTH) {
-      return null;
-    }
-
-    // Use sha256 hash of the PRF as the secretbox key (must be 32 bytes)
-    const secretKey = hash("sha256", prf);
-    secureErase(prf);
-
-    // Generate a random nonce for secretbox encryption
-    const nonceBytes = nacl.randomBytes(nacl.secretbox.nonceLength);
-
-    // Encrypt using nacl.secretbox
-    const ciphertext = nacl.secretbox(new Uint8Array(toEncrypt.arrayBuffer), nonceBytes, secretKey);
-    secureErase(secretKey);
-
-    // Combine encryption nonce and ciphertext into a single buffer
-    const result = new Uint8Array(PRF_NONCE_LENGTH + nonceBytes.length + ciphertext.length);
-    result.set(prfNonceBytes);
-    result.set(nonceBytes, PRF_NONCE_LENGTH);
-    result.set(ciphertext, PRF_NONCE_LENGTH + nonceBytes.length);
-
-    return {
-      name: toEncrypt.name,
-      type: toEncrypt.type,
-      arrayBuffer: Buffer.from(result), // Buffer contains secretbox nonce + ciphertext
-    } as File;
+    return this.encryptFile(toEncrypt, channel);
   }
 
   async acceptDecryptFile(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) {
     let result_contact = null;
     await this.acceptPRF(channel, (contact: VaultysId, appid: string) => {
-      if (appid.length > 63 && appid.startsWith("file_encryption/") && appid.endsWith("/file_encryption")) {
+      if (appid.length > 63 && appid.startsWith("encryption/") && appid.endsWith("/encryption")) {
         result_contact = contact;
         //TODO: maybe by default should be in web of trust?
         return accept?.(contact) || Promise.resolve(true);

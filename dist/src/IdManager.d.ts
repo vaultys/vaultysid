@@ -50,8 +50,8 @@ export default class IdManager {
     signChallenge(challenge: Buffer): Promise<Buffer>;
     signFile(file: File): Promise<FileSignature>;
     verifyFile(file: File, fileSignature: FileSignature, contactId: VaultysId, userVerifiation?: boolean): boolean;
-    decryptFile(toDecrypt: File): Promise<File>;
-    encryptFile(toEncrypt: File): Promise<File | null>;
+    decryptFile(toDecrypt: File, channel?: Channel): Promise<File>;
+    encryptFile(toEncrypt: File, channel?: Channel): Promise<File | null>;
     getSignatures(): {
         date: string;
         payload: any;
