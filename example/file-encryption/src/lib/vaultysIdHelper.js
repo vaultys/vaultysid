@@ -69,9 +69,10 @@ export async function setupPeerJsChannel(idManager) {
   try {
     const { PeerjsChannel } = await import("@vaultys/channel-peerjs");
     const channel = new PeerjsChannel();
-
+    console.log("start");
     // Start the channel
     channel.start();
+    console.log("start");
 
     // Get connection string
     const connectionString = channel.getConnectionString();
@@ -79,6 +80,8 @@ export async function setupPeerJsChannel(idManager) {
 
     // Create URL with channel info
     const channelUrl = `https://wallet.vaultys.net#${connectionString}&protocol=p2p&service=file_encryption&id=${idString}`;
+
+    console.log(channelUrl);
 
     return { channel, channelUrl };
   } catch (err) {
