@@ -283,7 +283,7 @@ class IdManager {
         const prfNonceBytes = data.slice(ENCRYPTION_HEADER.length, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH);
         const nonceBytes = data.slice(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + tweetnacl_1.default.secretbox.nonceLength);
         const ciphertext = data.slice(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + tweetnacl_1.default.secretbox.nonceLength);
-        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("encryption/prf|" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "|prf/encryption");
+        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("prf|encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption|prf");
         if (prf?.length !== PRF_NONCE_LENGTH) {
             throw new Error("Invalid PRF generated");
         }
@@ -305,7 +305,7 @@ class IdManager {
     async encryptFile(toEncrypt, channel) {
         // Generate a secure random nonce for both the PRF and the secretbox
         const prfNonceBytes = (0, crypto_1.randomBytes)(PRF_NONCE_LENGTH);
-        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("encryption/prf|" + prfNonceBytes.toString("hex") + "|prf/encryption");
+        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("prf|encryption/" + prfNonceBytes.toString("hex") + "/encryption|prf");
         if (prf?.length !== PRF_NONCE_LENGTH) {
             return null;
         }
