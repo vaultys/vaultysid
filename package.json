@@ -21,7 +21,8 @@
     "test:server": "http-server . -p 8080",
     "test:web": "webpack --config webpack.test.config.js && mocha --require tsx test/runner.ts",
     "testone": "mocha",
-    "visualize": "webpack --config webpack.config.web.cjs --json > stats.json"
+    "visualize": "webpack --config webpack.config.web.cjs --json > stats.json",
+    "test:pgp": "tsx example/smartcardpgp.ts"
   },
   "keywords": [],
   "author": "",
@@ -68,7 +69,12 @@
     "@peculiar/x509": "^1.12.3",
     "@samuelthomas2774/saltpack": "^0.3.2",
     "@stricahq/bip32ed25519": "^1.1.1",
+    "asn1.js": "^5.4.1",
+    "base64url": "^3.0.1",
+    "bindings": "^1.5.0",
     "cbor": "^10.0.3",
+    "node-addon-api": "^8.3.1",
+    "pcsclite": "^1.0.1",
     "tweetnacl": "^1.0.3"
   },
   "pnpm": {

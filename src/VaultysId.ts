@@ -2,6 +2,8 @@ import { hash, randomBytes } from "./crypto";
 import Fido2Manager from "./Fido2Manager";
 import Fido2PRFManager from "./Fido2PRFManager";
 import KeyManager from "./KeyManager";
+import PgpCardManager from "./PGPCardManager";
+import PivCardManager from "./PIVManager";
 import SoftCredentials from "./platform/SoftCredentials";
 import { getWebAuthnProvider } from "./platform/webauthn";
 import { Buffer } from "buffer/";
@@ -11,6 +13,8 @@ const TYPE_PERSON = 1;
 const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
 const TYPE_FIDO2PRF = 4;
+const TYPE_SMARTCARDPGP = 5;
+const TYPE_SMARTCARDPIV = 6;
 
 type StringifiedBuffer = {
   data: number[];
@@ -75,6 +79,12 @@ export default class VaultysId {
       return new VaultysId(f2m, certificate, type);
     } else if (type == TYPE_FIDO2PRF) {
       const f2m = Fido2PRFManager.fromId(cleanId.slice(1));
+      return new VaultysId(f2m, certificate, type);
+    } else if (type == TYPE_SMARTCARDPGP) {
+      const f2m = PgpCardManager.fromId(cleanId.slice(1));
+      return new VaultysId(f2m, certificate, type);
+    } else if (type == TYPE_SMARTCARDPIV) {
+      const f2m = PivCardManager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
     } else {
       const km = KeyManager.fromId(cleanId.slice(1));
@@ -167,6 +177,20 @@ export default class VaultysId {
     const attestation = await webAuthn.create(options);
     if (!attestation) return null;
     else return VaultysId.fido2FromAttestation(attestation as PublicKeyCredential, onPRFEnabled);
+  }
+
+  static async createSmartcardPGP(pin?: string) {
+    const cardManager = new PgpCardManager();
+    await cardManager.initialize(pin);
+    await cardManager.close();
+    return new VaultysId(cardManager, undefined, TYPE_SMARTCARDPGP);
+  }
+
+  static async createPIV(pin?: string) {
+    const cardManager = new PivCardManager();
+    await cardManager.initialize(pin);
+    await cardManager.close();
+    return new VaultysId(cardManager, undefined, TYPE_SMARTCARDPIV);
   }
 
   static async fido2FromAttestation(attestation: PublicKeyCredential, onPRFEnabled?: () => Promise<boolean>) {
