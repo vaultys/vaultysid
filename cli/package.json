@@ -1,5 +1,5 @@
 {
-  "name": "vaultysid-cli",
+  "name": "@vaultys/cli",
   "version": "1.0.0",
   "description": "",
   "main": "out/cli.js",
