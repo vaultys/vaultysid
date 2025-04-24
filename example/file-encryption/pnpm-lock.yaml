@@ -18,8 +18,8 @@ importers:
         specifier: ^2.4.1
         version: 2.4.1
       '@vaultys/id':
-        specifier: ^2.4.3
-        version: 2.4.3
+        specifier: ^2.4.4
+        version: 2.4.4
       file-saver:
         specifier: ^2.0.5
         version: 2.0.5
@@ -699,8 +699,8 @@ packages:
   '@vaultys/channel-peerjs@2.4.1':
     resolution: {integrity: sha512-b675IYpsD/yj9Gs1qa+SVMkQgWTm48fFDySQm61i+5G5DMVFcKoLyQ/BkmBAr4lWPnor9FS7QWeJ+GsLtuVRmw==}
 
-  '@vaultys/id@2.4.3':
-    resolution: {integrity: sha512-albZXueh0+wnCRbdtfo5DU6WjgVFH4869tyke3y4ZqJ/fDhRUx2ucG8kLfIP8s7Y/R13eV76JPQiR5VxL5Qwrw==}
+  '@vaultys/id@2.4.4':
+    resolution: {integrity: sha512-LeVyqAAZDXWoPlcRVHNpnBES/gAjMoOJEE/nf038/hSkY7y2Ho7sCAkAtA1R0M9X5Kzgb5t/c9DcO7EiQ3Jd4g==}
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -2732,12 +2732,12 @@ snapshots:
 
   '@vaultys/channel-peerjs@2.4.1':
     dependencies:
-      '@vaultys/id': 2.4.3
+      '@vaultys/id': 2.4.4
       peerjs: 1.5.4
     optionalDependencies:
       wrtc: 0.4.7
 
-  '@vaultys/id@2.4.3':
+  '@vaultys/id@2.4.4':
     dependencies:
       '@msgpack/msgpack': 3.0.1
       '@noble/curves': 1.8.2

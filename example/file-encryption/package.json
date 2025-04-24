@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@vaultys/channel-peerjs": "^2.4.1",
-    "@vaultys/id": "^2.4.3",
+    "@vaultys/id": "^2.4.4",
     "file-saver": "^2.0.5",
     "next": "^15.3.1",
     "qrcode": "^1.5.4",
