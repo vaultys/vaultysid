@@ -9,6 +9,9 @@ const __dirname = dirname(__filename);
 const nextConfig = {
   output: "export",
   reactStrictMode: true,
+  experimental: {
+    esmExternals: "loose",
+  },
   webpack(config) {
     config.resolve.alias["@vaultys/id"] = path.resolve(__dirname, "node_modules/@vaultys/id");
     return config;

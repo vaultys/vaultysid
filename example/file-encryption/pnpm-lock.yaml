@@ -18,8 +18,8 @@ importers:
         specifier: ^2.4.1
         version: 2.4.1
       '@vaultys/id':
-        specifier: ^2.4.4
-        version: 2.4.4
+        specifier: link:../..
+        version: link:../..
       file-saver:
         specifier: ^2.0.5
         version: 2.0.5

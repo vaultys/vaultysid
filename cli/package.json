@@ -7,7 +7,7 @@
     "vaultysid-cli": "./out/cli.js"
   },
   "scripts": {
-    "build": "webpack && pkg .",
+    "build": "tsc && pkg .",
     "start": "node out/cli.js",
     "test": "mocha test/vaultysid-cli.test.js"
   },
@@ -27,7 +27,6 @@
   },
   "dependencies": {
     "@vaultys/id": "link:..",
-    "buffer": "^6.0.3",
     "yargs": "^17.7.2"
   },
   "pkg": {

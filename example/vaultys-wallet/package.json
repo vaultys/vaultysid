@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@bitcoin-js/tiny-secp256k1-asmjs": "^2.2.3",
+    "@vaultys/channel-peerjs": "^2.4.1",
+    "@vaultys/id": "link:../..",
     "next": "15.3.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
@@ -21,8 +23,6 @@
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
-    "@vaultys/channel-peerjs": "^2.4.1",
-    "@vaultys/id": "^2.4.4",
     "bip32": "^4.0.0",
     "bip39": "^3.1.0",
     "bitcoinjs-lib": "^6.1.7",
