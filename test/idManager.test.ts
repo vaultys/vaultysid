@@ -207,7 +207,7 @@ describe("SRG challenge with IdManager", () => {
       try {
         await Promise.all([manager1.askContact(channel, metadata1, () => Promise.resolve(false)), manager2.acceptContact(channel.otherend, metadata2)]);
       } catch (e) {
-        assert.equal(e.message, "Error: Contact refused");
+        assert.equal((e as { message: string }).message, "Error: Contact refused");
       }
     }
   });
@@ -235,7 +235,7 @@ describe("SRG challenge with IdManager", () => {
       try {
         await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2, () => Promise.resolve(false))]);
       } catch (e) {
-        assert.equal(e.message, "Error: Contact refused");
+        assert.equal((e as { message: string }).message, "Error: Contact refused");
       }
     }
   });
