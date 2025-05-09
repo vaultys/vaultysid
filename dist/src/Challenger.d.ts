@@ -51,7 +51,6 @@ export default class Challenger {
     static fromString(vaultysId: VaultysId, challengeString: Buffer): Challenger;
     hasFailed(): boolean;
     isComplete(): boolean;
-    isSelfAuth(): boolean;
     init(challengeString: Buffer): Promise<void>;
     update(challengeString: Buffer, metadata?: {}): Promise<void>;
 }

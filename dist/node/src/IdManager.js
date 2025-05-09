@@ -377,26 +377,6 @@ class IdManager {
     async verifyChallenge(challenge, signature) {
         return this.vaultysId.verifyChallenge(challenge, signature, true);
     }
-    async sync(channel, initiator = false) {
-        if (initiator) {
-            const challenger = await this.startSRP(channel, "p2p", "selfauth");
-            if (challenger.isSelfAuth() && challenger.isComplete()) {
-                const data = this.store.fromString((await channel.receive()).toString("utf-8"));
-                channel.send(buffer_1.Buffer.from(this.store.toString(), "utf-8"));
-                this.merge(data, !initiator);
-            }
-        }
-        else {
-            const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
-            if (challenger.isSelfAuth() && challenger.isComplete()) {
-                channel.send(buffer_1.Buffer.from(this.store.toString(), "utf-8"));
-                const data = this.store.fromString((await channel.receive()).toString("utf-8"));
-                this.merge(data, !initiator);
-            }
-            channel.close();
-        }
-        this.store.save();
-    }
     async upload(channel, stream) {
         const challenger = await this.startSRP(channel, "p2p", "transfer");
         if (challenger.isComplete()) {
@@ -427,18 +407,16 @@ class IdManager {
             channel.send(buffer_1.Buffer.from([0]));
     }
     async acceptDecrypt(channel, accept) {
-        const challenger = await this.startSRP(channel, "p2p", "decrypt");
+        const challenger = await this.startSRP(channel, "p2p", "decrypt", {}, accept);
         if (challenger.isComplete()) {
-            if (!accept || (await accept(challenger.getContactId()))) {
-                const toDecrypt = await channel.receive();
-                const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
-                if (decrypted) {
-                    const encrypted = await this.vaultysId.dhiesEncrypt(decrypted, challenger.getContactId().id);
-                    channel.send(encrypted ?? buffer_1.Buffer.from([0]));
-                }
-                else
-                    channel.send(buffer_1.Buffer.from([0]));
+            const toDecrypt = await channel.receive();
+            const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
+            if (decrypted) {
+                const encrypted = await this.vaultysId.dhiesEncrypt(decrypted, challenger.getContactId().id);
+                channel.send(encrypted ?? buffer_1.Buffer.from([0]));
             }
+            else
+                channel.send(buffer_1.Buffer.from([0]));
         }
         else
             channel.send(buffer_1.Buffer.from([0]));
@@ -548,10 +526,11 @@ class IdManager {
             }
         });
     }
-    async startSRP(channel, protocol, service, metadata = {}) {
+    async startSRP(channel, protocol, service, metadata = {}, accept) {
         const idV0 = VaultysId_1.default.fromSecret(this.vaultysId.getSecret()).toVersion(0);
         const challenger = new Challenger_1.default(idV0);
         challenger.createChallenge(protocol, service, 0, metadata);
+        //console.log(challenger);
         const cert = challenger.getCertificate();
         if (!cert) {
             channel.close();
@@ -562,8 +541,15 @@ class IdManager {
         try {
             const message = await channel.receive();
             // console.log("startSRP", message)
-            // TODO: accept contact id before going further
-            //console.log(challenger);
+            const contact = Challenger_1.default.deserializeCertificate(message).pk2;
+            if (!contact) {
+                channel.send(buffer_1.Buffer.from([0]));
+                throw new Error("Contact pk2 is not sent");
+            }
+            if (accept && !(await accept(VaultysId_1.default.fromId(contact)))) {
+                channel.send(buffer_1.Buffer.from([0]));
+                throw new Error("Contact refused");
+            }
             await challenger.update(message);
         }
         catch (error) {
@@ -588,12 +574,28 @@ class IdManager {
             throw new Error("Can't add a new contact if the protocol is not complete");
         }
     }
-    async acceptSRP(channel, protocol, service, metadata = {}) {
+    async acceptSRP(channel, protocol, service, metadata = {}, accept) {
         const idV0 = VaultysId_1.default.fromSecret(this.vaultysId.getSecret()).toVersion(0);
         const challenger = new Challenger_1.default(idV0);
         try {
             const message = await channel.receive();
-            // console.log("acceptSRP", message)
+            const chal = Challenger_1.default.deserializeCertificate(message);
+            if (!chal.pk1) {
+                channel.send(buffer_1.Buffer.from([0]));
+                throw new Error("Contact pk1 is not sent");
+            }
+            if (chal.protocol !== protocol) {
+                channel.send(buffer_1.Buffer.from([0]));
+                throw new Error("protocol is not the one expected: " + chal.protocol + " !=" + protocol);
+            }
+            if (chal.service !== service) {
+                channel.send(buffer_1.Buffer.from([0]));
+                throw new Error("service is not the one expected: " + chal.service + " !=" + service);
+            }
+            if (accept && !(await accept(VaultysId_1.default.fromId(chal.pk1)))) {
+                channel.send(buffer_1.Buffer.from([0]));
+                throw new Error("Contact refused");
+            }
             await challenger.update(message);
         }
         catch (error) {
@@ -658,28 +660,17 @@ class IdManager {
             }
         }
     }
-    async askContact(channel, metadata = {}) {
-        const challenger = await this.startSRP(channel, "p2p", "auth");
+    async askContact(channel, metadata = {}, accept) {
+        const challenger = await this.startSRP(channel, "p2p", "auth", metadata, accept);
         const contact = challenger.getContactId();
         this.saveContact(contact);
         return contact;
     }
-    async acceptContact(channel, metadata = {}) {
-        const challenger = await this.acceptSRP(channel, "p2p", "auth");
+    async acceptContact(channel, metadata = {}, accept) {
+        const challenger = await this.acceptSRP(channel, "p2p", "auth", metadata, accept);
         const contact = challenger.getContactId();
         this.saveContact(contact);
         return contact;
-    }
-    // Connecting to itself on 2 different devices, checking this is same vaultysId on both ends
-    // deprecated
-    async askMyself(channel) {
-        const challenger = await this.startSRP(channel, "p2p", "selfauth");
-        return challenger.isSelfAuth() && challenger.isComplete();
-    }
-    // deprecated
-    async acceptMyself(channel) {
-        const challenger = await this.acceptSRP(channel, "p2p", "selfauth");
-        return challenger.isSelfAuth() && challenger.isComplete();
     }
 }
 exports.default = IdManager;

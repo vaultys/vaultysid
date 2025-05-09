@@ -345,10 +345,6 @@ export default class Challenger {
     return this.state == COMPLETE;
   }
 
-  isSelfAuth() {
-    return this.mykey?.toString("hex") == this.hisKey?.toString("hex");
-  }
-
   async init(challengeString: Buffer) {
     if (this.state !== UNINITIALISED) {
       throw new Error("Can't init INITIALISED challenge");

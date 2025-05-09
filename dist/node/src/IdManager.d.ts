@@ -60,7 +60,6 @@ export default class IdManager {
     }[];
     migrate(version: 0 | 1): void;
     verifyChallenge(challenge: Buffer, signature: Buffer): Promise<boolean>;
-    sync(channel: Channel, initiator?: boolean): Promise<void>;
     upload(channel: Channel, stream: Readable): Promise<void>;
     download(channel: Channel, stream: Writable): Promise<void>;
     requestDecrypt(channel: Channel, toDecrypt: Buffer): Promise<Buffer | null | undefined>;
@@ -76,12 +75,10 @@ export default class IdManager {
     /***************************/
     /***************************/
     listCertificates(): any[];
-    startSRP(channel: Channel, protocol: string, service: string, metadata?: Record<string, string>): Promise<Challenger>;
-    acceptSRP(channel: Channel, protocol: string, service: string, metadata?: Record<string, string>): Promise<Challenger>;
+    startSRP(channel: Channel, protocol: string, service: string, metadata?: Record<string, string>, accept?: (contact: VaultysId) => Promise<boolean>): Promise<Challenger>;
+    acceptSRP(channel: Channel, protocol: string, service: string, metadata?: Record<string, string>, accept?: (contact: VaultysId) => Promise<boolean>): Promise<Challenger>;
     saveApp(app: VaultysId, name?: string): void;
     saveContact(contact: VaultysId): void;
-    askContact(channel: Channel, metadata?: Record<string, string>): Promise<VaultysId>;
-    acceptContact(channel: Channel, metadata?: Record<string, string>): Promise<VaultysId>;
-    askMyself(channel: Channel): Promise<boolean>;
-    acceptMyself(channel: Channel): Promise<boolean>;
+    askContact(channel: Channel, metadata?: Record<string, string>, accept?: (contact: VaultysId) => Promise<boolean>): Promise<VaultysId>;
+    acceptContact(channel: Channel, metadata?: Record<string, string>, accept?: (contact: VaultysId) => Promise<boolean>): Promise<VaultysId>;
 }

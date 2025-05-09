@@ -14,6 +14,79 @@ export type Channel = {
   fromConnectionString(conn: string, options?: any): Channel | null;
 };
 
+/**
+ * Pipes two channels together, creating a bidirectional flow where
+ * messages sent to one channel are automatically forwarded to the other.
+ * @param channel1 The first channel to connect
+ * @param channel2 The second channel to connect
+ * @returns A Promise that resolves when both channels close
+ */
+export function pipeChannels(channel1: Channel, channel2: Channel): () => Promise<void> {
+  let running = true;
+
+  // Start both piping directions
+  const pipe1to2 = async () => {
+    try {
+      await channel1.start();
+      await channel2.start();
+
+      console.log("pipe1to2");
+
+      while (running) {
+        try {
+          const data = await channel1.receive();
+          console.log("pipe1to2", data);
+          if (!running || data.length === 0) break;
+          channel2.send(data);
+        } catch (error) {
+          if (running) console.error("Error in pipe1to2:", error);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("Fatal error in pipe1to2:", error);
+    }
+  };
+
+  const pipe2to1 = async () => {
+    try {
+      while (running) {
+        console.log("pipe2to1");
+        try {
+          const data = await channel2.receive();
+          console.log("pipe2to1", data);
+          if (!running || data.length === 0) break;
+          channel1.send(data);
+        } catch (error) {
+          if (running) console.error("Error in pipe2to1:", error);
+          break;
+        }
+      }
+    } catch (error) {
+      console.error("Fatal error in pipe2to1:", error);
+    }
+  };
+
+  // Start the pipes
+  pipe1to2();
+  pipe2to1();
+
+  // Return function to stop piping
+  return async () => {
+    running = false;
+    await Promise.all([channel1.close(), channel2.close()]);
+  };
+}
+
+/**
+ * Utility function that stops an active channel pipe
+ * @param channel1 The first channel in the pipe
+ * @param channel2 The second channel in the pipe
+ */
+export async function unpipeChannels(channel1: Channel, channel2: Channel): Promise<void> {
+  await Promise.all([channel1.close(), channel2.close()]);
+}
+
 export function StreamChannel(channel: Channel) {
   const onData = async (callback: (data: Buffer) => void) => {
     let message: Buffer = await channel.receive();
@@ -177,12 +250,14 @@ export function convertWebReadableStreamToNodeReadable(webReadableStream: Readab
 
 export class MemoryChannel implements Channel {
   name?: string;
-  lock = false;
   otherend?: MemoryChannel;
-  receiver?: (data: Buffer) => void;
+  private messageQueue: Buffer[] = [];
+  private waitingResolvers: ((data: Buffer) => void)[] = [];
+  private connected = false;
+  private connectedCallbacks: (() => void)[] = [];
+  private closed = false;
   logger?: (data: Buffer) => void;
   injector?: (data: Buffer) => Promise<Buffer> | Buffer;
-  _onConnected?: () => void;
 
   setChannel(chan: MemoryChannel, name?: string) {
     this.name = name;
@@ -198,7 +273,11 @@ export class MemoryChannel implements Channel {
   }
 
   onConnected(callback: () => void) {
-    this._onConnected = callback;
+    if (this.connected) {
+      callback();
+    } else {
+      this.connectedCallbacks.push(callback);
+    }
   }
 
   static createEncryptedBidirectionnal(key: Buffer = cc.generateKey()) {
@@ -226,35 +305,80 @@ export class MemoryChannel implements Channel {
   }
 
   async start() {
-    // noop
+    this.connected = true;
+    this.connectedCallbacks.forEach((callback) => callback());
+    this.connectedCallbacks = []; // Clear callbacks after calling them
   }
 
   async send(data: Buffer) {
-    // the other end might not listen yet
-    while (this.lock || !this.otherend?.receiver) {
-      // console.log(this.lock);
-      await delay(10);
+    if (this.closed) {
+      throw new Error("Cannot send on closed channel");
     }
-    this.lock = true;
-    const receiver = this.otherend.receiver;
-    delete this.otherend.receiver;
-    this.otherend._onConnected?.();
-    delete this.otherend._onConnected;
-    if (this.logger) this.logger(data);
+
+    if (!this.otherend) {
+      throw new Error("No other end connected to this channel");
+    }
+
+    // Log the data if a logger is set
+    if (this.logger) {
+      this.logger(data);
+    }
+
+    // Process data through injector if present
+    let processedData = data;
     if (this.injector) {
-      const injected = await this.injector(data);
-      receiver(injected);
-    } else receiver(data);
-    this.lock = false;
-  }
-
-  async receive() {
-    while (this.receiver) {
-      console.log(this.lock);
-      await delay(10);
+      processedData = await this.injector(data);
     }
-    return new Promise<Buffer>((resolve) => (this.receiver = resolve));
+
+    // // Signal that this end is connected
+    if (!this.connected) {
+      await this.start();
+    }
+
+    // Deliver the message to the other end
+    this.otherend.deliverMessage(processedData);
   }
 
-  async close() {}
+  private deliverMessage(data: Buffer) {
+    // If there are waiting receivers, deliver directly to the first one
+    if (this.waitingResolvers.length > 0) {
+      const resolver = this.waitingResolvers.shift()!;
+      resolver(data);
+    } else {
+      // Otherwise queue the message
+      this.messageQueue.push(data);
+    }
+  }
+
+  async receive(): Promise<Buffer> {
+    if (this.closed) {
+      throw new Error("Cannot receive on closed channel");
+    }
+
+    //console.log(this);
+
+    // If there are queued messages, return the first one
+    if (this.messageQueue.length > 0) {
+      return this.messageQueue.shift()!;
+    }
+
+    // Otherwise, wait for a message to arrive
+    return new Promise<Buffer>((resolve) => {
+      this.waitingResolvers.push(resolve);
+    });
+  }
+
+  async close() {
+    this.closed = true;
+
+    // Clear any waiting receivers with an error
+    while (this.waitingResolvers.length > 0) {
+      const resolver = this.waitingResolvers.shift()!;
+      // Resolve with empty buffer to indicate channel closed
+      resolver(Buffer.alloc(0));
+    }
+
+    // Clear the message queue
+    this.messageQueue = [];
+  }
 }

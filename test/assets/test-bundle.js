@@ -93,7 +93,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
 const VaultysId_1 = __importDefault(__webpack_require__(/*! ./VaultysId */ "./dist/node/src/VaultysId.js"));
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
@@ -581,7 +581,7 @@ const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
 const webauthn_1 = __webpack_require__(/*! ./platform/webauthn */ "./dist/node/src/platform/webauthn.js");
 const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./dist/node/src/KeyManager.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
@@ -809,7 +809,7 @@ const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js"
 const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
 const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./dist/node/src/Fido2Manager.js"));
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const lookup = {
@@ -1086,7 +1086,7 @@ const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/Sof
 const VaultysId_1 = __importDefault(__webpack_require__(/*! ./VaultysId */ "./dist/node/src/VaultysId.js"));
 const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
 const Fido2PRFManager_1 = __importDefault(__webpack_require__(/*! ./Fido2PRFManager */ "./dist/node/src/Fido2PRFManager.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
 // "vaultys/encryption/" + version = 0x01
@@ -1358,7 +1358,7 @@ class IdManager {
         const prfNonceBytes = data.slice(ENCRYPTION_HEADER.length, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH);
         const nonceBytes = data.slice(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + tweetnacl_1.default.secretbox.nonceLength);
         const ciphertext = data.slice(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + tweetnacl_1.default.secretbox.nonceLength);
-        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("encryption/prf|" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "|prf/encryption");
+        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("prf|encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption|prf");
         if (prf?.length !== PRF_NONCE_LENGTH) {
             throw new Error("Invalid PRF generated");
         }
@@ -1380,7 +1380,7 @@ class IdManager {
     async encryptFile(toEncrypt, channel) {
         // Generate a secure random nonce for both the PRF and the secretbox
         const prfNonceBytes = (0, crypto_1.randomBytes)(PRF_NONCE_LENGTH);
-        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("encryption/prf|" + prfNonceBytes.toString("hex") + "|prf/encryption");
+        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("prf|encryption/" + prfNonceBytes.toString("hex") + "/encryption|prf");
         if (prf?.length !== PRF_NONCE_LENGTH) {
             return null;
         }
@@ -1812,7 +1812,7 @@ const saltpack_1 = __webpack_require__(/*! @samuelthomas2774/saltpack */ "./node
 const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const bip32fix = __importStar(__webpack_require__(/*! @stricahq/bip32ed25519 */ "./node_modules/.pnpm/@stricahq+bip32ed25519@1.1.1/node_modules/@stricahq/bip32ed25519/dist/index.js"));
 const crypto_2 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 //@ts-expect-error fix for wrong way of exporting bip32ed25519
@@ -2291,6 +2291,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.MemoryChannel = void 0;
+exports.pipeChannels = pipeChannels;
+exports.unpipeChannels = unpipeChannels;
 exports.StreamChannel = StreamChannel;
 exports.convertWebWritableStreamToNodeWritable = convertWebWritableStreamToNodeWritable;
 exports.convertWebReadableStreamToNodeReadable = convertWebReadableStreamToNodeReadable;
@@ -2298,6 +2300,79 @@ const cryptoChannel_1 = __importDefault(__webpack_require__(/*! ./cryptoChannel 
 const stream_1 = __webpack_require__(/*! stream */ "./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Pipes two channels together, creating a bidirectional flow where
+ * messages sent to one channel are automatically forwarded to the other.
+ * @param channel1 The first channel to connect
+ * @param channel2 The second channel to connect
+ * @returns A Promise that resolves when both channels close
+ */
+function pipeChannels(channel1, channel2) {
+    let running = true;
+    // Start both piping directions
+    const pipe1to2 = async () => {
+        try {
+            await channel1.start();
+            await channel2.start();
+            console.log("pipe1to2");
+            while (running) {
+                try {
+                    const data = await channel1.receive();
+                    console.log("pipe1to2", data);
+                    if (!running || data.length === 0)
+                        break;
+                    channel2.send(data);
+                }
+                catch (error) {
+                    if (running)
+                        console.error("Error in pipe1to2:", error);
+                    break;
+                }
+            }
+        }
+        catch (error) {
+            console.error("Fatal error in pipe1to2:", error);
+        }
+    };
+    const pipe2to1 = async () => {
+        try {
+            while (running) {
+                console.log("pipe2to1");
+                try {
+                    const data = await channel2.receive();
+                    console.log("pipe2to1", data);
+                    if (!running || data.length === 0)
+                        break;
+                    channel1.send(data);
+                }
+                catch (error) {
+                    if (running)
+                        console.error("Error in pipe2to1:", error);
+                    break;
+                }
+            }
+        }
+        catch (error) {
+            console.error("Fatal error in pipe2to1:", error);
+        }
+    };
+    // Start the pipes
+    pipe1to2();
+    pipe2to1();
+    // Return function to stop piping
+    return async () => {
+        running = false;
+        await Promise.all([channel1.close(), channel2.close()]);
+    };
+}
+/**
+ * Utility function that stops an active channel pipe
+ * @param channel1 The first channel in the pipe
+ * @param channel2 The second channel in the pipe
+ */
+async function unpipeChannels(channel1, channel2) {
+    await Promise.all([channel1.close(), channel2.close()]);
+}
 function StreamChannel(channel) {
     const onData = async (callback) => {
         let message = await channel.receive();
@@ -2449,7 +2524,11 @@ function convertWebReadableStreamToNodeReadable(webReadableStream) {
 }
 class MemoryChannel {
     constructor() {
-        this.lock = false;
+        this.messageQueue = [];
+        this.waitingResolvers = [];
+        this.connected = false;
+        this.connectedCallbacks = [];
+        this.closed = false;
     }
     setChannel(chan, name) {
         this.name = name;
@@ -2463,7 +2542,12 @@ class MemoryChannel {
         return input;
     }
     onConnected(callback) {
-        this._onConnected = callback;
+        if (this.connected) {
+            callback();
+        }
+        else {
+            this.connectedCallbacks.push(callback);
+        }
     }
     static createEncryptedBidirectionnal(key = cryptoChannel_1.default.generateKey()) {
         const input = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
@@ -2485,37 +2569,69 @@ class MemoryChannel {
         this.injector = injector;
     }
     async start() {
-        // noop
+        this.connected = true;
+        this.connectedCallbacks.forEach((callback) => callback());
+        this.connectedCallbacks = []; // Clear callbacks after calling them
     }
     async send(data) {
-        // the other end might not listen yet
-        while (this.lock || !this.otherend?.receiver) {
-            // console.log(this.lock);
-            await delay(10);
+        if (this.closed) {
+            throw new Error("Cannot send on closed channel");
         }
-        this.lock = true;
-        const receiver = this.otherend.receiver;
-        delete this.otherend.receiver;
-        this.otherend._onConnected?.();
-        delete this.otherend._onConnected;
-        if (this.logger)
+        if (!this.otherend) {
+            throw new Error("No other end connected to this channel");
+        }
+        // Log the data if a logger is set
+        if (this.logger) {
             this.logger(data);
-        if (this.injector) {
-            const injected = await this.injector(data);
-            receiver(injected);
         }
-        else
-            receiver(data);
-        this.lock = false;
+        // Process data through injector if present
+        let processedData = data;
+        if (this.injector) {
+            processedData = await this.injector(data);
+        }
+        // // Signal that this end is connected
+        if (!this.connected) {
+            await this.start();
+        }
+        // Deliver the message to the other end
+        this.otherend.deliverMessage(processedData);
+    }
+    deliverMessage(data) {
+        // If there are waiting receivers, deliver directly to the first one
+        if (this.waitingResolvers.length > 0) {
+            const resolver = this.waitingResolvers.shift();
+            resolver(data);
+        }
+        else {
+            // Otherwise queue the message
+            this.messageQueue.push(data);
+        }
     }
     async receive() {
-        while (this.receiver) {
-            console.log(this.lock);
-            await delay(10);
+        if (this.closed) {
+            throw new Error("Cannot receive on closed channel");
         }
-        return new Promise((resolve) => (this.receiver = resolve));
+        //console.log(this);
+        // If there are queued messages, return the first one
+        if (this.messageQueue.length > 0) {
+            return this.messageQueue.shift();
+        }
+        // Otherwise, wait for a message to arrive
+        return new Promise((resolve) => {
+            this.waitingResolvers.push(resolve);
+        });
     }
-    async close() { }
+    async close() {
+        this.closed = true;
+        // Clear any waiting receivers with an error
+        while (this.waitingResolvers.length > 0) {
+            const resolver = this.waitingResolvers.shift();
+            // Resolve with empty buffer to indicate channel closed
+            resolver(buffer_1.Buffer.alloc(0));
+        }
+        // Clear the message queue
+        this.messageQueue = [];
+    }
 }
 exports.MemoryChannel = MemoryChannel;
 
@@ -3021,8 +3137,8 @@ const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 Object.defineProperty(exports, "Buffer", ({ enumerable: true, get: function () { return buffer_1.Buffer; } }));
-const sha256_1 = __webpack_require__(/*! @noble/hashes/sha256 */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha256.js");
-const sha512_1 = __webpack_require__(/*! @noble/hashes/sha512 */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha512.js");
+const sha256_1 = __webpack_require__(/*! @noble/hashes/sha256 */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha256.js");
+const sha512_1 = __webpack_require__(/*! @noble/hashes/sha512 */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha512.js");
 const getAlgorithm = (alg) => {
     const cleanAlg = alg.replaceAll("-", "").toLowerCase();
     if (cleanAlg === "sha256")
@@ -3145,10 +3261,10 @@ const crypto_1 = __importDefault(__webpack_require__(/*! crypto */ "./node_modul
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const crypto_2 = __webpack_require__(/*! ../crypto */ "./dist/node/src/crypto.js");
 const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
-const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/ed25519.js");
-const p256_1 = __webpack_require__(/*! @noble/curves/p256 */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p256.js");
-const p384_1 = __webpack_require__(/*! @noble/curves/p384 */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p384.js");
-const p521_1 = __webpack_require__(/*! @noble/curves/p521 */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p521.js");
+const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/ed25519.js");
+const p256_1 = __webpack_require__(/*! @noble/curves/p256 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p256.js");
+const p384_1 = __webpack_require__(/*! @noble/curves/p384 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p384.js");
+const p521_1 = __webpack_require__(/*! @noble/curves/p521 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p521.js");
 const x509_1 = __webpack_require__(/*! @peculiar/x509 */ "./node_modules/.pnpm/@peculiar+x509@1.12.3/node_modules/@peculiar/x509/build/x509.es.js");
 const credentials = {};
 //const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
@@ -4821,9 +4937,9 @@ exports.utf8DecodeTD = utf8DecodeTD;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/CachedKeyDecoder.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/CachedKeyDecoder.mjs":
 /*!***************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/CachedKeyDecoder.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/CachedKeyDecoder.mjs ***!
   \***************************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -4832,7 +4948,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   CachedKeyDecoder: () => (/* binding */ CachedKeyDecoder)
 /* harmony export */ });
-/* harmony import */ var _utils_utf8_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./utils/utf8.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs");
+/* harmony import */ var _utils_utf8_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./utils/utf8.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs");
 
 const DEFAULT_MAX_KEY_LENGTH = 16;
 const DEFAULT_MAX_LENGTH_PER_KEY = 16;
@@ -4895,9 +5011,9 @@ class CachedKeyDecoder {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs":
 /*!**********************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs ***!
   \**********************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -4923,9 +5039,9 @@ class DecodeError extends Error {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs":
 /*!******************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs ***!
   \******************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -4934,66 +5050,13 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   Decoder: () => (/* binding */ Decoder)
 /* harmony export */ });
-/* harmony import */ var _utils_prettyByte_mjs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./utils/prettyByte.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/prettyByte.mjs");
-/* harmony import */ var _ExtensionCodec_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./ExtensionCodec.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs");
-/* harmony import */ var _utils_int_mjs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./utils/int.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs");
-/* harmony import */ var _utils_utf8_mjs__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./utils/utf8.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs");
-/* harmony import */ var _utils_typedArrays_mjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./utils/typedArrays.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/typedArrays.mjs");
-/* harmony import */ var _CachedKeyDecoder_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./CachedKeyDecoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/CachedKeyDecoder.mjs");
-/* harmony import */ var _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./DecodeError.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs");
-var __addDisposableResource = (undefined && undefined.__addDisposableResource) || function (env, value, async) {
-    if (value !== null && value !== void 0) {
-        if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
-        var dispose, inner;
-        if (async) {
-            if (!Symbol.asyncDispose) throw new TypeError("Symbol.asyncDispose is not defined.");
-            dispose = value[Symbol.asyncDispose];
-        }
-        if (dispose === void 0) {
-            if (!Symbol.dispose) throw new TypeError("Symbol.dispose is not defined.");
-            dispose = value[Symbol.dispose];
-            if (async) inner = dispose;
-        }
-        if (typeof dispose !== "function") throw new TypeError("Object not disposable.");
-        if (inner) dispose = function() { try { inner.call(this); } catch (e) { return Promise.reject(e); } };
-        env.stack.push({ value: value, dispose: dispose, async: async });
-    }
-    else if (async) {
-        env.stack.push({ async: true });
-    }
-    return value;
-};
-var __disposeResources = (undefined && undefined.__disposeResources) || (function (SuppressedError) {
-    return function (env) {
-        function fail(e) {
-            env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
-            env.hasError = true;
-        }
-        var r, s = 0;
-        function next() {
-            while (r = env.stack.pop()) {
-                try {
-                    if (!r.async && s === 1) return s = 0, env.stack.push(r), Promise.resolve().then(next);
-                    if (r.dispose) {
-                        var result = r.dispose.call(r.value);
-                        if (r.async) return s |= 2, Promise.resolve(result).then(next, function(e) { fail(e); return next(); });
-                    }
-                    else s |= 1;
-                }
-                catch (e) {
-                    fail(e);
-                }
-            }
-            if (s === 1) return env.hasError ? Promise.reject(env.error) : Promise.resolve();
-            if (env.hasError) throw env.error;
-        }
-        return next();
-    };
-})(typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
-    var e = new Error(message);
-    return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
-});
-
+/* harmony import */ var _utils_prettyByte_mjs__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./utils/prettyByte.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/prettyByte.mjs");
+/* harmony import */ var _ExtensionCodec_mjs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./ExtensionCodec.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs");
+/* harmony import */ var _utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./utils/int.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs");
+/* harmony import */ var _utils_utf8_mjs__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./utils/utf8.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs");
+/* harmony import */ var _utils_typedArrays_mjs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./utils/typedArrays.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/typedArrays.mjs");
+/* harmony import */ var _CachedKeyDecoder_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./CachedKeyDecoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/CachedKeyDecoder.mjs");
+/* harmony import */ var _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./DecodeError.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs");
 
 
 
@@ -5004,8 +5067,11 @@ var __disposeResources = (undefined && undefined.__disposeResources) || (functio
 const STATE_ARRAY = "array";
 const STATE_MAP_KEY = "map_key";
 const STATE_MAP_VALUE = "map_value";
-const isValidMapKeyType = (key) => {
-    return typeof key === "string" || typeof key === "number";
+const mapKeyConverter = (key) => {
+    if (typeof key === "string" || typeof key === "number") {
+        return key;
+    }
+    throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError("The type of key must be string or number but " + typeof key);
 };
 class StackPool {
     constructor() {
@@ -5088,7 +5154,7 @@ catch (e) {
     }
 }
 const MORE_DATA = new RangeError("Insufficient data");
-const sharedCachedKeyDecoder = new _CachedKeyDecoder_mjs__WEBPACK_IMPORTED_MODULE_0__.CachedKeyDecoder();
+const sharedCachedKeyDecoder = new _CachedKeyDecoder_mjs__WEBPACK_IMPORTED_MODULE_1__.CachedKeyDecoder();
 class Decoder {
     constructor(options) {
         this.totalPos = 0;
@@ -5098,16 +5164,17 @@ class Decoder {
         this.headByte = HEAD_BYTE_REQUIRED;
         this.stack = new StackPool();
         this.entered = false;
-        this.extensionCodec = options?.extensionCodec ?? _ExtensionCodec_mjs__WEBPACK_IMPORTED_MODULE_1__.ExtensionCodec.defaultCodec;
+        this.extensionCodec = options?.extensionCodec ?? _ExtensionCodec_mjs__WEBPACK_IMPORTED_MODULE_2__.ExtensionCodec.defaultCodec;
         this.context = options?.context; // needs a type assertion because EncoderOptions has no context property when ContextType is undefined
         this.useBigInt64 = options?.useBigInt64 ?? false;
         this.rawStrings = options?.rawStrings ?? false;
-        this.maxStrLength = options?.maxStrLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_2__.UINT32_MAX;
-        this.maxBinLength = options?.maxBinLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_2__.UINT32_MAX;
-        this.maxArrayLength = options?.maxArrayLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_2__.UINT32_MAX;
-        this.maxMapLength = options?.maxMapLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_2__.UINT32_MAX;
-        this.maxExtLength = options?.maxExtLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_2__.UINT32_MAX;
+        this.maxStrLength = options?.maxStrLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__.UINT32_MAX;
+        this.maxBinLength = options?.maxBinLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__.UINT32_MAX;
+        this.maxArrayLength = options?.maxArrayLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__.UINT32_MAX;
+        this.maxMapLength = options?.maxMapLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__.UINT32_MAX;
+        this.maxExtLength = options?.maxExtLength ?? _utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__.UINT32_MAX;
         this.keyDecoder = options?.keyDecoder !== undefined ? options.keyDecoder : sharedCachedKeyDecoder;
+        this.mapKeyConverter = options?.mapKeyConverter ?? mapKeyConverter;
     }
     clone() {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
@@ -5131,7 +5198,7 @@ class Decoder {
         // view, bytes, and pos will be re-initialized in setBuffer()
     }
     setBuffer(buffer) {
-        const bytes = (0,_utils_typedArrays_mjs__WEBPACK_IMPORTED_MODULE_3__.ensureUint8Array)(buffer);
+        const bytes = (0,_utils_typedArrays_mjs__WEBPACK_IMPORTED_MODULE_4__.ensureUint8Array)(buffer);
         this.bytes = bytes;
         this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
         this.pos = 0;
@@ -5142,7 +5209,7 @@ class Decoder {
         }
         else {
             const remainingData = this.bytes.subarray(this.pos);
-            const newData = (0,_utils_typedArrays_mjs__WEBPACK_IMPORTED_MODULE_3__.ensureUint8Array)(buffer);
+            const newData = (0,_utils_typedArrays_mjs__WEBPACK_IMPORTED_MODULE_4__.ensureUint8Array)(buffer);
             // concat remainingData + newData
             const newBuffer = new Uint8Array(remainingData.length + newData.length);
             newBuffer.set(remainingData);
@@ -5157,27 +5224,17 @@ class Decoder {
         const { view, pos } = this;
         return new RangeError(`Extra ${view.byteLength - pos} of ${view.byteLength} byte(s) found at buffer[${posToShow}]`);
     }
-    enteringGuard() {
-        this.entered = true;
-        return {
-            [Symbol.dispose]: () => {
-                this.entered = false;
-            },
-        };
-    }
     /**
      * @throws {@link DecodeError}
      * @throws {@link RangeError}
      */
     decode(buffer) {
-        const env_1 = { stack: [], error: void 0, hasError: false };
+        if (this.entered) {
+            const instance = this.clone();
+            return instance.decode(buffer);
+        }
         try {
-            if (this.entered) {
-                const instance = this.clone();
-                return instance.decode(buffer);
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const _guard = __addDisposableResource(env_1, this.enteringGuard(), false);
+            this.entered = true;
             this.reinitializeState();
             this.setBuffer(buffer);
             const object = this.doDecodeSync();
@@ -5186,47 +5243,35 @@ class Decoder {
             }
             return object;
         }
-        catch (e_1) {
-            env_1.error = e_1;
-            env_1.hasError = true;
-        }
         finally {
-            __disposeResources(env_1);
+            this.entered = false;
         }
     }
     *decodeMulti(buffer) {
-        const env_2 = { stack: [], error: void 0, hasError: false };
+        if (this.entered) {
+            const instance = this.clone();
+            yield* instance.decodeMulti(buffer);
+            return;
+        }
         try {
-            if (this.entered) {
-                const instance = this.clone();
-                yield* instance.decodeMulti(buffer);
-                return;
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const _guard = __addDisposableResource(env_2, this.enteringGuard(), false);
+            this.entered = true;
             this.reinitializeState();
             this.setBuffer(buffer);
             while (this.hasRemaining(1)) {
                 yield this.doDecodeSync();
             }
         }
-        catch (e_2) {
-            env_2.error = e_2;
-            env_2.hasError = true;
-        }
         finally {
-            __disposeResources(env_2);
+            this.entered = false;
         }
     }
     async decodeAsync(stream) {
-        const env_3 = { stack: [], error: void 0, hasError: false };
+        if (this.entered) {
+            const instance = this.clone();
+            return instance.decodeAsync(stream);
+        }
         try {
-            if (this.entered) {
-                const instance = this.clone();
-                return instance.decodeAsync(stream);
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const _guard = __addDisposableResource(env_3, this.enteringGuard(), false);
+            this.entered = true;
             let decoded = false;
             let object;
             for await (const buffer of stream) {
@@ -5254,14 +5299,10 @@ class Decoder {
                 return object;
             }
             const { headByte, pos, totalPos } = this;
-            throw new RangeError(`Insufficient data in parsing ${(0,_utils_prettyByte_mjs__WEBPACK_IMPORTED_MODULE_4__.prettyByte)(headByte)} at ${totalPos} (${pos} in the current buffer)`);
-        }
-        catch (e_3) {
-            env_3.error = e_3;
-            env_3.hasError = true;
+            throw new RangeError(`Insufficient data in parsing ${(0,_utils_prettyByte_mjs__WEBPACK_IMPORTED_MODULE_5__.prettyByte)(headByte)} at ${totalPos} (${pos} in the current buffer)`);
         }
         finally {
-            __disposeResources(env_3);
+            this.entered = false;
         }
     }
     decodeArrayStream(stream) {
@@ -5271,15 +5312,13 @@ class Decoder {
         return this.decodeMultiAsync(stream, false);
     }
     async *decodeMultiAsync(stream, isArray) {
-        const env_4 = { stack: [], error: void 0, hasError: false };
+        if (this.entered) {
+            const instance = this.clone();
+            yield* instance.decodeMultiAsync(stream, isArray);
+            return;
+        }
         try {
-            if (this.entered) {
-                const instance = this.clone();
-                yield* instance.decodeMultiAsync(stream, isArray);
-                return;
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const _guard = __addDisposableResource(env_4, this.enteringGuard(), false);
+            this.entered = true;
             let isArrayHeaderRequired = isArray;
             let arrayItemsLeft = -1;
             for await (const buffer of stream) {
@@ -5309,12 +5348,8 @@ class Decoder {
                 this.totalPos += this.pos;
             }
         }
-        catch (e_4) {
-            env_4.error = e_4;
-            env_4.hasError = true;
-        }
         finally {
-            __disposeResources(env_4);
+            this.entered = false;
         }
     }
     doDecodeSync() {
@@ -5536,7 +5571,7 @@ class Decoder {
                 object = this.decodeExtension(size, 4);
             }
             else {
-                throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError(`Unrecognized type byte: ${(0,_utils_prettyByte_mjs__WEBPACK_IMPORTED_MODULE_4__.prettyByte)(headByte)}`);
+                throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError(`Unrecognized type byte: ${(0,_utils_prettyByte_mjs__WEBPACK_IMPORTED_MODULE_5__.prettyByte)(headByte)}`);
             }
             this.complete();
             const stack = this.stack;
@@ -5555,13 +5590,10 @@ class Decoder {
                     }
                 }
                 else if (state.type === STATE_MAP_KEY) {
-                    if (!isValidMapKeyType(object)) {
-                        throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError("The type of key must be string or number but " + typeof object);
-                    }
                     if (object === "__proto__") {
-                        throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError("The key __proto__ is not allowed");
+                        throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError("The key __proto__ is not allowed");
                     }
-                    state.key = object;
+                    state.key = this.mapKeyConverter(object);
                     state.type = STATE_MAP_VALUE;
                     continue DECODE;
                 }
@@ -5605,20 +5637,20 @@ class Decoder {
                     return headByte - 0x90;
                 }
                 else {
-                    throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError(`Unrecognized array type byte: ${(0,_utils_prettyByte_mjs__WEBPACK_IMPORTED_MODULE_4__.prettyByte)(headByte)}`);
+                    throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError(`Unrecognized array type byte: ${(0,_utils_prettyByte_mjs__WEBPACK_IMPORTED_MODULE_5__.prettyByte)(headByte)}`);
                 }
             }
         }
     }
     pushMapState(size) {
         if (size > this.maxMapLength) {
-            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError(`Max length exceeded: map length (${size}) > maxMapLengthLength (${this.maxMapLength})`);
+            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError(`Max length exceeded: map length (${size}) > maxMapLengthLength (${this.maxMapLength})`);
         }
         this.stack.pushMapState(size);
     }
     pushArrayState(size) {
         if (size > this.maxArrayLength) {
-            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError(`Max length exceeded: array length (${size}) > maxArrayLength (${this.maxArrayLength})`);
+            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError(`Max length exceeded: array length (${size}) > maxArrayLength (${this.maxArrayLength})`);
         }
         this.stack.pushArrayState(size);
     }
@@ -5633,7 +5665,7 @@ class Decoder {
      */
     decodeUtf8String(byteLength, headerOffset) {
         if (byteLength > this.maxStrLength) {
-            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError(`Max length exceeded: UTF-8 byte length (${byteLength}) > maxStrLength (${this.maxStrLength})`);
+            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError(`Max length exceeded: UTF-8 byte length (${byteLength}) > maxStrLength (${this.maxStrLength})`);
         }
         if (this.bytes.byteLength < this.pos + headerOffset + byteLength) {
             throw MORE_DATA;
@@ -5661,7 +5693,7 @@ class Decoder {
      */
     decodeBinary(byteLength, headOffset) {
         if (byteLength > this.maxBinLength) {
-            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError(`Max length exceeded: bin length (${byteLength}) > maxBinLength (${this.maxBinLength})`);
+            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError(`Max length exceeded: bin length (${byteLength}) > maxBinLength (${this.maxBinLength})`);
         }
         if (!this.hasRemaining(byteLength + headOffset)) {
             throw MORE_DATA;
@@ -5673,7 +5705,7 @@ class Decoder {
     }
     decodeExtension(size, headOffset) {
         if (size > this.maxExtLength) {
-            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_5__.DecodeError(`Max length exceeded: ext length (${size}) > maxExtLength (${this.maxExtLength})`);
+            throw new _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_0__.DecodeError(`Max length exceeded: ext length (${size}) > maxExtLength (${this.maxExtLength})`);
         }
         const extType = this.view.getInt8(this.pos + headOffset);
         const data = this.decodeBinary(size, headOffset + 1 /* extType */);
@@ -5719,12 +5751,12 @@ class Decoder {
         return value;
     }
     readU64() {
-        const value = (0,_utils_int_mjs__WEBPACK_IMPORTED_MODULE_2__.getUint64)(this.view, this.pos);
+        const value = (0,_utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__.getUint64)(this.view, this.pos);
         this.pos += 8;
         return value;
     }
     readI64() {
-        const value = (0,_utils_int_mjs__WEBPACK_IMPORTED_MODULE_2__.getInt64)(this.view, this.pos);
+        const value = (0,_utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__.getInt64)(this.view, this.pos);
         this.pos += 8;
         return value;
     }
@@ -5753,9 +5785,9 @@ class Decoder {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Encoder.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Encoder.mjs":
 /*!******************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Encoder.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Encoder.mjs ***!
   \******************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -5766,63 +5798,10 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   DEFAULT_MAX_DEPTH: () => (/* binding */ DEFAULT_MAX_DEPTH),
 /* harmony export */   Encoder: () => (/* binding */ Encoder)
 /* harmony export */ });
-/* harmony import */ var _utils_utf8_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./utils/utf8.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs");
-/* harmony import */ var _ExtensionCodec_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./ExtensionCodec.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs");
-/* harmony import */ var _utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./utils/int.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs");
-/* harmony import */ var _utils_typedArrays_mjs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./utils/typedArrays.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/typedArrays.mjs");
-var __addDisposableResource = (undefined && undefined.__addDisposableResource) || function (env, value, async) {
-    if (value !== null && value !== void 0) {
-        if (typeof value !== "object" && typeof value !== "function") throw new TypeError("Object expected.");
-        var dispose, inner;
-        if (async) {
-            if (!Symbol.asyncDispose) throw new TypeError("Symbol.asyncDispose is not defined.");
-            dispose = value[Symbol.asyncDispose];
-        }
-        if (dispose === void 0) {
-            if (!Symbol.dispose) throw new TypeError("Symbol.dispose is not defined.");
-            dispose = value[Symbol.dispose];
-            if (async) inner = dispose;
-        }
-        if (typeof dispose !== "function") throw new TypeError("Object not disposable.");
-        if (inner) dispose = function() { try { inner.call(this); } catch (e) { return Promise.reject(e); } };
-        env.stack.push({ value: value, dispose: dispose, async: async });
-    }
-    else if (async) {
-        env.stack.push({ async: true });
-    }
-    return value;
-};
-var __disposeResources = (undefined && undefined.__disposeResources) || (function (SuppressedError) {
-    return function (env) {
-        function fail(e) {
-            env.error = env.hasError ? new SuppressedError(e, env.error, "An error was suppressed during disposal.") : e;
-            env.hasError = true;
-        }
-        var r, s = 0;
-        function next() {
-            while (r = env.stack.pop()) {
-                try {
-                    if (!r.async && s === 1) return s = 0, env.stack.push(r), Promise.resolve().then(next);
-                    if (r.dispose) {
-                        var result = r.dispose.call(r.value);
-                        if (r.async) return s |= 2, Promise.resolve(result).then(next, function(e) { fail(e); return next(); });
-                    }
-                    else s |= 1;
-                }
-                catch (e) {
-                    fail(e);
-                }
-            }
-            if (s === 1) return env.hasError ? Promise.reject(env.error) : Promise.resolve();
-            if (env.hasError) throw env.error;
-        }
-        return next();
-    };
-})(typeof SuppressedError === "function" ? SuppressedError : function (error, suppressed, message) {
-    var e = new Error(message);
-    return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
-});
-
+/* harmony import */ var _utils_utf8_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./utils/utf8.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs");
+/* harmony import */ var _ExtensionCodec_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./ExtensionCodec.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs");
+/* harmony import */ var _utils_int_mjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./utils/int.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs");
+/* harmony import */ var _utils_typedArrays_mjs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./utils/typedArrays.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/typedArrays.mjs");
 
 
 
@@ -5864,62 +5843,42 @@ class Encoder {
     reinitializeState() {
         this.pos = 0;
     }
-    enteringGuard() {
-        this.entered = true;
-        return {
-            [Symbol.dispose]: () => {
-                this.entered = false;
-            },
-        };
-    }
     /**
      * This is almost equivalent to {@link Encoder#encode}, but it returns an reference of the encoder's internal buffer and thus much faster than {@link Encoder#encode}.
      *
      * @returns Encodes the object and returns a shared reference the encoder's internal buffer.
      */
     encodeSharedRef(object) {
-        const env_1 = { stack: [], error: void 0, hasError: false };
+        if (this.entered) {
+            const instance = this.clone();
+            return instance.encodeSharedRef(object);
+        }
         try {
-            if (this.entered) {
-                const instance = this.clone();
-                return instance.encodeSharedRef(object);
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const _guard = __addDisposableResource(env_1, this.enteringGuard(), false);
+            this.entered = true;
             this.reinitializeState();
             this.doEncode(object, 1);
             return this.bytes.subarray(0, this.pos);
         }
-        catch (e_1) {
-            env_1.error = e_1;
-            env_1.hasError = true;
-        }
         finally {
-            __disposeResources(env_1);
+            this.entered = false;
         }
     }
     /**
      * @returns Encodes the object and returns a copy of the encoder's internal buffer.
      */
     encode(object) {
-        const env_2 = { stack: [], error: void 0, hasError: false };
+        if (this.entered) {
+            const instance = this.clone();
+            return instance.encode(object);
+        }
         try {
-            if (this.entered) {
-                const instance = this.clone();
-                return instance.encode(object);
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const _guard = __addDisposableResource(env_2, this.enteringGuard(), false);
+            this.entered = true;
             this.reinitializeState();
             this.doEncode(object, 1);
             return this.bytes.slice(0, this.pos);
         }
-        catch (e_2) {
-            env_2.error = e_2;
-            env_2.hasError = true;
-        }
         finally {
-            __disposeResources(env_2);
+            this.entered = false;
         }
     }
     doEncode(object, depth) {
@@ -6328,9 +6287,9 @@ class Encoder {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtData.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtData.mjs":
 /*!******************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtData.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtData.mjs ***!
   \******************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6352,9 +6311,9 @@ class ExtData {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs":
 /*!*************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs ***!
   \*************************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6363,8 +6322,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   ExtensionCodec: () => (/* binding */ ExtensionCodec)
 /* harmony export */ });
-/* harmony import */ var _ExtData_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./ExtData.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtData.mjs");
-/* harmony import */ var _timestamp_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./timestamp.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/timestamp.mjs");
+/* harmony import */ var _ExtData_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./ExtData.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtData.mjs");
+/* harmony import */ var _timestamp_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./timestamp.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/timestamp.mjs");
 // ExtensionCodec to handle MessagePack extensions
 
 
@@ -6436,9 +6395,9 @@ ExtensionCodec.defaultCodec = new ExtensionCodec();
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/decode.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/decode.mjs":
 /*!*****************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/decode.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/decode.mjs ***!
   \*****************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6448,7 +6407,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   decode: () => (/* binding */ decode),
 /* harmony export */   decodeMulti: () => (/* binding */ decodeMulti)
 /* harmony export */ });
-/* harmony import */ var _Decoder_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Decoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs");
+/* harmony import */ var _Decoder_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Decoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs");
 
 /**
  * It decodes a single MessagePack object in a buffer.
@@ -6478,9 +6437,9 @@ function decodeMulti(buffer, options) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/decodeAsync.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/decodeAsync.mjs":
 /*!**********************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/decodeAsync.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/decodeAsync.mjs ***!
   \**********************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6491,8 +6450,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   decodeAsync: () => (/* binding */ decodeAsync),
 /* harmony export */   decodeMultiStream: () => (/* binding */ decodeMultiStream)
 /* harmony export */ });
-/* harmony import */ var _Decoder_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Decoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs");
-/* harmony import */ var _utils_stream_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./utils/stream.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/stream.mjs");
+/* harmony import */ var _Decoder_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Decoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs");
+/* harmony import */ var _utils_stream_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./utils/stream.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/stream.mjs");
 
 
 /**
@@ -6526,9 +6485,9 @@ function decodeMultiStream(streamLike, options) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/encode.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/encode.mjs":
 /*!*****************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/encode.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/encode.mjs ***!
   \*****************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6537,7 +6496,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   encode: () => (/* binding */ encode)
 /* harmony export */ });
-/* harmony import */ var _Encoder_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Encoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Encoder.mjs");
+/* harmony import */ var _Encoder_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Encoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Encoder.mjs");
 
 /**
  * It encodes `value` in the MessagePack format and
@@ -6553,9 +6512,9 @@ function encode(value, options) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs":
 /*!****************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs ***!
   \****************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6580,15 +6539,15 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   encodeTimeSpecToTimestamp: () => (/* reexport safe */ _timestamp_mjs__WEBPACK_IMPORTED_MODULE_8__.encodeTimeSpecToTimestamp),
 /* harmony export */   encodeTimestampExtension: () => (/* reexport safe */ _timestamp_mjs__WEBPACK_IMPORTED_MODULE_8__.encodeTimestampExtension)
 /* harmony export */ });
-/* harmony import */ var _encode_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./encode.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/encode.mjs");
-/* harmony import */ var _decode_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./decode.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/decode.mjs");
-/* harmony import */ var _decodeAsync_mjs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./decodeAsync.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/decodeAsync.mjs");
-/* harmony import */ var _Decoder_mjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./Decoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs");
-/* harmony import */ var _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./DecodeError.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs");
-/* harmony import */ var _Encoder_mjs__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./Encoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/Encoder.mjs");
-/* harmony import */ var _ExtensionCodec_mjs__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./ExtensionCodec.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs");
-/* harmony import */ var _ExtData_mjs__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./ExtData.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/ExtData.mjs");
-/* harmony import */ var _timestamp_mjs__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./timestamp.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/timestamp.mjs");
+/* harmony import */ var _encode_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./encode.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/encode.mjs");
+/* harmony import */ var _decode_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./decode.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/decode.mjs");
+/* harmony import */ var _decodeAsync_mjs__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./decodeAsync.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/decodeAsync.mjs");
+/* harmony import */ var _Decoder_mjs__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./Decoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Decoder.mjs");
+/* harmony import */ var _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./DecodeError.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs");
+/* harmony import */ var _Encoder_mjs__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./Encoder.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/Encoder.mjs");
+/* harmony import */ var _ExtensionCodec_mjs__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./ExtensionCodec.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtensionCodec.mjs");
+/* harmony import */ var _ExtData_mjs__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./ExtData.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/ExtData.mjs");
+/* harmony import */ var _timestamp_mjs__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./timestamp.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/timestamp.mjs");
 // Main Functions:
 
 
@@ -6613,9 +6572,9 @@ __webpack_require__.r(__webpack_exports__);
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/timestamp.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/timestamp.mjs":
 /*!********************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/timestamp.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/timestamp.mjs ***!
   \********************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6630,8 +6589,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   encodeTimestampExtension: () => (/* binding */ encodeTimestampExtension),
 /* harmony export */   timestampExtension: () => (/* binding */ timestampExtension)
 /* harmony export */ });
-/* harmony import */ var _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./DecodeError.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs");
-/* harmony import */ var _utils_int_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./utils/int.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs");
+/* harmony import */ var _DecodeError_mjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./DecodeError.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/DecodeError.mjs");
+/* harmony import */ var _utils_int_mjs__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./utils/int.mjs */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs");
 // https://github.com/msgpack/msgpack/blob/master/spec.md#timestamp-extension-type
 
 
@@ -6731,9 +6690,9 @@ const timestampExtension = {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs":
 /*!********************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/int.mjs ***!
   \********************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6776,9 +6735,9 @@ function getUint64(view, offset) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/prettyByte.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/prettyByte.mjs":
 /*!***************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/prettyByte.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/prettyByte.mjs ***!
   \***************************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6794,9 +6753,9 @@ function prettyByte(byte) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/stream.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/stream.mjs":
 /*!***********************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/stream.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/stream.mjs ***!
   \***********************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6811,11 +6770,6 @@ __webpack_require__.r(__webpack_exports__);
 function isAsyncIterable(object) {
     return object[Symbol.asyncIterator] != null;
 }
-function assertNonNull(value) {
-    if (value == null) {
-        throw new Error("Assertion Failure: value must not be null nor undefined");
-    }
-}
 async function* asyncIterableFromStream(stream) {
     const reader = stream.getReader();
     try {
@@ -6824,7 +6778,6 @@ async function* asyncIterableFromStream(stream) {
             if (done) {
                 return;
             }
-            assertNonNull(value);
             yield value;
         }
     }
@@ -6844,9 +6797,9 @@ function ensureAsyncIterable(streamLike) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/typedArrays.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/typedArrays.mjs":
 /*!****************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/typedArrays.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/typedArrays.mjs ***!
   \****************************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -6877,9 +6830,9 @@ function ensureUint8Array(buffer) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs":
+/***/ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs":
 /*!*********************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs ***!
+  !*** ./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/utils/utf8.mjs ***!
   \*********************************************************************************************************/
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
@@ -7065,9 +7018,9 @@ function utf8Decode(bytes, inputOffset, byteLength) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/_shortw_utils.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/_shortw_utils.js":
 /*!********************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/_shortw_utils.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/_shortw_utils.js ***!
   \********************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -7081,9 +7034,9 @@ exports.createCurve = createCurve;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const hmac_1 = __webpack_require__(/*! @noble/hashes/hmac */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/hmac.js");
-const utils_1 = __webpack_require__(/*! @noble/hashes/utils */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/utils.js");
-const weierstrass_ts_1 = __webpack_require__(/*! ./abstract/weierstrass.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/weierstrass.js");
+const hmac_1 = __webpack_require__(/*! @noble/hashes/hmac */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/hmac.js");
+const utils_1 = __webpack_require__(/*! @noble/hashes/utils */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/utils.js");
+const weierstrass_ts_1 = __webpack_require__(/*! ./abstract/weierstrass.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/weierstrass.js");
 /** connects noble-curves to noble-hashes */
 function getHash(hash) {
     return {
@@ -7100,9 +7053,9 @@ function createCurve(curveDef, defHash) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/curve.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/curve.js":
 /*!*********************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/curve.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/curve.js ***!
   \*********************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -7119,8 +7072,8 @@ exports.validateBasic = validateBasic;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js");
+const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js");
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js");
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 function constTimeNegate(condition, item) {
@@ -7493,9 +7446,9 @@ function validateBasic(curve) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/edwards.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/edwards.js":
 /*!***********************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/edwards.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/edwards.js ***!
   \***********************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -7509,10 +7462,11 @@ exports.twistedEdwards = twistedEdwards;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const curve_ts_1 = __webpack_require__(/*! ./curve.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/curve.js");
-const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
 // prettier-ignore
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js");
+const curve_ts_1 = __webpack_require__(/*! ./curve.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/curve.js");
+const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js");
+// prettier-ignore
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js");
 // Be friendly to bad ECMAScript parsers by not using bigint literals
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = BigInt(2), _8n = BigInt(8);
@@ -7647,7 +7601,7 @@ function twistedEdwards(curveDef) {
             return new Point(x, y, _1n, modP(x * y));
         }
         static normalizeZ(points) {
-            const toInv = Fp.invertBatch(points.map((p) => p.ez));
+            const toInv = (0, modular_ts_1.FpInvertBatch)(Fp, points.map((p) => p.ez));
             return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
         }
         // Multiscalar Multiplication
@@ -7857,7 +7811,7 @@ function twistedEdwards(curveDef) {
         return getExtendedPublicKey(privKey).pointBytes;
     }
     // int('LE', SHA512(dom2(F, C) || msgs)) mod N
-    function hashDomainToScalar(context = new Uint8Array(), ...msgs) {
+    function hashDomainToScalar(context = Uint8Array.of(), ...msgs) {
         const msg = (0, utils_ts_1.concatBytes)(...msgs);
         return modN_LE(cHash(domain(msg, (0, utils_ts_1.ensureBytes)('context', context), !!prehash)));
     }
@@ -7941,9 +7895,9 @@ function twistedEdwards(curveDef) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/hash-to-curve.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/hash-to-curve.js":
 /*!*****************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/hash-to-curve.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/hash-to-curve.js ***!
   \*****************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -7955,8 +7909,8 @@ exports.expand_message_xof = expand_message_xof;
 exports.hash_to_field = hash_to_field;
 exports.isogenyMap = isogenyMap;
 exports.createHasher = createHasher;
-const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js");
+const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js");
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js");
 // Octet Stream to Integer. "spec" implementation of os2ip is 2.5x slower vs bytesToNumberBE.
 const os2ip = utils_ts_1.bytesToNumberBE;
 // Integer to Octet Stream (numberToBytesBE)
@@ -8089,49 +8043,57 @@ function hash_to_field(msg, count, options) {
 }
 function isogenyMap(field, map) {
     // Make same order as in spec
-    const COEFF = map.map((i) => Array.from(i).reverse());
+    const coeff = map.map((i) => Array.from(i).reverse());
     return (x, y) => {
-        const [xNum, xDen, yNum, yDen] = COEFF.map((val) => val.reduce((acc, i) => field.add(field.mul(acc, x), i)));
-        if (field.is0(xDen) || field.is0(yDen))
-            throw new Error('bad point: ZERO');
-        x = field.div(xNum, xDen); // xNum / xDen
-        y = field.mul(y, field.div(yNum, yDen)); // y * (yNum / yDev)
-        return { x: x, y: y };
+        const [xn, xd, yn, yd] = coeff.map((val) => val.reduce((acc, i) => field.add(field.mul(acc, x), i)));
+        // 6.6.3
+        // Exceptional cases of iso_map are inputs that cause the denominator of
+        // either rational function to evaluate to zero; such cases MUST return
+        // the identity point on E.
+        const [xd_inv, yd_inv] = (0, modular_ts_1.FpInvertBatch)(field, [xd, yd], true);
+        x = field.mul(xn, xd_inv); // xNum / xDen
+        y = field.mul(y, field.mul(yn, yd_inv)); // y * (yNum / yDev)
+        return { x, y };
     };
 }
 /** Creates hash-to-curve methods from EC Point and mapToCurve function. */
-function createHasher(Point, mapToCurve, def) {
+function createHasher(Point, mapToCurve, defaults) {
     if (typeof mapToCurve !== 'function')
         throw new Error('mapToCurve() must be defined');
+    function map(num) {
+        return Point.fromAffine(mapToCurve(num));
+    }
+    function clear(initial) {
+        const P = initial.clearCofactor();
+        if (P.equals(Point.ZERO))
+            return Point.ZERO; // zero will throw in assert
+        P.assertValidity();
+        return P;
+    }
     return {
+        defaults,
         // Encodes byte string to elliptic curve.
         // hash_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
         hashToCurve(msg, options) {
-            const u = hash_to_field(msg, 2, { ...def, DST: def.DST, ...options });
-            const u0 = Point.fromAffine(mapToCurve(u[0]));
-            const u1 = Point.fromAffine(mapToCurve(u[1]));
-            const P = u0.add(u1).clearCofactor();
-            P.assertValidity();
-            return P;
+            const u = hash_to_field(msg, 2, { ...defaults, DST: defaults.DST, ...options });
+            const u0 = map(u[0]);
+            const u1 = map(u[1]);
+            return clear(u0.add(u1));
         },
         // Encodes byte string to elliptic curve.
         // encode_to_curve from https://www.rfc-editor.org/rfc/rfc9380#section-3
         encodeToCurve(msg, options) {
-            const u = hash_to_field(msg, 1, { ...def, DST: def.encodeDST, ...options });
-            const P = Point.fromAffine(mapToCurve(u[0])).clearCofactor();
-            P.assertValidity();
-            return P;
+            const u = hash_to_field(msg, 1, { ...defaults, DST: defaults.encodeDST, ...options });
+            return clear(map(u[0]));
         },
         // Same as encodeToCurve, but without hash
         mapToCurve(scalars) {
             if (!Array.isArray(scalars))
-                throw new Error('mapToCurve: expected array of bigints');
+                throw new Error('expected array of bigints');
             for (const i of scalars)
                 if (typeof i !== 'bigint')
-                    throw new Error('mapToCurve: expected array of bigints');
-            const P = Point.fromAffine(mapToCurve(scalars)).clearCofactor();
-            P.assertValidity();
-            return P;
+                    throw new Error('expected array of bigints');
+            return clear(map(scalars));
         },
     };
 }
@@ -8139,9 +8101,9 @@ function createHasher(Point, mapToCurve, def) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js":
 /*!***********************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js ***!
   \***********************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -8176,7 +8138,8 @@ exports.mapHashToField = mapHashToField;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js");
+const utils_1 = __webpack_require__(/*! @noble/hashes/utils */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/utils.js");
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js");
 // prettier-ignore
 const _0n = BigInt(0), _1n = BigInt(1), _2n = /* @__PURE__ */ BigInt(2), _3n = /* @__PURE__ */ BigInt(3);
 // prettier-ignore
@@ -8191,7 +8154,7 @@ function mod(a, b) {
 /**
  * Efficiently raise num to power and do modular division.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
- * @todo use field version && remove
+ * TODO: remove.
  * @example
  * pow(2n, 6n, 11n) // 64n % 11n == 9n
  */
@@ -8252,27 +8215,25 @@ function invert(number, modulo) {
  * Tonelli-Shanks square root search algorithm.
  * 1. https://eprint.iacr.org/2012/685.pdf (page 12)
  * 2. Square Roots from 1; 24, 51, 10 to Dan Shanks
- * Will start an infinite loop if field order P is not prime.
  * @param P field order
  * @returns function that takes field Fp (created from P) and number n
  */
 function tonelliShanks(P) {
-    // Legendre constant: used to calculate Legendre symbol (a | p),
-    // which denotes the value of a^((p-1)/2) (mod p).
-    // (a | p) ≡ 1    if a is a square (mod p)
-    // (a | p) ≡ -1   if a is not a square (mod p)
-    // (a | p) ≡ 0    if a ≡ 0 (mod p)
-    const legendreC = (P - _1n) / _2n;
-    let Q, S, Z;
+    // Do expensive precomputation step
     // Step 1: By factoring out powers of 2 from p - 1,
-    // find q and s such that p - 1 = q*(2^s) with q odd
-    for (Q = P - _1n, S = 0; Q % _2n === _0n; Q /= _2n, S++)
-        ;
+    // find q and s such that p-1 == q*(2^s) with q odd
+    let Q = P - _1n;
+    let S = 0;
+    while (Q % _2n === _0n) {
+        Q /= _2n;
+        S++;
+    }
     // Step 2: Select a non-square z such that (z | p) ≡ -1 and set c ≡ zq
-    for (Z = _2n; Z < P && pow(Z, legendreC, P) !== P - _1n; Z++) {
-        // Crash instead of infinity loop, we cannot reasonable count until P.
-        if (Z > 1000)
-            throw new Error('Cannot find square root: likely non-prime P');
+    let Z = _2n;
+    const _Fp = Field(P);
+    while (Z < P && FpIsSquare(_Fp, Z)) {
+        if (Z++ > 1000)
+            throw new Error('Cannot find square root: probably non-prime P');
     }
     // Fast-path
     if (S === 1) {
@@ -8288,16 +8249,18 @@ function tonelliShanks(P) {
     const Q1div2 = (Q + _1n) / _2n;
     return function tonelliSlow(Fp, n) {
         // Step 0: Check that n is indeed a square: (n | p) should not be ≡ -1
-        if (Fp.pow(n, legendreC) === Fp.neg(Fp.ONE))
+        if (!FpIsSquare(Fp, n))
             throw new Error('Cannot find square root');
         let r = S;
-        // TODO: will fail at Fp2/etc
+        // TODO: test on Fp2 and others
         let g = Fp.pow(Fp.mul(Fp.ONE, Z), Q); // will update both x and b
         let x = Fp.pow(n, Q1div2); // first guess at the square root
         let b = Fp.pow(n, Q); // first guess at the fudge factor
         while (!Fp.eql(b, Fp.ONE)) {
+            // (4. If t = 0, return r = 0)
+            // https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm
             if (Fp.eql(b, Fp.ZERO))
-                return Fp.ZERO; // https://en.wikipedia.org/wiki/Tonelli%E2%80%93Shanks_algorithm (4. If t = 0, return r = 0)
+                return Fp.ZERO;
             // Find m such b^(2^m)==1
             let m = 1;
             for (let t2 = Fp.sqr(b); m < r; m++) {
@@ -8305,7 +8268,8 @@ function tonelliShanks(P) {
                     break;
                 t2 = Fp.sqr(t2); // t2 *= t2
             }
-            // NOTE: r-m-1 can be bigger than 32, need to convert to bigint before shift, otherwise there will be overflow
+            // NOTE: r-m-1 can be bigger than 32, need to convert to bigint before shift,
+            // otherwise there will be overflow.
             const ge = Fp.pow(g, _1n << BigInt(r - m - 1)); // ge = 2^(r-m-1)
             g = Fp.sqr(ge); // g = ge * ge
             x = Fp.mul(x, ge); // x *= ge
@@ -8334,8 +8298,8 @@ function FpSqrt(P) {
         // const ORDER =
         //   0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaabn;
         // const NUM = 72057594037927816n;
-        const p1div4 = (P + _1n) / _4n;
         return function sqrt3mod4(Fp, n) {
+            const p1div4 = (P + _1n) / _4n;
             const root = Fp.pow(n, p1div4);
             // Throw if root**2 != n
             if (!Fp.eql(Fp.sqr(root), n))
@@ -8345,9 +8309,9 @@ function FpSqrt(P) {
     }
     // Atkin algorithm for q ≡ 5 (mod 8), https://eprint.iacr.org/2012/685.pdf (page 10)
     if (P % _8n === _5n) {
-        const c1 = (P - _5n) / _8n;
         return function sqrt5mod8(Fp, n) {
             const n2 = Fp.mul(n, _2n);
+            const c1 = (P - _5n) / _8n;
             const v = Fp.pow(n2, c1);
             const nv = Fp.mul(n, v);
             const i = Fp.mul(Fp.mul(nv, _2n), v);
@@ -8409,73 +8373,82 @@ function validateField(field) {
  * Same as `pow` but for Fp: non-constant-time.
  * Unsafe in some contexts: uses ladder, so can expose bigint bits.
  */
-function FpPow(f, num, power) {
-    // Should have same speed as pow for bigints
-    // TODO: benchmark!
+function FpPow(Fp, num, power) {
     if (power < _0n)
         throw new Error('invalid exponent, negatives unsupported');
     if (power === _0n)
-        return f.ONE;
+        return Fp.ONE;
     if (power === _1n)
         return num;
-    let p = f.ONE;
+    // @ts-ignore
+    let p = Fp.ONE;
     let d = num;
     while (power > _0n) {
         if (power & _1n)
-            p = f.mul(p, d);
-        d = f.sqr(d);
+            p = Fp.mul(p, d);
+        d = Fp.sqr(d);
         power >>= _1n;
     }
     return p;
 }
 /**
  * Efficiently invert an array of Field elements.
- * `inv(0)` will return `undefined` here: make sure to throw an error.
+ * Exception-free. Will return `undefined` for 0 elements.
+ * @param passZero map 0 to 0 (instead of undefined)
  */
-function FpInvertBatch(f, nums) {
-    const tmp = new Array(nums.length);
+function FpInvertBatch(Fp, nums, passZero = false) {
+    const inverted = new Array(nums.length).fill(passZero ? Fp.ZERO : undefined);
     // Walk from first to last, multiply them by each other MOD p
-    const lastMultiplied = nums.reduce((acc, num, i) => {
-        if (f.is0(num))
+    const multipliedAcc = nums.reduce((acc, num, i) => {
+        if (Fp.is0(num))
             return acc;
-        tmp[i] = acc;
-        return f.mul(acc, num);
-    }, f.ONE);
+        inverted[i] = acc;
+        return Fp.mul(acc, num);
+    }, Fp.ONE);
     // Invert last element
-    const inverted = f.inv(lastMultiplied);
+    const invertedAcc = Fp.inv(multipliedAcc);
     // Walk from last to first, multiply them by inverted each other MOD p
     nums.reduceRight((acc, num, i) => {
-        if (f.is0(num))
+        if (Fp.is0(num))
             return acc;
-        tmp[i] = f.mul(acc, tmp[i]);
-        return f.mul(acc, num);
-    }, inverted);
-    return tmp;
+        inverted[i] = Fp.mul(acc, inverted[i]);
+        return Fp.mul(acc, num);
+    }, invertedAcc);
+    return inverted;
 }
-function FpDiv(f, lhs, rhs) {
-    return f.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, f.ORDER) : f.inv(rhs));
+// TODO: remove
+function FpDiv(Fp, lhs, rhs) {
+    return Fp.mul(lhs, typeof rhs === 'bigint' ? invert(rhs, Fp.ORDER) : Fp.inv(rhs));
 }
 /**
  * Legendre symbol.
+ * Legendre constant is used to calculate Legendre symbol (a | p)
+ * which denotes the value of a^((p-1)/2) (mod p)..
+ *
  * * (a | p) ≡ 1    if a is a square (mod p), quadratic residue
  * * (a | p) ≡ -1   if a is not a square (mod p), quadratic non residue
  * * (a | p) ≡ 0    if a ≡ 0 (mod p)
  */
-function FpLegendre(order) {
-    const legendreConst = (order - _1n) / _2n; // Integer arithmetic
-    return (f, x) => f.pow(x, legendreConst);
+function FpLegendre(Fp, n) {
+    const legc = (Fp.ORDER - _1n) / _2n;
+    const powered = Fp.pow(n, legc);
+    const yes = Fp.eql(powered, Fp.ONE);
+    const zero = Fp.eql(powered, Fp.ZERO);
+    const no = Fp.eql(powered, Fp.neg(Fp.ONE));
+    if (!yes && !zero && !no)
+        throw new Error('Cannot find square root: probably non-prime P');
+    return yes ? 1 : zero ? 0 : -1;
 }
 // This function returns True whenever the value x is a square in the field F.
-function FpIsSquare(f) {
-    const legendre = FpLegendre(f.ORDER);
-    return (x) => {
-        const p = legendre(f, x);
-        return f.eql(p, f.ZERO) || f.eql(p, f.ONE);
-    };
+function FpIsSquare(Fp, n) {
+    const l = FpLegendre(Fp, n);
+    return l === 0 || l === 1;
 }
 // CURVE.n lengths
 function nLength(n, nBitLength) {
     // Bit size, byte size of CURVE.n
+    if (nBitLength !== undefined)
+        (0, utils_1.anumber)(nBitLength);
     const _nBitLength = nBitLength !== undefined ? nBitLength : n.toString(2).length;
     const nByteLength = Math.ceil(_nBitLength / 8);
     return { nBitLength: _nBitLength, nByteLength };
@@ -8538,16 +8511,17 @@ function Field(ORDER, bitLen, isLE = false, redef = {}) {
                     sqrtP = FpSqrt(ORDER);
                 return sqrtP(f, n);
             }),
-        invertBatch: (lst) => FpInvertBatch(f, lst),
-        // TODO: do we really need constant cmov?
-        // We don't have const-time bigints anyway, so probably will be not very useful
-        cmov: (a, b, c) => (c ? b : a),
         toBytes: (num) => (isLE ? (0, utils_ts_1.numberToBytesLE)(num, BYTES) : (0, utils_ts_1.numberToBytesBE)(num, BYTES)),
         fromBytes: (bytes) => {
             if (bytes.length !== BYTES)
                 throw new Error('Field.fromBytes: expected ' + BYTES + ' bytes, got ' + bytes.length);
             return isLE ? (0, utils_ts_1.bytesToNumberLE)(bytes) : (0, utils_ts_1.bytesToNumberBE)(bytes);
         },
+        // TODO: we don't need it here, move out to separate fn
+        invertBatch: (lst) => FpInvertBatch(f, lst),
+        // We can't move this out because Fp6, Fp12 implement it
+        // and it's unclear what to return in there.
+        cmov: (a, b, c) => (c ? b : a),
     });
     return Object.freeze(f);
 }
@@ -8630,9 +8604,9 @@ function mapHashToField(key, fieldOrder, isLE = false) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/montgomery.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/montgomery.js":
 /*!**************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/montgomery.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/montgomery.js ***!
   \**************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -8647,8 +8621,8 @@ exports.montgomery = montgomery;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js");
+const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js");
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js");
 const _0n = BigInt(0);
 const _1n = BigInt(1);
 function validateOpts(curve) {
@@ -8669,12 +8643,13 @@ function validateOpts(curve) {
 function montgomery(curveDef) {
     const CURVE = validateOpts(curveDef);
     const { P } = CURVE;
+    const Fp = (0, modular_ts_1.Field)(P);
     const modP = (n) => (0, modular_ts_1.mod)(n, P);
     const montgomeryBits = CURVE.montgomeryBits;
     const montgomeryBytes = Math.ceil(montgomeryBits / 8);
     const fieldLen = CURVE.nByteLength;
     const adjustScalarBytes = CURVE.adjustScalarBytes || ((bytes) => bytes);
-    const powPminus2 = CURVE.powPminus2 || ((x) => (0, modular_ts_1.pow)(x, P - BigInt(2), P));
+    const powPminus2 = CURVE.powPminus2 || ((x) => Fp.pow(x, P - BigInt(2)));
     // cswap from RFC7748. But it is not from RFC7748!
     /*
       cswap(swap, x_2, x_3):
@@ -8800,9 +8775,9 @@ function montgomery(curveDef) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js":
 /*!*********************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js ***!
   \*********************************************************************************************/
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -8856,6 +8831,7 @@ function abool(title, value) {
     if (typeof value !== 'boolean')
         throw new Error(title + ' boolean expected, got ' + value);
 }
+// Used in weierstrass, der
 function numberToHexUnpadded(num) {
     const hex = num.toString(16);
     return hex.length & 1 ? '0' + hex : hex;
@@ -9032,6 +9008,7 @@ function aInRange(title, n, min, max) {
 /**
  * Calculates amount of bits in a bigint.
  * Same as `n.toString(2).length`
+ * TODO: merge with nLength in modular
  */
 function bitLen(n) {
     let len;
@@ -9185,9 +9162,9 @@ function memoized(fn) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/weierstrass.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/weierstrass.js":
 /*!***************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/weierstrass.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/weierstrass.js ***!
   \***************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -9240,11 +9217,11 @@ exports.mapToCurveSimpleSWU = mapToCurveSimpleSWU;
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 // prettier-ignore
-const curve_ts_1 = __webpack_require__(/*! ./curve.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/curve.js");
+const curve_ts_1 = __webpack_require__(/*! ./curve.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/curve.js");
 // prettier-ignore
-const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
+const modular_ts_1 = __webpack_require__(/*! ./modular.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js");
 // prettier-ignore
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js");
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js");
 function validateSigVerOpts(opts) {
     if (opts.lowS !== undefined)
         (0, utils_ts_1.abool)('lowS', opts.lowS);
@@ -9523,7 +9500,7 @@ function weierstrassPoints(opts) {
         constructor(px, py, pz) {
             if (px == null || !Fp.isValid(px))
                 throw new Error('x required');
-            if (py == null || !Fp.isValid(py))
+            if (py == null || !Fp.isValid(py) || Fp.is0(py))
                 throw new Error('y required');
             if (pz == null || !Fp.isValid(pz))
                 throw new Error('z required');
@@ -9559,7 +9536,7 @@ function weierstrassPoints(opts) {
          * Optimization: converts a list of projective points to a list of identical points with Z=1.
          */
         static normalizeZ(points) {
-            const toInv = Fp.invertBatch(points.map((p) => p.pz));
+            const toInv = (0, modular_ts_1.FpInvertBatch)(Fp, points.map((p) => p.pz));
             return points.map((p, i) => p.toAffine(toInv[i])).map(Point.fromAffine);
         }
         /**
@@ -9828,10 +9805,9 @@ function weierstrassPoints(opts) {
         }
     }
     Point.BASE = new Point(CURVE.Gx, CURVE.Gy, Fp.ONE);
-    Point.ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO);
+    Point.ZERO = new Point(Fp.ZERO, Fp.ONE, Fp.ZERO); // 0, 1, 0
     const _bits = CURVE.nBitLength;
     const wnaf = (0, curve_ts_1.wNAF)(Point, CURVE.endo ? Math.ceil(_bits / 2) : _bits);
-    // Validate if generator point is on curve
     return {
         CURVE,
         ProjectivePoint: Point,
@@ -9996,7 +9972,7 @@ function weierstrass(curveDef) {
             return (0, utils_ts_1.hexToBytes)(this.toDERHex());
         }
         toDERHex() {
-            return exports.DER.hexFromSig({ r: this.r, s: this.s });
+            return exports.DER.hexFromSig(this);
         }
         // padded bytes of r, then padded bytes of s
         toCompactRawBytes() {
@@ -10394,7 +10370,8 @@ function mapToCurveSimpleSWU(Fp, opts) {
         y = Fp.cmov(y, value, isValid); // 22.   y = CMOV(y, y1, is_gx1_square)
         const e1 = Fp.isOdd(u) === Fp.isOdd(y); // 23.  e1 = sgn0(u) == sgn0(y)
         y = Fp.cmov(Fp.neg(y), y, e1); // 24.   y = CMOV(-y, y, e1)
-        x = Fp.div(x, tv4); // 25.   x = x / tv4
+        const tv4_inv = (0, modular_ts_1.FpInvertBatch)(Fp, [tv4], true)[0];
+        x = Fp.mul(x, tv4_inv); // 25.   x = x / tv4
         return { x, y };
     };
 }
@@ -10402,16 +10379,16 @@ function mapToCurveSimpleSWU(Fp, opts) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/ed25519.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/ed25519.js":
 /*!**************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/ed25519.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/ed25519.js ***!
   \**************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.hash_to_ristretto255 = exports.hashToRistretto255 = exports.RistrettoPoint = exports.encodeToCurve = exports.hashToCurve = exports.edwardsToMontgomery = exports.x25519 = exports.ed25519ph = exports.ed25519ctx = exports.ed25519 = exports.ED25519_TORSION_SUBGROUP = void 0;
+exports.hash_to_ristretto255 = exports.hashToRistretto255 = exports.RistrettoPoint = exports.encodeToCurve = exports.hashToCurve = exports.ed25519_hasher = exports.edwardsToMontgomery = exports.x25519 = exports.ed25519ph = exports.ed25519ctx = exports.ed25519 = exports.ED25519_TORSION_SUBGROUP = void 0;
 exports.edwardsToMontgomeryPub = edwardsToMontgomeryPub;
 exports.edwardsToMontgomeryPriv = edwardsToMontgomeryPriv;
 /**
@@ -10422,14 +10399,14 @@ exports.edwardsToMontgomeryPriv = edwardsToMontgomeryPriv;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const sha2_1 = __webpack_require__(/*! @noble/hashes/sha2 */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha2.js");
-const utils_1 = __webpack_require__(/*! @noble/hashes/utils */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/utils.js");
-const curve_ts_1 = __webpack_require__(/*! ./abstract/curve.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/curve.js");
-const edwards_ts_1 = __webpack_require__(/*! ./abstract/edwards.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/edwards.js");
-const hash_to_curve_ts_1 = __webpack_require__(/*! ./abstract/hash-to-curve.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/hash-to-curve.js");
-const modular_ts_1 = __webpack_require__(/*! ./abstract/modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
-const montgomery_ts_1 = __webpack_require__(/*! ./abstract/montgomery.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/montgomery.js");
-const utils_ts_1 = __webpack_require__(/*! ./abstract/utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/utils.js");
+const sha2_1 = __webpack_require__(/*! @noble/hashes/sha2 */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha2.js");
+const utils_1 = __webpack_require__(/*! @noble/hashes/utils */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/utils.js");
+const curve_ts_1 = __webpack_require__(/*! ./abstract/curve.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/curve.js");
+const edwards_ts_1 = __webpack_require__(/*! ./abstract/edwards.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/edwards.js");
+const hash_to_curve_ts_1 = __webpack_require__(/*! ./abstract/hash-to-curve.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/hash-to-curve.js");
+const modular_ts_1 = __webpack_require__(/*! ./abstract/modular.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js");
+const montgomery_ts_1 = __webpack_require__(/*! ./abstract/montgomery.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/montgomery.js");
+const utils_ts_1 = __webpack_require__(/*! ./abstract/utils.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/utils.js");
 // 2n**255n - 19n
 const ED25519_P = BigInt('57896044618658097711785492504343953926634992332820282019728792003956564819949');
 // √(-1) aka √(a) aka 2^((p-1)/4)
@@ -10663,10 +10640,10 @@ function map_to_curve_elligator2_edwards25519(u) {
     xd = Fp.cmov(xd, Fp.ONE, e); //  10. xd = CMOV(xd, 1, e)
     yn = Fp.cmov(yn, Fp.ONE, e); //  11. yn = CMOV(yn, 1, e)
     yd = Fp.cmov(yd, Fp.ONE, e); //  12. yd = CMOV(yd, 1, e)
-    const inv = Fp.invertBatch([xd, yd]); // batch division
-    return { x: Fp.mul(xn, inv[0]), y: Fp.mul(yn, inv[1]) }; //  13. return (xn, xd, yn, yd)
+    const [xd_inv, yd_inv] = (0, modular_ts_1.FpInvertBatch)(Fp, [xd, yd], true); // batch division
+    return { x: Fp.mul(xn, xd_inv), y: Fp.mul(yn, yd_inv) }; //  13. return (xn, xd, yn, yd)
 }
-const htf = /* @__PURE__ */ (() => (0, hash_to_curve_ts_1.createHasher)(exports.ed25519.ExtendedPoint, (scalars) => map_to_curve_elligator2_edwards25519(scalars[0]), {
+exports.ed25519_hasher = (() => (0, hash_to_curve_ts_1.createHasher)(exports.ed25519.ExtendedPoint, (scalars) => map_to_curve_elligator2_edwards25519(scalars[0]), {
     DST: 'edwards25519_XMD:SHA-512_ELL2_RO_',
     encodeDST: 'edwards25519_XMD:SHA-512_ELL2_NU_',
     p: Fp.ORDER,
@@ -10675,8 +10652,8 @@ const htf = /* @__PURE__ */ (() => (0, hash_to_curve_ts_1.createHasher)(exports.
     expand: 'xmd',
     hash: sha2_1.sha512,
 }))();
-exports.hashToCurve = (() => htf.hashToCurve)();
-exports.encodeToCurve = (() => htf.encodeToCurve)();
+exports.hashToCurve = (() => exports.ed25519_hasher.hashToCurve)();
+exports.encodeToCurve = (() => exports.ed25519_hasher.encodeToCurve)();
 function aristp(other) {
     if (!(other instanceof RistPoint))
         throw new Error('RistrettoPoint expected');
@@ -10884,53 +10861,54 @@ exports.hash_to_ristretto255 = exports.hashToRistretto255; // legacy
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p256.js":
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/nist.js":
 /*!***********************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p256.js ***!
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/nist.js ***!
   \***********************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.encodeToCurve = exports.hashToCurve = exports.secp256r1 = exports.p256 = void 0;
+exports.p521_hasher = exports.secp521r1 = exports.p521 = exports.p384_hasher = exports.secp384r1 = exports.p384 = exports.p256_hasher = exports.secp256r1 = exports.p256 = void 0;
 /**
- * NIST secp256r1 aka p256.
- * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-256
+ * Internal module for NIST P256, P384, P521 curves.
+ * Do not use for now.
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const sha2_1 = __webpack_require__(/*! @noble/hashes/sha2 */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha2.js");
-const _shortw_utils_ts_1 = __webpack_require__(/*! ./_shortw_utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/_shortw_utils.js");
-const hash_to_curve_ts_1 = __webpack_require__(/*! ./abstract/hash-to-curve.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/hash-to-curve.js");
-const modular_ts_1 = __webpack_require__(/*! ./abstract/modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
-const weierstrass_ts_1 = __webpack_require__(/*! ./abstract/weierstrass.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/weierstrass.js");
+const sha2_1 = __webpack_require__(/*! @noble/hashes/sha2 */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha2.js");
+const _shortw_utils_ts_1 = __webpack_require__(/*! ./_shortw_utils.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/_shortw_utils.js");
+const hash_to_curve_ts_1 = __webpack_require__(/*! ./abstract/hash-to-curve.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/hash-to-curve.js");
+const modular_ts_1 = __webpack_require__(/*! ./abstract/modular.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/modular.js");
+const weierstrass_ts_1 = __webpack_require__(/*! ./abstract/weierstrass.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/abstract/weierstrass.js");
 const Fp256 = (0, modular_ts_1.Field)(BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff'));
-const CURVE_A = Fp256.create(BigInt('-3'));
-const CURVE_B = BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b');
+const p256_a = Fp256.create(BigInt('-3'));
+const p256_b = BigInt('0x5ac635d8aa3a93e7b3ebbd55769886bc651d06b0cc53b0f63bce3c3e27d2604b');
 /**
  * secp256r1 curve, ECDSA and ECDH methods.
  * Field: `2n**224n * (2n**32n-1n) + 2n**192n + 2n**96n-1n`
  */
 // prettier-ignore
 exports.p256 = (0, _shortw_utils_ts_1.createCurve)({
-    a: CURVE_A,
-    b: CURVE_B,
+    a: p256_a,
+    b: p256_b,
     Fp: Fp256,
     n: BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551'),
     Gx: BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'),
     Gy: BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5'),
     h: BigInt(1),
-    lowS: false,
+    lowS: false
 }, sha2_1.sha256);
 /** Alias to p256. */
 exports.secp256r1 = exports.p256;
-const mapSWU = /* @__PURE__ */ (() => (0, weierstrass_ts_1.mapToCurveSimpleSWU)(Fp256, {
-    A: CURVE_A,
-    B: CURVE_B,
+const p256_mapSWU = /* @__PURE__ */ (() => (0, weierstrass_ts_1.mapToCurveSimpleSWU)(Fp256, {
+    A: p256_a,
+    B: p256_b,
     Z: Fp256.create(BigInt('-10')),
 }))();
-const htf = /* @__PURE__ */ (() => (0, hash_to_curve_ts_1.createHasher)(exports.secp256r1.ProjectivePoint, (scalars) => mapSWU(scalars[0]), {
+/** Hashing / encoding to p256 points / field. RFC 9380 methods. */
+exports.p256_hasher = (() => (0, hash_to_curve_ts_1.createHasher)(exports.secp256r1.ProjectivePoint, (scalars) => p256_mapSWU(scalars[0]), {
     DST: 'P256_XMD:SHA-256_SSWU_RO_',
     encodeDST: 'P256_XMD:SHA-256_SSWU_NU_',
     p: Fp256.ORDER,
@@ -10939,63 +10917,35 @@ const htf = /* @__PURE__ */ (() => (0, hash_to_curve_ts_1.createHasher)(exports.
     expand: 'xmd',
     hash: sha2_1.sha256,
 }))();
-/** secp256r1 hash-to-curve from RFC 9380. */
-exports.hashToCurve = (() => htf.hashToCurve)();
-/** secp256r1 encode-to-curve from RFC 9380. */
-exports.encodeToCurve = (() => htf.encodeToCurve)();
-//# sourceMappingURL=p256.js.map
-
-/***/ }),
-
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p384.js":
-/*!***********************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p384.js ***!
-  \***********************************************************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.encodeToCurve = exports.hashToCurve = exports.secp384r1 = exports.p384 = void 0;
-/**
- * NIST secp384r1 aka p384.
- * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-384
- * @module
- */
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const sha2_1 = __webpack_require__(/*! @noble/hashes/sha2 */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha2.js");
-const _shortw_utils_ts_1 = __webpack_require__(/*! ./_shortw_utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/_shortw_utils.js");
-const hash_to_curve_ts_1 = __webpack_require__(/*! ./abstract/hash-to-curve.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/hash-to-curve.js");
-const modular_ts_1 = __webpack_require__(/*! ./abstract/modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
-const weierstrass_ts_1 = __webpack_require__(/*! ./abstract/weierstrass.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/weierstrass.js");
 // Field over which we'll do calculations.
 const Fp384 = (0, modular_ts_1.Field)(BigInt('0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeffffffff0000000000000000ffffffff'));
-const CURVE_A = Fp384.create(BigInt('-3'));
+const p384_a = Fp384.create(BigInt('-3'));
 // prettier-ignore
-const CURVE_B = BigInt('0xb3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef');
+const p384_b = BigInt('0xb3312fa7e23ee7e4988e056be3f82d19181d9c6efe8141120314088f5013875ac656398d8a2ed19d2a85c8edd3ec2aef');
 /**
  * secp384r1 curve, ECDSA and ECDH methods.
  * Field: `2n**384n - 2n**128n - 2n**96n + 2n**32n - 1n`.
  * */
 // prettier-ignore
 exports.p384 = (0, _shortw_utils_ts_1.createCurve)({
-    a: CURVE_A,
-    b: CURVE_B,
+    a: p384_a,
+    b: p384_b,
     Fp: Fp384,
     n: BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffc7634d81f4372ddf581a0db248b0a77aecec196accc52973'),
     Gx: BigInt('0xaa87ca22be8b05378eb1c71ef320ad746e1d3b628ba79b9859f741e082542a385502f25dbf55296c3a545e3872760ab7'),
     Gy: BigInt('0x3617de4a96262c6f5d9e98bf9292dc29f8f41dbd289a147ce9da3113b5f0b8c00a60b1ce1d7e819d7a431d7c90ea0e5f'),
     h: BigInt(1),
-    lowS: false,
+    lowS: false
 }, sha2_1.sha384);
 /** Alias to p384. */
 exports.secp384r1 = exports.p384;
-const mapSWU = /* @__PURE__ */ (() => (0, weierstrass_ts_1.mapToCurveSimpleSWU)(Fp384, {
-    A: CURVE_A,
-    B: CURVE_B,
+const p384_mapSWU = /* @__PURE__ */ (() => (0, weierstrass_ts_1.mapToCurveSimpleSWU)(Fp384, {
+    A: p384_a,
+    B: p384_b,
     Z: Fp384.create(BigInt('-12')),
 }))();
-const htf = /* @__PURE__ */ (() => (0, hash_to_curve_ts_1.createHasher)(exports.secp384r1.ProjectivePoint, (scalars) => mapSWU(scalars[0]), {
+/** Hashing / encoding to p384 points / field. RFC 9380 methods. */
+exports.p384_hasher = (() => (0, hash_to_curve_ts_1.createHasher)(exports.secp384r1.ProjectivePoint, (scalars) => p384_mapSWU(scalars[0]), {
     DST: 'P384_XMD:SHA-384_SSWU_RO_',
     encodeDST: 'P384_XMD:SHA-384_SSWU_NU_',
     p: Fp384.ORDER,
@@ -11004,48 +10954,18 @@ const htf = /* @__PURE__ */ (() => (0, hash_to_curve_ts_1.createHasher)(exports.
     expand: 'xmd',
     hash: sha2_1.sha384,
 }))();
-/** secp384r1 hash-to-curve from RFC 9380. */
-exports.hashToCurve = (() => htf.hashToCurve)();
-/** secp384r1 encode-to-curve from RFC 9380. */
-exports.encodeToCurve = (() => htf.encodeToCurve)();
-//# sourceMappingURL=p384.js.map
-
-/***/ }),
-
-/***/ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p521.js":
-/*!***********************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p521.js ***!
-  \***********************************************************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.encodeToCurve = exports.hashToCurve = exports.secp521r1 = exports.p521 = void 0;
-/**
- * NIST secp521r1 aka p521.
- * Note that it's 521, which differs from 512 of its hash function.
- * https://www.secg.org/sec2-v2.pdf, https://neuromancer.sk/std/nist/P-521
- * @module
- */
-/*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const sha2_1 = __webpack_require__(/*! @noble/hashes/sha2 */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha2.js");
-const _shortw_utils_ts_1 = __webpack_require__(/*! ./_shortw_utils.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/_shortw_utils.js");
-const hash_to_curve_ts_1 = __webpack_require__(/*! ./abstract/hash-to-curve.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/hash-to-curve.js");
-const modular_ts_1 = __webpack_require__(/*! ./abstract/modular.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/modular.js");
-const weierstrass_ts_1 = __webpack_require__(/*! ./abstract/weierstrass.js */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/abstract/weierstrass.js");
 // Field over which we'll do calculations.
 const Fp521 = (0, modular_ts_1.Field)(BigInt('0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'));
-const CURVE_A = Fp521.create(BigInt('-3'));
-const CURVE_B = BigInt('0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00');
+const p521_a = Fp521.create(BigInt('-3'));
+const p521_b = BigInt('0x0051953eb9618e1c9a1f929a21a0b68540eea2da725b99b315f3b8b489918ef109e156193951ec7e937b1652c0bd3bb1bf073573df883d2c34f1ef451fd46b503f00');
 /**
  * NIST secp521r1 aka p521 curve, ECDSA and ECDH methods.
  * Field: `2n**521n - 1n`.
  */
 // prettier-ignore
 exports.p521 = (0, _shortw_utils_ts_1.createCurve)({
-    a: CURVE_A,
-    b: CURVE_B,
+    a: p521_a,
+    b: p521_b,
     Fp: Fp521,
     n: BigInt('0x01fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffa51868783bf2f966b7fcc0148f709a5d03bb5c9b8899c47aebb6fb71e91386409'),
     Gx: BigInt('0x00c6858e06b70404e9cd9e3ecb662395b4429c648139053fb521f828af606b4d3dbaa14b5e77efe75928fe1dc127a2ffa8de3348b3c1856a429bf97e7e31c2e5bd66'),
@@ -11055,12 +10975,13 @@ exports.p521 = (0, _shortw_utils_ts_1.createCurve)({
     allowedPrivateKeyLengths: [130, 131, 132] // P521 keys are variable-length. Normalize to 132b
 }, sha2_1.sha512);
 exports.secp521r1 = exports.p521;
-const mapSWU = /* @__PURE__ */ (() => (0, weierstrass_ts_1.mapToCurveSimpleSWU)(Fp521, {
-    A: CURVE_A,
-    B: CURVE_B,
+const p521_mapSWU = /* @__PURE__ */ (() => (0, weierstrass_ts_1.mapToCurveSimpleSWU)(Fp521, {
+    A: p521_a,
+    B: p521_b,
     Z: Fp521.create(BigInt('-4')),
 }))();
-const htf = /* @__PURE__ */ (() => (0, hash_to_curve_ts_1.createHasher)(exports.secp521r1.ProjectivePoint, (scalars) => mapSWU(scalars[0]), {
+/** Hashing / encoding to p521 points / field. RFC 9380 methods. */
+exports.p521_hasher = (() => (0, hash_to_curve_ts_1.createHasher)(exports.secp521r1.ProjectivePoint, (scalars) => p521_mapSWU(scalars[0]), {
     DST: 'P521_XMD:SHA-512_SSWU_RO_',
     encodeDST: 'P521_XMD:SHA-512_SSWU_NU_',
     p: Fp521.ORDER,
@@ -11069,84 +10990,78 @@ const htf = /* @__PURE__ */ (() => (0, hash_to_curve_ts_1.createHasher)(exports.
     expand: 'xmd',
     hash: sha2_1.sha512,
 }))();
-/** secp521r1 hash-to-curve from RFC 9380. */
-exports.hashToCurve = (() => htf.hashToCurve)();
-/** secp521r1 encode-to-curve from RFC 9380. */
-exports.encodeToCurve = (() => htf.encodeToCurve)();
+//# sourceMappingURL=nist.js.map
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p256.js":
+/*!***********************************************************************************!*\
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p256.js ***!
+  \***********************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.encodeToCurve = exports.hashToCurve = exports.secp256r1 = exports.p256 = void 0;
+const nist_ts_1 = __webpack_require__(/*! ./nist.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/nist.js");
+exports.p256 = nist_ts_1.p256;
+exports.secp256r1 = nist_ts_1.p256;
+exports.hashToCurve = (() => nist_ts_1.p256_hasher.hashToCurve)();
+exports.encodeToCurve = (() => nist_ts_1.p256_hasher.encodeToCurve)();
+//# sourceMappingURL=p256.js.map
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p384.js":
+/*!***********************************************************************************!*\
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p384.js ***!
+  \***********************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.encodeToCurve = exports.hashToCurve = exports.secp384r1 = exports.p384 = void 0;
+const nist_ts_1 = __webpack_require__(/*! ./nist.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/nist.js");
+exports.p384 = nist_ts_1.p384;
+exports.secp384r1 = nist_ts_1.p384;
+exports.hashToCurve = (() => nist_ts_1.p384_hasher.hashToCurve)();
+exports.encodeToCurve = (() => nist_ts_1.p384_hasher.encodeToCurve)();
+/** @deprecated Use `import { p384_hasher } from "@noble/curves/nist"` module. */
+//# sourceMappingURL=p384.js.map
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p521.js":
+/*!***********************************************************************************!*\
+  !*** ./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p521.js ***!
+  \***********************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.encodeToCurve = exports.hashToCurve = exports.secp521r1 = exports.p521 = void 0;
+const nist_ts_1 = __webpack_require__(/*! ./nist.js */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/nist.js");
+exports.p521 = nist_ts_1.p521;
+exports.secp521r1 = nist_ts_1.p521;
+exports.hashToCurve = (() => nist_ts_1.p521_hasher.hashToCurve)();
+exports.encodeToCurve = (() => nist_ts_1.p521_hasher.encodeToCurve)();
 //# sourceMappingURL=p521.js.map
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_assert.js":
-/*!**************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_assert.js ***!
-  \**************************************************************************************/
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-/**
- * Internal assertion helpers.
- * @module
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.anumber = anumber;
-exports.abytes = abytes;
-exports.ahash = ahash;
-exports.aexists = aexists;
-exports.aoutput = aoutput;
-/** Asserts something is positive integer. */
-function anumber(n) {
-    if (!Number.isSafeInteger(n) || n < 0)
-        throw new Error('positive integer expected, got ' + n);
-}
-/** Is number an Uint8Array? Copied from utils for perf. */
-function isBytes(a) {
-    return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');
-}
-/** Asserts something is Uint8Array. */
-function abytes(b, ...lengths) {
-    if (!isBytes(b))
-        throw new Error('Uint8Array expected');
-    if (lengths.length > 0 && !lengths.includes(b.length))
-        throw new Error('Uint8Array expected of length ' + lengths + ', got length=' + b.length);
-}
-/** Asserts something is hash */
-function ahash(h) {
-    if (typeof h !== 'function' || typeof h.create !== 'function')
-        throw new Error('Hash should be wrapped by utils.wrapConstructor');
-    anumber(h.outputLen);
-    anumber(h.blockLen);
-}
-/** Asserts a hash instance has not been destroyed / finished */
-function aexists(instance, checkFinished = true) {
-    if (instance.destroyed)
-        throw new Error('Hash instance has been destroyed');
-    if (checkFinished && instance.finished)
-        throw new Error('Hash#digest() has already been called');
-}
-/** Asserts output is properly-sized byte array */
-function aoutput(out, instance) {
-    abytes(out);
-    const min = instance.outputLen;
-    if (out.length < min) {
-        throw new Error('digestInto() expects output buffer of length at least ' + min);
-    }
-}
-//# sourceMappingURL=_assert.js.map
-
-/***/ }),
-
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_md.js":
+/***/ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/_md.js":
 /*!**********************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_md.js ***!
+  !*** ./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/_md.js ***!
   \**********************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.HashMD = void 0;
+exports.SHA512_IV = exports.SHA384_IV = exports.SHA224_IV = exports.SHA256_IV = exports.HashMD = void 0;
 exports.setBigUint64 = setBigUint64;
 exports.Chi = Chi;
 exports.Maj = Maj;
@@ -11154,8 +11069,7 @@ exports.Maj = Maj;
  * Internal Merkle-Damgard hash utils.
  * @module
  */
-const _assert_ts_1 = __webpack_require__(/*! ./_assert.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_assert.js");
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/utils.js");
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/utils.js");
 /** Polyfill for Safari 14. https://caniuse.com/mdn-javascript_builtins_dataview_setbiguint64 */
 function setBigUint64(view, byteOffset, value, isLE) {
     if (typeof view.setBigUint64 === 'function')
@@ -11196,9 +11110,10 @@ class HashMD extends utils_ts_1.Hash {
         this.view = (0, utils_ts_1.createView)(this.buffer);
     }
     update(data) {
-        (0, _assert_ts_1.aexists)(this);
-        const { view, buffer, blockLen } = this;
+        (0, utils_ts_1.aexists)(this);
         data = (0, utils_ts_1.toBytes)(data);
+        (0, utils_ts_1.abytes)(data);
+        const { view, buffer, blockLen } = this;
         const len = data.length;
         for (let pos = 0; pos < len;) {
             const take = Math.min(blockLen - this.pos, len - pos);
@@ -11222,8 +11137,8 @@ class HashMD extends utils_ts_1.Hash {
         return this;
     }
     digestInto(out) {
-        (0, _assert_ts_1.aexists)(this);
-        (0, _assert_ts_1.aoutput)(out, this);
+        (0, utils_ts_1.aexists)(this);
+        (0, utils_ts_1.aoutput)(out, this);
         this.finished = true;
         // Padding
         // We can avoid allocation of buffer for padding completely if it
@@ -11232,7 +11147,7 @@ class HashMD extends utils_ts_1.Hash {
         let { pos } = this;
         // append the bit '1' to the message
         buffer[pos++] = 0b10000000;
-        this.buffer.subarray(pos).fill(0);
+        (0, utils_ts_1.clean)(this.buffer.subarray(pos));
         // we have less than padOffset left in buffer, so we cannot put length in
         // current block, need process it and pad again
         if (this.padOffset > blockLen - pos) {
@@ -11270,33 +11185,58 @@ class HashMD extends utils_ts_1.Hash {
         to || (to = new this.constructor());
         to.set(...this.get());
         const { blockLen, buffer, length, finished, destroyed, pos } = this;
+        to.destroyed = destroyed;
+        to.finished = finished;
         to.length = length;
         to.pos = pos;
-        to.finished = finished;
-        to.destroyed = destroyed;
         if (length % blockLen)
             to.buffer.set(buffer);
         return to;
     }
+    clone() {
+        return this._cloneInto();
+    }
 }
 exports.HashMD = HashMD;
+/**
+ * Initial SHA-2 state: fractional parts of square roots of first 16 primes 2..53.
+ * Check out `test/misc/sha2-gen-iv.js` for recomputation guide.
+ */
+/** Initial SHA256 state. Bits 0..32 of frac part of sqrt of primes 2..19 */
+exports.SHA256_IV = Uint32Array.from([
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+]);
+/** Initial SHA224 state. Bits 32..64 of frac part of sqrt of primes 23..53 */
+exports.SHA224_IV = Uint32Array.from([
+    0xc1059ed8, 0x367cd507, 0x3070dd17, 0xf70e5939, 0xffc00b31, 0x68581511, 0x64f98fa7, 0xbefa4fa4,
+]);
+/** Initial SHA384 state. Bits 0..64 of frac part of sqrt of primes 23..53 */
+exports.SHA384_IV = Uint32Array.from([
+    0xcbbb9d5d, 0xc1059ed8, 0x629a292a, 0x367cd507, 0x9159015a, 0x3070dd17, 0x152fecd8, 0xf70e5939,
+    0x67332667, 0xffc00b31, 0x8eb44a87, 0x68581511, 0xdb0c2e0d, 0x64f98fa7, 0x47b5481d, 0xbefa4fa4,
+]);
+/** Initial SHA512 state. Bits 0..64 of frac part of sqrt of primes 2..19 */
+exports.SHA512_IV = Uint32Array.from([
+    0x6a09e667, 0xf3bcc908, 0xbb67ae85, 0x84caa73b, 0x3c6ef372, 0xfe94f82b, 0xa54ff53a, 0x5f1d36f1,
+    0x510e527f, 0xade682d1, 0x9b05688c, 0x2b3e6c1f, 0x1f83d9ab, 0xfb41bd6b, 0x5be0cd19, 0x137e2179,
+]);
 //# sourceMappingURL=_md.js.map
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_u64.js":
+/***/ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/_u64.js":
 /*!***********************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_u64.js ***!
+  !*** ./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/_u64.js ***!
   \***********************************************************************************/
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.add5L = exports.add5H = exports.add4H = exports.add4L = exports.add3H = exports.add3L = exports.rotlBL = exports.rotlBH = exports.rotlSL = exports.rotlSH = exports.rotr32L = exports.rotr32H = exports.rotrBL = exports.rotrBH = exports.rotrSL = exports.rotrSH = exports.shrSL = exports.shrSH = exports.toBig = void 0;
+exports.toBig = exports.shrSL = exports.shrSH = exports.rotrSL = exports.rotrSH = exports.rotrBL = exports.rotrBH = exports.rotr32L = exports.rotr32H = exports.rotlSL = exports.rotlSH = exports.rotlBL = exports.rotlBH = exports.add5L = exports.add5H = exports.add4L = exports.add4H = exports.add3L = exports.add3H = void 0;
+exports.add = add;
 exports.fromBig = fromBig;
 exports.split = split;
-exports.add = add;
 /**
  * Internal helpers for u64. BigUint64Array is too slow as per 2025, so we implement it using Uint32Array.
  * @todo re-check https://issues.chromium.org/issues/42212588
@@ -11310,9 +11250,10 @@ function fromBig(n, le = false) {
     return { h: Number((n >> _32n) & U32_MASK64) | 0, l: Number(n & U32_MASK64) | 0 };
 }
 function split(lst, le = false) {
-    let Ah = new Uint32Array(lst.length);
-    let Al = new Uint32Array(lst.length);
-    for (let i = 0; i < lst.length; i++) {
+    const len = lst.length;
+    let Ah = new Uint32Array(len);
+    let Al = new Uint32Array(len);
+    for (let i = 0; i < len; i++) {
         const { h, l } = fromBig(lst[i], le);
         [Ah[i], Al[i]] = [h, l];
     }
@@ -11383,9 +11324,9 @@ exports["default"] = u64;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/crypto.js":
+/***/ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/crypto.js":
 /*!*************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/crypto.js ***!
+  !*** ./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/crypto.js ***!
   \*************************************************************************************/
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -11398,9 +11339,9 @@ exports.crypto = typeof globalThis === 'object' && 'crypto' in globalThis ? glob
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/hmac.js":
+/***/ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/hmac.js":
 /*!***********************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/hmac.js ***!
+  !*** ./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/hmac.js ***!
   \***********************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -11412,14 +11353,13 @@ exports.hmac = exports.HMAC = void 0;
  * HMAC: RFC2104 message authentication code.
  * @module
  */
-const _assert_ts_1 = __webpack_require__(/*! ./_assert.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_assert.js");
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/utils.js");
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/utils.js");
 class HMAC extends utils_ts_1.Hash {
     constructor(hash, _key) {
         super();
         this.finished = false;
         this.destroyed = false;
-        (0, _assert_ts_1.ahash)(hash);
+        (0, utils_ts_1.ahash)(hash);
         const key = (0, utils_ts_1.toBytes)(_key);
         this.iHash = hash.create();
         if (typeof this.iHash.update !== 'function')
@@ -11439,16 +11379,16 @@ class HMAC extends utils_ts_1.Hash {
         for (let i = 0; i < pad.length; i++)
             pad[i] ^= 0x36 ^ 0x5c;
         this.oHash.update(pad);
-        pad.fill(0);
+        (0, utils_ts_1.clean)(pad);
     }
     update(buf) {
-        (0, _assert_ts_1.aexists)(this);
+        (0, utils_ts_1.aexists)(this);
         this.iHash.update(buf);
         return this;
     }
     digestInto(out) {
-        (0, _assert_ts_1.aexists)(this);
-        (0, _assert_ts_1.abytes)(out, this.outputLen);
+        (0, utils_ts_1.aexists)(this);
+        (0, utils_ts_1.abytes)(out, this.outputLen);
         this.finished = true;
         this.iHash.digestInto(out);
         this.oHash.update(out);
@@ -11472,6 +11412,9 @@ class HMAC extends utils_ts_1.Hash {
         to.oHash = oHash._cloneInto(to.oHash);
         to.iHash = iHash._cloneInto(to.iHash);
         return to;
+    }
+    clone() {
+        return this._cloneInto();
     }
     destroy() {
         this.destroyed = true;
@@ -11497,57 +11440,32 @@ exports.hmac.create = (hash, key) => new HMAC(hash, key);
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha2.js":
+/***/ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha2.js":
 /*!***********************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha2.js ***!
+  !*** ./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha2.js ***!
   \***********************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.sha512_256 = exports.sha512_224 = exports.sha512 = exports.sha384 = exports.sha256 = exports.sha224 = void 0;
+exports.sha512_224 = exports.sha512_256 = exports.sha384 = exports.sha512 = exports.sha224 = exports.sha256 = exports.SHA512_256 = exports.SHA512_224 = exports.SHA384 = exports.SHA512 = exports.SHA224 = exports.SHA256 = void 0;
 /**
- * SHA2 hash function. A.k.a. sha256, sha512, sha512_256, etc.
+ * SHA2 hash function. A.k.a. sha256, sha384, sha512, sha512_224, sha512_256.
+ * SHA256 is the fastest hash implementable in JS, even faster than Blake3.
+ * Check out [RFC 4634](https://datatracker.ietf.org/doc/html/rfc4634) and
+ * [FIPS 180-4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf).
  * @module
  */
-// Usually you either use sha256, or sha512. We re-export them as sha2 for naming consistency.
-var sha256_ts_1 = __webpack_require__(/*! ./sha256.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha256.js");
-Object.defineProperty(exports, "sha224", ({ enumerable: true, get: function () { return sha256_ts_1.sha224; } }));
-Object.defineProperty(exports, "sha256", ({ enumerable: true, get: function () { return sha256_ts_1.sha256; } }));
-var sha512_ts_1 = __webpack_require__(/*! ./sha512.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha512.js");
-Object.defineProperty(exports, "sha384", ({ enumerable: true, get: function () { return sha512_ts_1.sha384; } }));
-Object.defineProperty(exports, "sha512", ({ enumerable: true, get: function () { return sha512_ts_1.sha512; } }));
-Object.defineProperty(exports, "sha512_224", ({ enumerable: true, get: function () { return sha512_ts_1.sha512_224; } }));
-Object.defineProperty(exports, "sha512_256", ({ enumerable: true, get: function () { return sha512_ts_1.sha512_256; } }));
-//# sourceMappingURL=sha2.js.map
-
-/***/ }),
-
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha256.js":
-/*!*************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha256.js ***!
-  \*************************************************************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.sha224 = exports.sha256 = exports.SHA256 = void 0;
+const _md_ts_1 = __webpack_require__(/*! ./_md.js */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/_md.js");
+const u64 = __webpack_require__(/*! ./_u64.js */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/_u64.js");
+const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/utils.js");
 /**
- * SHA2-256 a.k.a. sha256. In JS, it is the fastest hash, even faster than Blake3.
- *
- * To break sha256 using birthday attack, attackers need to try 2^128 hashes.
- * BTC network is doing 2^70 hashes/sec (2^95 hashes/year) as per 2025.
- *
- * Check out [FIPS 180-4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf).
- * @module
+ * Round constants:
+ * First 32 bits of fractional parts of the cube roots of the first 64 primes 2..311)
  */
-const _md_ts_1 = __webpack_require__(/*! ./_md.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_md.js");
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/utils.js");
-/** Round constants: first 32 bits of fractional parts of the cube roots of the first 64 primes 2..311). */
 // prettier-ignore
-const SHA256_K = /* @__PURE__ */ new Uint32Array([
+const SHA256_K = /* @__PURE__ */ Uint32Array.from([
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
     0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
@@ -11557,29 +11475,21 @@ const SHA256_K = /* @__PURE__ */ new Uint32Array([
     0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 ]);
-/** Initial state: first 32 bits of fractional parts of the square roots of the first 8 primes 2..19. */
-// prettier-ignore
-const SHA256_IV = /* @__PURE__ */ new Uint32Array([
-    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
-]);
-/**
- * Temporary buffer, not used to store anything between runs.
- * Named this way because it matches specification.
- */
+/** Reusable temporary buffer. "W" comes straight from spec. */
 const SHA256_W = /* @__PURE__ */ new Uint32Array(64);
 class SHA256 extends _md_ts_1.HashMD {
     constructor(outputLen = 32) {
         super(64, outputLen, 8, false);
         // We cannot use array here since array allows indexing by variable
         // which means optimizer/compiler cannot use registers.
-        this.A = SHA256_IV[0] | 0;
-        this.B = SHA256_IV[1] | 0;
-        this.C = SHA256_IV[2] | 0;
-        this.D = SHA256_IV[3] | 0;
-        this.E = SHA256_IV[4] | 0;
-        this.F = SHA256_IV[5] | 0;
-        this.G = SHA256_IV[6] | 0;
-        this.H = SHA256_IV[7] | 0;
+        this.A = _md_ts_1.SHA256_IV[0] | 0;
+        this.B = _md_ts_1.SHA256_IV[1] | 0;
+        this.C = _md_ts_1.SHA256_IV[2] | 0;
+        this.D = _md_ts_1.SHA256_IV[3] | 0;
+        this.E = _md_ts_1.SHA256_IV[4] | 0;
+        this.F = _md_ts_1.SHA256_IV[5] | 0;
+        this.G = _md_ts_1.SHA256_IV[6] | 0;
+        this.H = _md_ts_1.SHA256_IV[7] | 0;
     }
     get() {
         const { A, B, C, D, E, F, G, H } = this;
@@ -11635,61 +11545,33 @@ class SHA256 extends _md_ts_1.HashMD {
         this.set(A, B, C, D, E, F, G, H);
     }
     roundClean() {
-        SHA256_W.fill(0);
+        (0, utils_ts_1.clean)(SHA256_W);
     }
     destroy() {
         this.set(0, 0, 0, 0, 0, 0, 0, 0);
-        this.buffer.fill(0);
+        (0, utils_ts_1.clean)(this.buffer);
     }
 }
 exports.SHA256 = SHA256;
-/**
- * Constants taken from https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf.
- */
 class SHA224 extends SHA256 {
     constructor() {
         super(28);
-        this.A = 0xc1059ed8 | 0;
-        this.B = 0x367cd507 | 0;
-        this.C = 0x3070dd17 | 0;
-        this.D = 0xf70e5939 | 0;
-        this.E = 0xffc00b31 | 0;
-        this.F = 0x68581511 | 0;
-        this.G = 0x64f98fa7 | 0;
-        this.H = 0xbefa4fa4 | 0;
+        this.A = _md_ts_1.SHA224_IV[0] | 0;
+        this.B = _md_ts_1.SHA224_IV[1] | 0;
+        this.C = _md_ts_1.SHA224_IV[2] | 0;
+        this.D = _md_ts_1.SHA224_IV[3] | 0;
+        this.E = _md_ts_1.SHA224_IV[4] | 0;
+        this.F = _md_ts_1.SHA224_IV[5] | 0;
+        this.G = _md_ts_1.SHA224_IV[6] | 0;
+        this.H = _md_ts_1.SHA224_IV[7] | 0;
     }
 }
-/** SHA2-256 hash function */
-exports.sha256 = (0, utils_ts_1.wrapConstructor)(() => new SHA256());
-/** SHA2-224 hash function */
-exports.sha224 = (0, utils_ts_1.wrapConstructor)(() => new SHA224());
-//# sourceMappingURL=sha256.js.map
-
-/***/ }),
-
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha512.js":
-/*!*************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha512.js ***!
-  \*************************************************************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.sha384 = exports.sha512_256 = exports.sha512_224 = exports.sha512 = exports.SHA384 = exports.SHA512_256 = exports.SHA512_224 = exports.SHA512 = void 0;
-/**
- * SHA2-512 a.k.a. sha512 and sha384. It is slower than sha256 in js because u64 operations are slow.
- *
- * Check out [RFC 4634](https://datatracker.ietf.org/doc/html/rfc4634) and
- * [the paper on truncated SHA512/256](https://eprint.iacr.org/2010/548.pdf).
- * @module
- */
-const _md_ts_1 = __webpack_require__(/*! ./_md.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_md.js");
-const _u64_ts_1 = __webpack_require__(/*! ./_u64.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_u64.js");
-const utils_ts_1 = __webpack_require__(/*! ./utils.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/utils.js");
-// Round contants (first 32 bits of the fractional parts of the cube roots of the first 80 primes 2..409):
+exports.SHA224 = SHA224;
+// SHA2-512 is slower than sha256 in js because u64 operations are slow.
+// Round contants
+// First 32 bits of the fractional parts of the cube roots of the first 80 primes 2..409
 // prettier-ignore
-const [SHA512_Kh, SHA512_Kl] = /* @__PURE__ */ (() => _u64_ts_1.default.split([
+const K512 = /* @__PURE__ */ (() => u64.split([
     '0x428a2f98d728ae22', '0x7137449123ef65cd', '0xb5c0fbcfec4d3b2f', '0xe9b5dba58189dbbc',
     '0x3956c25bf348b538', '0x59f111f1b605d019', '0x923f82a4af194f9b', '0xab1c5ed5da6d8118',
     '0xd807aa98a3030242', '0x12835b0145706fbe', '0x243185be4ee4b28c', '0x550c7dc3d5ffb4e2',
@@ -11711,32 +11593,33 @@ const [SHA512_Kh, SHA512_Kl] = /* @__PURE__ */ (() => _u64_ts_1.default.split([
     '0x28db77f523047d84', '0x32caab7b40c72493', '0x3c9ebe0a15c9bebc', '0x431d67c49c100d4c',
     '0x4cc5d4becb3e42b6', '0x597f299cfc657e2a', '0x5fcb6fab3ad6faec', '0x6c44198c4a475817'
 ].map(n => BigInt(n))))();
-// Temporary buffer, not used to store anything between runs
+const SHA512_Kh = /* @__PURE__ */ (() => K512[0])();
+const SHA512_Kl = /* @__PURE__ */ (() => K512[1])();
+// Reusable temporary buffers
 const SHA512_W_H = /* @__PURE__ */ new Uint32Array(80);
 const SHA512_W_L = /* @__PURE__ */ new Uint32Array(80);
 class SHA512 extends _md_ts_1.HashMD {
     constructor(outputLen = 64) {
         super(128, outputLen, 16, false);
-        // We cannot use array here since array allows indexing by variable which means optimizer/compiler cannot use registers.
-        // Also looks cleaner and easier to verify with spec.
-        // Initial state (first 32 bits of the fractional parts of the square roots of the first 8 primes 2..19):
+        // We cannot use array here since array allows indexing by variable
+        // which means optimizer/compiler cannot use registers.
         // h -- high 32 bits, l -- low 32 bits
-        this.Ah = 0x6a09e667 | 0;
-        this.Al = 0xf3bcc908 | 0;
-        this.Bh = 0xbb67ae85 | 0;
-        this.Bl = 0x84caa73b | 0;
-        this.Ch = 0x3c6ef372 | 0;
-        this.Cl = 0xfe94f82b | 0;
-        this.Dh = 0xa54ff53a | 0;
-        this.Dl = 0x5f1d36f1 | 0;
-        this.Eh = 0x510e527f | 0;
-        this.El = 0xade682d1 | 0;
-        this.Fh = 0x9b05688c | 0;
-        this.Fl = 0x2b3e6c1f | 0;
-        this.Gh = 0x1f83d9ab | 0;
-        this.Gl = 0xfb41bd6b | 0;
-        this.Hh = 0x5be0cd19 | 0;
-        this.Hl = 0x137e2179 | 0;
+        this.Ah = _md_ts_1.SHA512_IV[0] | 0;
+        this.Al = _md_ts_1.SHA512_IV[1] | 0;
+        this.Bh = _md_ts_1.SHA512_IV[2] | 0;
+        this.Bl = _md_ts_1.SHA512_IV[3] | 0;
+        this.Ch = _md_ts_1.SHA512_IV[4] | 0;
+        this.Cl = _md_ts_1.SHA512_IV[5] | 0;
+        this.Dh = _md_ts_1.SHA512_IV[6] | 0;
+        this.Dl = _md_ts_1.SHA512_IV[7] | 0;
+        this.Eh = _md_ts_1.SHA512_IV[8] | 0;
+        this.El = _md_ts_1.SHA512_IV[9] | 0;
+        this.Fh = _md_ts_1.SHA512_IV[10] | 0;
+        this.Fl = _md_ts_1.SHA512_IV[11] | 0;
+        this.Gh = _md_ts_1.SHA512_IV[12] | 0;
+        this.Gl = _md_ts_1.SHA512_IV[13] | 0;
+        this.Hh = _md_ts_1.SHA512_IV[14] | 0;
+        this.Hl = _md_ts_1.SHA512_IV[15] | 0;
     }
     // prettier-ignore
     get() {
@@ -11772,16 +11655,16 @@ class SHA512 extends _md_ts_1.HashMD {
             // s0 := (w[i-15] rightrotate 1) xor (w[i-15] rightrotate 8) xor (w[i-15] rightshift 7)
             const W15h = SHA512_W_H[i - 15] | 0;
             const W15l = SHA512_W_L[i - 15] | 0;
-            const s0h = _u64_ts_1.default.rotrSH(W15h, W15l, 1) ^ _u64_ts_1.default.rotrSH(W15h, W15l, 8) ^ _u64_ts_1.default.shrSH(W15h, W15l, 7);
-            const s0l = _u64_ts_1.default.rotrSL(W15h, W15l, 1) ^ _u64_ts_1.default.rotrSL(W15h, W15l, 8) ^ _u64_ts_1.default.shrSL(W15h, W15l, 7);
+            const s0h = u64.rotrSH(W15h, W15l, 1) ^ u64.rotrSH(W15h, W15l, 8) ^ u64.shrSH(W15h, W15l, 7);
+            const s0l = u64.rotrSL(W15h, W15l, 1) ^ u64.rotrSL(W15h, W15l, 8) ^ u64.shrSL(W15h, W15l, 7);
             // s1 := (w[i-2] rightrotate 19) xor (w[i-2] rightrotate 61) xor (w[i-2] rightshift 6)
             const W2h = SHA512_W_H[i - 2] | 0;
             const W2l = SHA512_W_L[i - 2] | 0;
-            const s1h = _u64_ts_1.default.rotrSH(W2h, W2l, 19) ^ _u64_ts_1.default.rotrBH(W2h, W2l, 61) ^ _u64_ts_1.default.shrSH(W2h, W2l, 6);
-            const s1l = _u64_ts_1.default.rotrSL(W2h, W2l, 19) ^ _u64_ts_1.default.rotrBL(W2h, W2l, 61) ^ _u64_ts_1.default.shrSL(W2h, W2l, 6);
+            const s1h = u64.rotrSH(W2h, W2l, 19) ^ u64.rotrBH(W2h, W2l, 61) ^ u64.shrSH(W2h, W2l, 6);
+            const s1l = u64.rotrSL(W2h, W2l, 19) ^ u64.rotrBL(W2h, W2l, 61) ^ u64.shrSL(W2h, W2l, 6);
             // SHA256_W[i] = s0 + s1 + SHA256_W[i - 7] + SHA256_W[i - 16];
-            const SUMl = _u64_ts_1.default.add4L(s0l, s1l, SHA512_W_L[i - 7], SHA512_W_L[i - 16]);
-            const SUMh = _u64_ts_1.default.add4H(SUMl, s0h, s1h, SHA512_W_H[i - 7], SHA512_W_H[i - 16]);
+            const SUMl = u64.add4L(s0l, s1l, SHA512_W_L[i - 7], SHA512_W_L[i - 16]);
+            const SUMh = u64.add4H(SUMl, s0h, s1h, SHA512_W_H[i - 7], SHA512_W_H[i - 16]);
             SHA512_W_H[i] = SUMh | 0;
             SHA512_W_L[i] = SUMl | 0;
         }
@@ -11789,19 +11672,19 @@ class SHA512 extends _md_ts_1.HashMD {
         // Compression function main loop, 80 rounds
         for (let i = 0; i < 80; i++) {
             // S1 := (e rightrotate 14) xor (e rightrotate 18) xor (e rightrotate 41)
-            const sigma1h = _u64_ts_1.default.rotrSH(Eh, El, 14) ^ _u64_ts_1.default.rotrSH(Eh, El, 18) ^ _u64_ts_1.default.rotrBH(Eh, El, 41);
-            const sigma1l = _u64_ts_1.default.rotrSL(Eh, El, 14) ^ _u64_ts_1.default.rotrSL(Eh, El, 18) ^ _u64_ts_1.default.rotrBL(Eh, El, 41);
+            const sigma1h = u64.rotrSH(Eh, El, 14) ^ u64.rotrSH(Eh, El, 18) ^ u64.rotrBH(Eh, El, 41);
+            const sigma1l = u64.rotrSL(Eh, El, 14) ^ u64.rotrSL(Eh, El, 18) ^ u64.rotrBL(Eh, El, 41);
             //const T1 = (H + sigma1 + Chi(E, F, G) + SHA256_K[i] + SHA256_W[i]) | 0;
             const CHIh = (Eh & Fh) ^ (~Eh & Gh);
             const CHIl = (El & Fl) ^ (~El & Gl);
             // T1 = H + sigma1 + Chi(E, F, G) + SHA512_K[i] + SHA512_W[i]
             // prettier-ignore
-            const T1ll = _u64_ts_1.default.add5L(Hl, sigma1l, CHIl, SHA512_Kl[i], SHA512_W_L[i]);
-            const T1h = _u64_ts_1.default.add5H(T1ll, Hh, sigma1h, CHIh, SHA512_Kh[i], SHA512_W_H[i]);
+            const T1ll = u64.add5L(Hl, sigma1l, CHIl, SHA512_Kl[i], SHA512_W_L[i]);
+            const T1h = u64.add5H(T1ll, Hh, sigma1h, CHIh, SHA512_Kh[i], SHA512_W_H[i]);
             const T1l = T1ll | 0;
             // S0 := (a rightrotate 28) xor (a rightrotate 34) xor (a rightrotate 39)
-            const sigma0h = _u64_ts_1.default.rotrSH(Ah, Al, 28) ^ _u64_ts_1.default.rotrBH(Ah, Al, 34) ^ _u64_ts_1.default.rotrBH(Ah, Al, 39);
-            const sigma0l = _u64_ts_1.default.rotrSL(Ah, Al, 28) ^ _u64_ts_1.default.rotrBL(Ah, Al, 34) ^ _u64_ts_1.default.rotrBL(Ah, Al, 39);
+            const sigma0h = u64.rotrSH(Ah, Al, 28) ^ u64.rotrBH(Ah, Al, 34) ^ u64.rotrBH(Ah, Al, 39);
+            const sigma0l = u64.rotrSL(Ah, Al, 28) ^ u64.rotrBL(Ah, Al, 34) ^ u64.rotrBL(Ah, Al, 39);
             const MAJh = (Ah & Bh) ^ (Ah & Ch) ^ (Bh & Ch);
             const MAJl = (Al & Bl) ^ (Al & Cl) ^ (Bl & Cl);
             Hh = Gh | 0;
@@ -11810,122 +11693,222 @@ class SHA512 extends _md_ts_1.HashMD {
             Gl = Fl | 0;
             Fh = Eh | 0;
             Fl = El | 0;
-            ({ h: Eh, l: El } = _u64_ts_1.default.add(Dh | 0, Dl | 0, T1h | 0, T1l | 0));
+            ({ h: Eh, l: El } = u64.add(Dh | 0, Dl | 0, T1h | 0, T1l | 0));
             Dh = Ch | 0;
             Dl = Cl | 0;
             Ch = Bh | 0;
             Cl = Bl | 0;
             Bh = Ah | 0;
             Bl = Al | 0;
-            const All = _u64_ts_1.default.add3L(T1l, sigma0l, MAJl);
-            Ah = _u64_ts_1.default.add3H(All, T1h, sigma0h, MAJh);
+            const All = u64.add3L(T1l, sigma0l, MAJl);
+            Ah = u64.add3H(All, T1h, sigma0h, MAJh);
             Al = All | 0;
         }
         // Add the compressed chunk to the current hash value
-        ({ h: Ah, l: Al } = _u64_ts_1.default.add(this.Ah | 0, this.Al | 0, Ah | 0, Al | 0));
-        ({ h: Bh, l: Bl } = _u64_ts_1.default.add(this.Bh | 0, this.Bl | 0, Bh | 0, Bl | 0));
-        ({ h: Ch, l: Cl } = _u64_ts_1.default.add(this.Ch | 0, this.Cl | 0, Ch | 0, Cl | 0));
-        ({ h: Dh, l: Dl } = _u64_ts_1.default.add(this.Dh | 0, this.Dl | 0, Dh | 0, Dl | 0));
-        ({ h: Eh, l: El } = _u64_ts_1.default.add(this.Eh | 0, this.El | 0, Eh | 0, El | 0));
-        ({ h: Fh, l: Fl } = _u64_ts_1.default.add(this.Fh | 0, this.Fl | 0, Fh | 0, Fl | 0));
-        ({ h: Gh, l: Gl } = _u64_ts_1.default.add(this.Gh | 0, this.Gl | 0, Gh | 0, Gl | 0));
-        ({ h: Hh, l: Hl } = _u64_ts_1.default.add(this.Hh | 0, this.Hl | 0, Hh | 0, Hl | 0));
+        ({ h: Ah, l: Al } = u64.add(this.Ah | 0, this.Al | 0, Ah | 0, Al | 0));
+        ({ h: Bh, l: Bl } = u64.add(this.Bh | 0, this.Bl | 0, Bh | 0, Bl | 0));
+        ({ h: Ch, l: Cl } = u64.add(this.Ch | 0, this.Cl | 0, Ch | 0, Cl | 0));
+        ({ h: Dh, l: Dl } = u64.add(this.Dh | 0, this.Dl | 0, Dh | 0, Dl | 0));
+        ({ h: Eh, l: El } = u64.add(this.Eh | 0, this.El | 0, Eh | 0, El | 0));
+        ({ h: Fh, l: Fl } = u64.add(this.Fh | 0, this.Fl | 0, Fh | 0, Fl | 0));
+        ({ h: Gh, l: Gl } = u64.add(this.Gh | 0, this.Gl | 0, Gh | 0, Gl | 0));
+        ({ h: Hh, l: Hl } = u64.add(this.Hh | 0, this.Hl | 0, Hh | 0, Hl | 0));
         this.set(Ah, Al, Bh, Bl, Ch, Cl, Dh, Dl, Eh, El, Fh, Fl, Gh, Gl, Hh, Hl);
     }
     roundClean() {
-        SHA512_W_H.fill(0);
-        SHA512_W_L.fill(0);
+        (0, utils_ts_1.clean)(SHA512_W_H, SHA512_W_L);
     }
     destroy() {
-        this.buffer.fill(0);
+        (0, utils_ts_1.clean)(this.buffer);
         this.set(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 }
 exports.SHA512 = SHA512;
+class SHA384 extends SHA512 {
+    constructor() {
+        super(48);
+        this.Ah = _md_ts_1.SHA384_IV[0] | 0;
+        this.Al = _md_ts_1.SHA384_IV[1] | 0;
+        this.Bh = _md_ts_1.SHA384_IV[2] | 0;
+        this.Bl = _md_ts_1.SHA384_IV[3] | 0;
+        this.Ch = _md_ts_1.SHA384_IV[4] | 0;
+        this.Cl = _md_ts_1.SHA384_IV[5] | 0;
+        this.Dh = _md_ts_1.SHA384_IV[6] | 0;
+        this.Dl = _md_ts_1.SHA384_IV[7] | 0;
+        this.Eh = _md_ts_1.SHA384_IV[8] | 0;
+        this.El = _md_ts_1.SHA384_IV[9] | 0;
+        this.Fh = _md_ts_1.SHA384_IV[10] | 0;
+        this.Fl = _md_ts_1.SHA384_IV[11] | 0;
+        this.Gh = _md_ts_1.SHA384_IV[12] | 0;
+        this.Gl = _md_ts_1.SHA384_IV[13] | 0;
+        this.Hh = _md_ts_1.SHA384_IV[14] | 0;
+        this.Hl = _md_ts_1.SHA384_IV[15] | 0;
+    }
+}
+exports.SHA384 = SHA384;
+/**
+ * Truncated SHA512/256 and SHA512/224.
+ * SHA512_IV is XORed with 0xa5a5a5a5a5a5a5a5, then used as "intermediary" IV of SHA512/t.
+ * Then t hashes string to produce result IV.
+ * See `test/misc/sha2-gen-iv.js`.
+ */
+/** SHA512/224 IV */
+const T224_IV = /* @__PURE__ */ Uint32Array.from([
+    0x8c3d37c8, 0x19544da2, 0x73e19966, 0x89dcd4d6, 0x1dfab7ae, 0x32ff9c82, 0x679dd514, 0x582f9fcf,
+    0x0f6d2b69, 0x7bd44da8, 0x77e36f73, 0x04c48942, 0x3f9d85a8, 0x6a1d36c8, 0x1112e6ad, 0x91d692a1,
+]);
+/** SHA512/256 IV */
+const T256_IV = /* @__PURE__ */ Uint32Array.from([
+    0x22312194, 0xfc2bf72c, 0x9f555fa3, 0xc84c64c2, 0x2393b86b, 0x6f53b151, 0x96387719, 0x5940eabd,
+    0x96283ee2, 0xa88effe3, 0xbe5e1e25, 0x53863992, 0x2b0199fc, 0x2c85b8aa, 0x0eb72ddc, 0x81c52ca2,
+]);
 class SHA512_224 extends SHA512 {
     constructor() {
         super(28);
-        // h -- high 32 bits, l -- low 32 bits
-        this.Ah = 0x8c3d37c8 | 0;
-        this.Al = 0x19544da2 | 0;
-        this.Bh = 0x73e19966 | 0;
-        this.Bl = 0x89dcd4d6 | 0;
-        this.Ch = 0x1dfab7ae | 0;
-        this.Cl = 0x32ff9c82 | 0;
-        this.Dh = 0x679dd514 | 0;
-        this.Dl = 0x582f9fcf | 0;
-        this.Eh = 0x0f6d2b69 | 0;
-        this.El = 0x7bd44da8 | 0;
-        this.Fh = 0x77e36f73 | 0;
-        this.Fl = 0x04c48942 | 0;
-        this.Gh = 0x3f9d85a8 | 0;
-        this.Gl = 0x6a1d36c8 | 0;
-        this.Hh = 0x1112e6ad | 0;
-        this.Hl = 0x91d692a1 | 0;
+        this.Ah = T224_IV[0] | 0;
+        this.Al = T224_IV[1] | 0;
+        this.Bh = T224_IV[2] | 0;
+        this.Bl = T224_IV[3] | 0;
+        this.Ch = T224_IV[4] | 0;
+        this.Cl = T224_IV[5] | 0;
+        this.Dh = T224_IV[6] | 0;
+        this.Dl = T224_IV[7] | 0;
+        this.Eh = T224_IV[8] | 0;
+        this.El = T224_IV[9] | 0;
+        this.Fh = T224_IV[10] | 0;
+        this.Fl = T224_IV[11] | 0;
+        this.Gh = T224_IV[12] | 0;
+        this.Gl = T224_IV[13] | 0;
+        this.Hh = T224_IV[14] | 0;
+        this.Hl = T224_IV[15] | 0;
     }
 }
 exports.SHA512_224 = SHA512_224;
 class SHA512_256 extends SHA512 {
     constructor() {
         super(32);
-        // h -- high 32 bits, l -- low 32 bits
-        this.Ah = 0x22312194 | 0;
-        this.Al = 0xfc2bf72c | 0;
-        this.Bh = 0x9f555fa3 | 0;
-        this.Bl = 0xc84c64c2 | 0;
-        this.Ch = 0x2393b86b | 0;
-        this.Cl = 0x6f53b151 | 0;
-        this.Dh = 0x96387719 | 0;
-        this.Dl = 0x5940eabd | 0;
-        this.Eh = 0x96283ee2 | 0;
-        this.El = 0xa88effe3 | 0;
-        this.Fh = 0xbe5e1e25 | 0;
-        this.Fl = 0x53863992 | 0;
-        this.Gh = 0x2b0199fc | 0;
-        this.Gl = 0x2c85b8aa | 0;
-        this.Hh = 0x0eb72ddc | 0;
-        this.Hl = 0x81c52ca2 | 0;
+        this.Ah = T256_IV[0] | 0;
+        this.Al = T256_IV[1] | 0;
+        this.Bh = T256_IV[2] | 0;
+        this.Bl = T256_IV[3] | 0;
+        this.Ch = T256_IV[4] | 0;
+        this.Cl = T256_IV[5] | 0;
+        this.Dh = T256_IV[6] | 0;
+        this.Dl = T256_IV[7] | 0;
+        this.Eh = T256_IV[8] | 0;
+        this.El = T256_IV[9] | 0;
+        this.Fh = T256_IV[10] | 0;
+        this.Fl = T256_IV[11] | 0;
+        this.Gh = T256_IV[12] | 0;
+        this.Gl = T256_IV[13] | 0;
+        this.Hh = T256_IV[14] | 0;
+        this.Hl = T256_IV[15] | 0;
     }
 }
 exports.SHA512_256 = SHA512_256;
-class SHA384 extends SHA512 {
-    constructor() {
-        super(48);
-        // h -- high 32 bits, l -- low 32 bits
-        this.Ah = 0xcbbb9d5d | 0;
-        this.Al = 0xc1059ed8 | 0;
-        this.Bh = 0x629a292a | 0;
-        this.Bl = 0x367cd507 | 0;
-        this.Ch = 0x9159015a | 0;
-        this.Cl = 0x3070dd17 | 0;
-        this.Dh = 0x152fecd8 | 0;
-        this.Dl = 0xf70e5939 | 0;
-        this.Eh = 0x67332667 | 0;
-        this.El = 0xffc00b31 | 0;
-        this.Fh = 0x8eb44a87 | 0;
-        this.Fl = 0x68581511 | 0;
-        this.Gh = 0xdb0c2e0d | 0;
-        this.Gl = 0x64f98fa7 | 0;
-        this.Hh = 0x47b5481d | 0;
-        this.Hl = 0xbefa4fa4 | 0;
-    }
-}
-exports.SHA384 = SHA384;
-/** SHA2-512 hash function. */
-exports.sha512 = (0, utils_ts_1.wrapConstructor)(() => new SHA512());
-/** SHA2-512/224 "truncated" hash function, with improved resistance to length extension attacks. */
-exports.sha512_224 = (0, utils_ts_1.wrapConstructor)(() => new SHA512_224());
-/** SHA2-512/256 "truncated" hash function, with improved resistance to length extension attacks. */
-exports.sha512_256 = (0, utils_ts_1.wrapConstructor)(() => new SHA512_256());
-/** SHA2-384 hash function. */
-exports.sha384 = (0, utils_ts_1.wrapConstructor)(() => new SHA384());
+/**
+ * SHA2-256 hash function from RFC 4634.
+ *
+ * It is the fastest JS hash, even faster than Blake3.
+ * To break sha256 using birthday attack, attackers need to try 2^128 hashes.
+ * BTC network is doing 2^70 hashes/sec (2^95 hashes/year) as per 2025.
+ */
+exports.sha256 = (0, utils_ts_1.createHasher)(() => new SHA256());
+/** SHA2-224 hash function from RFC 4634 */
+exports.sha224 = (0, utils_ts_1.createHasher)(() => new SHA224());
+/** SHA2-512 hash function from RFC 4634. */
+exports.sha512 = (0, utils_ts_1.createHasher)(() => new SHA512());
+/** SHA2-384 hash function from RFC 4634. */
+exports.sha384 = (0, utils_ts_1.createHasher)(() => new SHA384());
+/**
+ * SHA2-512/256 "truncated" hash function, with improved resistance to length extension attacks.
+ * See the paper on [truncated SHA512](https://eprint.iacr.org/2010/548.pdf).
+ */
+exports.sha512_256 = (0, utils_ts_1.createHasher)(() => new SHA512_256());
+/**
+ * SHA2-512/224 "truncated" hash function, with improved resistance to length extension attacks.
+ * See the paper on [truncated SHA512](https://eprint.iacr.org/2010/548.pdf).
+ */
+exports.sha512_224 = (0, utils_ts_1.createHasher)(() => new SHA512_224());
+//# sourceMappingURL=sha2.js.map
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha256.js":
+/*!*************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha256.js ***!
+  \*************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.sha224 = exports.SHA224 = exports.sha256 = exports.SHA256 = void 0;
+/**
+ * SHA2-256 a.k.a. sha256. In JS, it is the fastest hash, even faster than Blake3.
+ *
+ * To break sha256 using birthday attack, attackers need to try 2^128 hashes.
+ * BTC network is doing 2^70 hashes/sec (2^95 hashes/year) as per 2025.
+ *
+ * Check out [FIPS 180-4](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf).
+ * @module
+ * @deprecated
+ */
+const sha2_ts_1 = __webpack_require__(/*! ./sha2.js */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha2.js");
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.SHA256 = sha2_ts_1.SHA256;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.sha256 = sha2_ts_1.sha256;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.SHA224 = sha2_ts_1.SHA224;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.sha224 = sha2_ts_1.sha224;
+//# sourceMappingURL=sha256.js.map
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha512.js":
+/*!*************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha512.js ***!
+  \*************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.sha512_256 = exports.SHA512_256 = exports.sha512_224 = exports.SHA512_224 = exports.sha384 = exports.SHA384 = exports.sha512 = exports.SHA512 = void 0;
+/**
+ * SHA2-512 a.k.a. sha512 and sha384. It is slower than sha256 in js because u64 operations are slow.
+ *
+ * Check out [RFC 4634](https://datatracker.ietf.org/doc/html/rfc4634) and
+ * [the paper on truncated SHA512/256](https://eprint.iacr.org/2010/548.pdf).
+ * @module
+ * @deprecated
+ */
+const sha2_ts_1 = __webpack_require__(/*! ./sha2.js */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha2.js");
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.SHA512 = sha2_ts_1.SHA512;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.sha512 = sha2_ts_1.sha512;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.SHA384 = sha2_ts_1.SHA384;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.sha384 = sha2_ts_1.sha384;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.SHA512_224 = sha2_ts_1.SHA512_224;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.sha512_224 = sha2_ts_1.sha512_224;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.SHA512_256 = sha2_ts_1.SHA512_256;
+/** @deprecated Use import from `noble/hashes/sha2` module */
+exports.sha512_256 = sha2_ts_1.sha512_256;
 //# sourceMappingURL=sha512.js.map
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/utils.js":
+/***/ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/utils.js":
 /*!************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/utils.js ***!
+  !*** ./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/utils.js ***!
   \************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
@@ -11937,10 +11920,16 @@ exports.sha384 = (0, utils_ts_1.wrapConstructor)(() => new SHA384());
  */
 /*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Hash = exports.nextTick = exports.byteSwapIfBE = exports.isLE = void 0;
+exports.wrapXOFConstructorWithOpts = exports.wrapConstructorWithOpts = exports.wrapConstructor = exports.Hash = exports.nextTick = exports.swap32IfBE = exports.byteSwapIfBE = exports.swap8IfBE = exports.isLE = void 0;
 exports.isBytes = isBytes;
+exports.anumber = anumber;
+exports.abytes = abytes;
+exports.ahash = ahash;
+exports.aexists = aexists;
+exports.aoutput = aoutput;
 exports.u8 = u8;
 exports.u32 = u32;
+exports.clean = clean;
 exports.createView = createView;
 exports.rotr = rotr;
 exports.rotl = rotl;
@@ -11950,12 +11939,14 @@ exports.bytesToHex = bytesToHex;
 exports.hexToBytes = hexToBytes;
 exports.asyncLoop = asyncLoop;
 exports.utf8ToBytes = utf8ToBytes;
+exports.bytesToUtf8 = bytesToUtf8;
 exports.toBytes = toBytes;
+exports.kdfInputToBytes = kdfInputToBytes;
 exports.concatBytes = concatBytes;
 exports.checkOpts = checkOpts;
-exports.wrapConstructor = wrapConstructor;
-exports.wrapConstructorWithOpts = wrapConstructorWithOpts;
-exports.wrapXOFConstructorWithOpts = wrapXOFConstructorWithOpts;
+exports.createHasher = createHasher;
+exports.createOptHasher = createOptHasher;
+exports.createXOFer = createXOFer;
 exports.randomBytes = randomBytes;
 // We use WebCrypto aka globalThis.crypto, which exists in browsers and node.js 16+.
 // node.js versions earlier than v19 don't declare it in global scope.
@@ -11963,21 +11954,60 @@ exports.randomBytes = randomBytes;
 // from `crypto` to `cryptoNode`, which imports native module.
 // Makes the utils un-importable in browsers without a bundler.
 // Once node.js 18 is deprecated (2025-04-30), we can just drop the import.
-const crypto_1 = __webpack_require__(/*! @noble/hashes/crypto */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/crypto.js");
-const _assert_ts_1 = __webpack_require__(/*! ./_assert.js */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/_assert.js");
-// export { isBytes } from './_assert.ts';
-// We can't reuse isBytes from _assert, because somehow this causes huge perf issues
+const crypto_1 = __webpack_require__(/*! @noble/hashes/crypto */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/crypto.js");
+/** Checks if something is Uint8Array. Be careful: nodejs Buffer will return true. */
 function isBytes(a) {
     return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');
 }
-// Cast array to different type
+/** Asserts something is positive integer. */
+function anumber(n) {
+    if (!Number.isSafeInteger(n) || n < 0)
+        throw new Error('positive integer expected, got ' + n);
+}
+/** Asserts something is Uint8Array. */
+function abytes(b, ...lengths) {
+    if (!isBytes(b))
+        throw new Error('Uint8Array expected');
+    if (lengths.length > 0 && !lengths.includes(b.length))
+        throw new Error('Uint8Array expected of length ' + lengths + ', got length=' + b.length);
+}
+/** Asserts something is hash */
+function ahash(h) {
+    if (typeof h !== 'function' || typeof h.create !== 'function')
+        throw new Error('Hash should be wrapped by utils.createHasher');
+    anumber(h.outputLen);
+    anumber(h.blockLen);
+}
+/** Asserts a hash instance has not been destroyed / finished */
+function aexists(instance, checkFinished = true) {
+    if (instance.destroyed)
+        throw new Error('Hash instance has been destroyed');
+    if (checkFinished && instance.finished)
+        throw new Error('Hash#digest() has already been called');
+}
+/** Asserts output is properly-sized byte array */
+function aoutput(out, instance) {
+    abytes(out);
+    const min = instance.outputLen;
+    if (out.length < min) {
+        throw new Error('digestInto() expects output buffer of length at least ' + min);
+    }
+}
+/** Cast u8 / u16 / u32 to u8. */
 function u8(arr) {
     return new Uint8Array(arr.buffer, arr.byteOffset, arr.byteLength);
 }
+/** Cast u8 / u16 / u32 to u32. */
 function u32(arr) {
     return new Uint32Array(arr.buffer, arr.byteOffset, Math.floor(arr.byteLength / 4));
 }
-// Cast array to view
+/** Zeroize a byte array. Warning: JS provides no guarantees. */
+function clean(...arrays) {
+    for (let i = 0; i < arrays.length; i++) {
+        arrays[i].fill(0);
+    }
+}
+/** Create DataView of an array for easy byte-level manipulation. */
 function createView(arr) {
     return new DataView(arr.buffer, arr.byteOffset, arr.byteLength);
 }
@@ -11991,7 +12021,7 @@ function rotl(word, shift) {
 }
 /** Is current platform little-endian? Most are. Big-Endian platform: IBM */
 exports.isLE = (() => new Uint8Array(new Uint32Array([0x11223344]).buffer)[0] === 0x44)();
-// The byte swap operation for uint32
+/** The byte swap operation for uint32 */
 function byteSwap(word) {
     return (((word << 24) & 0xff000000) |
         ((word << 8) & 0xff0000) |
@@ -11999,19 +12029,25 @@ function byteSwap(word) {
         ((word >>> 24) & 0xff));
 }
 /** Conditionally byte swap if on a big-endian platform */
-exports.byteSwapIfBE = exports.isLE
+exports.swap8IfBE = exports.isLE
     ? (n) => n
     : (n) => byteSwap(n);
+/** @deprecated */
+exports.byteSwapIfBE = exports.swap8IfBE;
 /** In place byte swap for Uint32Array */
 function byteSwap32(arr) {
     for (let i = 0; i < arr.length; i++) {
         arr[i] = byteSwap(arr[i]);
     }
+    return arr;
 }
+exports.swap32IfBE = exports.isLE
+    ? (u) => u
+    : byteSwap32;
 // Built-in hex conversion https://caniuse.com/mdn-javascript_builtins_uint8array_fromhex
-const hasHexBuiltin = 
+const hasHexBuiltin = /* @__PURE__ */ (() => 
 // @ts-ignore
-typeof Uint8Array.from([]).toHex === 'function' && typeof Uint8Array.fromHex === 'function';
+typeof Uint8Array.from([]).toHex === 'function' && typeof Uint8Array.fromHex === 'function')();
 // Array where index 0xf0 (240) is mapped to string 'f0'
 const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, '0'));
 /**
@@ -12019,7 +12055,7 @@ const hexes = /* @__PURE__ */ Array.from({ length: 256 }, (_, i) => i.toString(1
  * @example bytesToHex(Uint8Array.from([0xca, 0xfe, 0x01, 0x23])) // 'cafe0123'
  */
 function bytesToHex(bytes) {
-    (0, _assert_ts_1.abytes)(bytes);
+    abytes(bytes);
     // @ts-ignore
     if (hasHexBuiltin)
         return bytes.toHex();
@@ -12088,13 +12124,20 @@ async function asyncLoop(iters, tick, cb) {
     }
 }
 /**
- * Convert JS string to byte array.
- * @example utf8ToBytes('abc') // new Uint8Array([97, 98, 99])
+ * Converts string to bytes using UTF8 encoding.
+ * @example utf8ToBytes('abc') // Uint8Array.from([97, 98, 99])
  */
 function utf8ToBytes(str) {
     if (typeof str !== 'string')
-        throw new Error('utf8ToBytes expected string, got ' + typeof str);
+        throw new Error('string expected');
     return new Uint8Array(new TextEncoder().encode(str)); // https://bugzil.la/1681809
+}
+/**
+ * Converts bytes to string using UTF8 encoding.
+ * @example bytesToUtf8(Uint8Array.from([97, 98, 99])) // 'abc'
+ */
+function bytesToUtf8(bytes) {
+    return new TextDecoder().decode(bytes);
 }
 /**
  * Normalizes (non-hex) string or Uint8Array to Uint8Array.
@@ -12104,17 +12147,25 @@ function utf8ToBytes(str) {
 function toBytes(data) {
     if (typeof data === 'string')
         data = utf8ToBytes(data);
-    (0, _assert_ts_1.abytes)(data);
+    abytes(data);
     return data;
 }
 /**
- * Copies several Uint8Arrays into one.
+ * Helper for KDFs: consumes uint8array or string.
+ * When string is passed, does utf8 decoding, using TextDecoder.
  */
+function kdfInputToBytes(data) {
+    if (typeof data === 'string')
+        data = utf8ToBytes(data);
+    abytes(data);
+    return data;
+}
+/** Copies several Uint8Arrays into one. */
 function concatBytes(...arrays) {
     let sum = 0;
     for (let i = 0; i < arrays.length; i++) {
         const a = arrays[i];
-        (0, _assert_ts_1.abytes)(a);
+        abytes(a);
         sum += a.length;
     }
     const res = new Uint8Array(sum);
@@ -12125,22 +12176,18 @@ function concatBytes(...arrays) {
     }
     return res;
 }
-/** For runtime check if class implements interface */
-class Hash {
-    // Safe version that clones internal state
-    clone() {
-        return this._cloneInto();
-    }
-}
-exports.Hash = Hash;
 function checkOpts(defaults, opts) {
     if (opts !== undefined && {}.toString.call(opts) !== '[object Object]')
-        throw new Error('Options should be object or undefined');
+        throw new Error('options should be object or undefined');
     const merged = Object.assign(defaults, opts);
     return merged;
 }
+/** For runtime check if class implements interface */
+class Hash {
+}
+exports.Hash = Hash;
 /** Wraps hash function, creating an interface on top of it */
-function wrapConstructor(hashCons) {
+function createHasher(hashCons) {
     const hashC = (msg) => hashCons().update(toBytes(msg)).digest();
     const tmp = hashCons();
     hashC.outputLen = tmp.outputLen;
@@ -12148,7 +12195,7 @@ function wrapConstructor(hashCons) {
     hashC.create = () => hashCons();
     return hashC;
 }
-function wrapConstructorWithOpts(hashCons) {
+function createOptHasher(hashCons) {
     const hashC = (msg, opts) => hashCons(opts).update(toBytes(msg)).digest();
     const tmp = hashCons({});
     hashC.outputLen = tmp.outputLen;
@@ -12156,7 +12203,7 @@ function wrapConstructorWithOpts(hashCons) {
     hashC.create = (opts) => hashCons(opts);
     return hashC;
 }
-function wrapXOFConstructorWithOpts(hashCons) {
+function createXOFer(hashCons) {
     const hashC = (msg, opts) => hashCons(opts).update(toBytes(msg)).digest();
     const tmp = hashCons({});
     hashC.outputLen = tmp.outputLen;
@@ -12164,6 +12211,9 @@ function wrapXOFConstructorWithOpts(hashCons) {
     hashC.create = (opts) => hashCons(opts);
     return hashC;
 }
+exports.wrapConstructor = createHasher;
+exports.wrapConstructorWithOpts = createOptHasher;
+exports.wrapXOFConstructorWithOpts = createXOFer;
 /** Cryptographically secure PRNG. Uses internal OS-level `crypto.getRandomValues`. */
 function randomBytes(bytesLength = 32) {
     if (crypto_1.crypto && typeof crypto_1.crypto.getRandomValues === 'function') {
@@ -25849,7 +25899,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const buffer_1 = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const bn_js_1 = __importDefault(__webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js"));
+const bn_js_1 = __importDefault(__webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js"));
 const pbkdf2_1 = __webpack_require__(/*! pbkdf2 */ "./node_modules/.pnpm/pbkdf2@3.1.2/node_modules/pbkdf2/browser.js");
 const Bip32PublicKey_1 = __importDefault(__webpack_require__(/*! ./Bip32PublicKey */ "./node_modules/.pnpm/@stricahq+bip32ed25519@1.1.1/node_modules/@stricahq/bip32ed25519/dist/Bip32PublicKey.js"));
 const PrivateKey_1 = __importDefault(__webpack_require__(/*! ./PrivateKey */ "./node_modules/.pnpm/@stricahq+bip32ed25519@1.1.1/node_modules/@stricahq/bip32ed25519/dist/PrivateKey.js"));
@@ -25973,7 +26023,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 /* eslint-disable no-bitwise */
 const buffer_1 = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const bn_js_1 = __importDefault(__webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js"));
+const bn_js_1 = __importDefault(__webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js"));
 const PublicKey_1 = __importDefault(__webpack_require__(/*! ./PublicKey */ "./node_modules/.pnpm/@stricahq+bip32ed25519@1.1.1/node_modules/@stricahq/bip32ed25519/dist/PublicKey.js"));
 const utils_1 = __webpack_require__(/*! ./utils */ "./node_modules/.pnpm/@stricahq+bip32ed25519@1.1.1/node_modules/@stricahq/bip32ed25519/dist/utils.js");
 const EDDSA = __webpack_require__(/*! ./ed25519e */ "./node_modules/.pnpm/@stricahq+bip32ed25519@1.1.1/node_modules/@stricahq/bip32ed25519/dist/ed25519e/index.js");
@@ -26405,7 +26455,7 @@ module.exports = KeyPair;
  * OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
  */
-const BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+const BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 const elliptic = __webpack_require__(/*! elliptic */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic.js");
 const utils = elliptic.utils;
 const assert = utils.assert;
@@ -26548,7 +26598,7 @@ exports.HARDENED_OFFSET = 0x80000000;
 
 var asn1 = exports;
 
-asn1.bignum = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+asn1.bignum = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 
 asn1.define = (__webpack_require__(/*! ./asn1/api */ "./node_modules/.pnpm/asn1.js@4.10.1/node_modules/asn1.js/lib/asn1/api.js").define);
 asn1.base = __webpack_require__(/*! ./asn1/base */ "./node_modules/.pnpm/asn1.js@4.10.1/node_modules/asn1.js/lib/asn1/base/index.js");
@@ -34450,9 +34500,9 @@ module.exports = {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js":
+/***/ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js":
 /*!*********************************************************************!*\
-  !*** ./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js ***!
+  !*** ./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js ***!
   \*********************************************************************/
 /***/ (function(module, __unused_webpack_exports, __webpack_require__) {
 
@@ -34512,7 +34562,7 @@ module.exports = {
     if (typeof window !== 'undefined' && typeof window.Buffer !== 'undefined') {
       Buffer = window.Buffer;
     } else {
-      Buffer = (__webpack_require__(/*! buffer */ "?c167").Buffer);
+      Buffer = (__webpack_require__(/*! buffer */ "?2534").Buffer);
     }
   } catch (e) {
   }
@@ -36467,6 +36517,7 @@ module.exports = {
       this.words[i] = carry;
       this.length++;
     }
+    this.length = num === 0 ? 1 : this.length;
 
     return isNegNum ? this.ineg() : this;
   };
@@ -39350,7 +39401,7 @@ exports["des-ede"] = {
 "use strict";
 
 
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var randomBytes = __webpack_require__(/*! randombytes */ "./node_modules/.pnpm/randombytes@2.1.0/node_modules/randombytes/browser.js");
 var Buffer = (__webpack_require__(/*! safe-buffer */ "./node_modules/.pnpm/safe-buffer@5.2.1/node_modules/safe-buffer/index.js").Buffer);
 
@@ -39543,7 +39594,7 @@ var Buffer = (__webpack_require__(/*! safe-buffer */ "./node_modules/.pnpm/safe-
 var createHmac = __webpack_require__(/*! create-hmac */ "./node_modules/.pnpm/create-hmac@1.1.7/node_modules/create-hmac/browser.js");
 var crt = __webpack_require__(/*! browserify-rsa */ "./node_modules/.pnpm/browserify-rsa@4.1.1/node_modules/browserify-rsa/index.js");
 var EC = (__webpack_require__(/*! elliptic */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic.js").ec);
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var parseKeys = __webpack_require__(/*! parse-asn1 */ "./node_modules/.pnpm/parse-asn1@5.1.7/node_modules/parse-asn1/index.js");
 var curves = __webpack_require__(/*! ./curves.json */ "./node_modules/.pnpm/browserify-sign@4.2.3/node_modules/browserify-sign/browser/curves.json");
 
@@ -39701,7 +39752,7 @@ module.exports.makeKey = makeKey;
 
 // much of this based on https://github.com/indutny/self-signed/blob/gh-pages/lib/rsa.js
 var Buffer = (__webpack_require__(/*! safe-buffer */ "./node_modules/.pnpm/safe-buffer@5.2.1/node_modules/safe-buffer/index.js").Buffer);
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var EC = (__webpack_require__(/*! elliptic */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic.js").ec);
 var parseKeys = __webpack_require__(/*! parse-asn1 */ "./node_modules/.pnpm/parse-asn1@5.1.7/node_modules/parse-asn1/index.js");
 var curves = __webpack_require__(/*! ./curves.json */ "./node_modules/.pnpm/browserify-sign@4.2.3/node_modules/browserify-sign/browser/curves.json");
@@ -46406,7 +46457,7 @@ module.exports = CipherBase;
 
 /* provided dependency */ var Buffer = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js")["Buffer"];
 var elliptic = __webpack_require__(/*! elliptic */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic.js")
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js")
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js")
 
 module.exports = function createECDH (curve) {
   return new ECDH(curve)
@@ -47758,7 +47809,7 @@ exports.createDiffieHellman = exports.DiffieHellman = createDiffieHellman
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 /* provided dependency */ var Buffer = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js")["Buffer"];
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var MillerRabin = __webpack_require__(/*! miller-rabin */ "./node_modules/.pnpm/miller-rabin@4.0.1/node_modules/miller-rabin/lib/mr.js");
 var millerRabin = new MillerRabin();
 var TWENTYFOUR = new BN(24);
@@ -47936,7 +47987,7 @@ var randomBytes = __webpack_require__(/*! randombytes */ "./node_modules/.pnpm/r
 module.exports = findPrime;
 findPrime.simpleSieve = simpleSieve;
 findPrime.fermatTest = fermatTest;
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var TWENTYFOUR = new BN(24);
 var MillerRabin = __webpack_require__(/*! miller-rabin */ "./node_modules/.pnpm/miller-rabin@4.0.1/node_modules/miller-rabin/lib/mr.js");
 var millerRabin = new MillerRabin();
@@ -48376,7 +48427,7 @@ elliptic.eddsa = __webpack_require__(/*! ./elliptic/eddsa */ "./node_modules/.pn
 "use strict";
 
 
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var utils = __webpack_require__(/*! ../utils */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/utils.js");
 var getNAF = utils.getNAF;
 var getJSF = utils.getJSF;
@@ -48769,7 +48820,7 @@ BasePoint.prototype.dblp = function dblp(k) {
 
 
 var utils = __webpack_require__(/*! ../utils */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/utils.js");
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var inherits = __webpack_require__(/*! inherits */ "./node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits_browser.js");
 var Base = __webpack_require__(/*! ./base */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/curve/base.js");
 
@@ -49233,7 +49284,7 @@ curve.edwards = __webpack_require__(/*! ./edwards */ "./node_modules/.pnpm/ellip
 "use strict";
 
 
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var inherits = __webpack_require__(/*! inherits */ "./node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits_browser.js");
 var Base = __webpack_require__(/*! ./base */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/curve/base.js");
 
@@ -49423,7 +49474,7 @@ Point.prototype.getX = function getX() {
 
 
 var utils = __webpack_require__(/*! ../utils */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/utils.js");
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var inherits = __webpack_require__(/*! inherits */ "./node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits_browser.js");
 var Base = __webpack_require__(/*! ./base */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/curve/base.js");
 
@@ -50588,7 +50639,7 @@ defineCurve('secp256k1', {
 "use strict";
 
 
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var HmacDRBG = __webpack_require__(/*! hmac-drbg */ "./node_modules/.pnpm/hmac-drbg@1.0.1/node_modules/hmac-drbg/lib/hmac-drbg.js");
 var utils = __webpack_require__(/*! ../utils */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/utils.js");
 var curves = __webpack_require__(/*! ../curves */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/curves.js");
@@ -50877,7 +50928,7 @@ EC.prototype.getKeyRecoveryParam = function(e, signature, Q, enc) {
 "use strict";
 
 
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var utils = __webpack_require__(/*! ../utils */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/utils.js");
 var assert = utils.assert;
 
@@ -51009,7 +51060,7 @@ KeyPair.prototype.inspect = function inspect() {
 "use strict";
 
 
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 
 var utils = __webpack_require__(/*! ../utils */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/utils.js");
 var assert = utils.assert;
@@ -51434,7 +51485,7 @@ module.exports = KeyPair;
 "use strict";
 
 
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var utils = __webpack_require__(/*! ../utils */ "./node_modules/.pnpm/elliptic@6.6.1/node_modules/elliptic/lib/elliptic/utils.js");
 var assert = utils.assert;
 var cachedProperty = utils.cachedProperty;
@@ -52302,7 +52353,7 @@ module.exports = {
 
 
 var utils = exports;
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var minAssert = __webpack_require__(/*! minimalistic-assert */ "./node_modules/.pnpm/minimalistic-assert@1.0.1/node_modules/minimalistic-assert/index.js");
 var minUtils = __webpack_require__(/*! minimalistic-crypto-utils */ "./node_modules/.pnpm/minimalistic-crypto-utils@1.0.1/node_modules/minimalistic-crypto-utils/lib/utils.js");
 
@@ -57034,7 +57085,7 @@ module.exports = MD5
   \***********************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var bn = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js");
+var bn = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js");
 var brorand = __webpack_require__(/*! brorand */ "./node_modules/.pnpm/brorand@1.1.0/node_modules/brorand/index.js");
 
 function MillerRabin(rand) {
@@ -59811,7 +59862,7 @@ function i2ops (c) {
 var parseKeys = __webpack_require__(/*! parse-asn1 */ "./node_modules/.pnpm/parse-asn1@5.1.7/node_modules/parse-asn1/index.js")
 var mgf = __webpack_require__(/*! ./mgf */ "./node_modules/.pnpm/public-encrypt@4.0.3/node_modules/public-encrypt/mgf.js")
 var xor = __webpack_require__(/*! ./xor */ "./node_modules/.pnpm/public-encrypt@4.0.3/node_modules/public-encrypt/xor.js")
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js")
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js")
 var crt = __webpack_require__(/*! browserify-rsa */ "./node_modules/.pnpm/browserify-rsa@4.1.1/node_modules/browserify-rsa/index.js")
 var createHash = __webpack_require__(/*! create-hash */ "./node_modules/.pnpm/create-hash@1.2.0/node_modules/create-hash/browser.js")
 var withPublic = __webpack_require__(/*! ./withPublic */ "./node_modules/.pnpm/public-encrypt@4.0.3/node_modules/public-encrypt/withPublic.js")
@@ -59928,7 +59979,7 @@ var randomBytes = __webpack_require__(/*! randombytes */ "./node_modules/.pnpm/r
 var createHash = __webpack_require__(/*! create-hash */ "./node_modules/.pnpm/create-hash@1.2.0/node_modules/create-hash/browser.js")
 var mgf = __webpack_require__(/*! ./mgf */ "./node_modules/.pnpm/public-encrypt@4.0.3/node_modules/public-encrypt/mgf.js")
 var xor = __webpack_require__(/*! ./xor */ "./node_modules/.pnpm/public-encrypt@4.0.3/node_modules/public-encrypt/xor.js")
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js")
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js")
 var withPublic = __webpack_require__(/*! ./withPublic */ "./node_modules/.pnpm/public-encrypt@4.0.3/node_modules/public-encrypt/withPublic.js")
 var crt = __webpack_require__(/*! browserify-rsa */ "./node_modules/.pnpm/browserify-rsa@4.1.1/node_modules/browserify-rsa/index.js")
 var Buffer = (__webpack_require__(/*! safe-buffer */ "./node_modules/.pnpm/safe-buffer@5.2.1/node_modules/safe-buffer/index.js").Buffer)
@@ -60021,7 +60072,7 @@ function nonZero (len) {
   \*******************************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.1/node_modules/bn.js/lib/bn.js")
+var BN = __webpack_require__(/*! bn.js */ "./node_modules/.pnpm/bn.js@5.2.2/node_modules/bn.js/lib/bn.js")
 var Buffer = (__webpack_require__(/*! safe-buffer */ "./node_modules/.pnpm/safe-buffer@5.2.1/node_modules/safe-buffer/index.js").Buffer)
 
 function withPublic (paddedMsg, key) {
@@ -73355,7 +73406,7 @@ const saltpack_1 = __webpack_require__(/*! @samuelthomas2774/saltpack */ "./node
 const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.0.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const bip32fix = __importStar(__webpack_require__(/*! @stricahq/bip32ed25519 */ "./node_modules/.pnpm/@stricahq+bip32ed25519@1.1.1/node_modules/@stricahq/bip32ed25519/dist/index.js"));
 const crypto_2 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 //@ts-expect-error fix for wrong way of exporting bip32ed25519
@@ -73834,6 +73885,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.MemoryChannel = void 0;
+exports.pipeChannels = pipeChannels;
+exports.unpipeChannels = unpipeChannels;
 exports.StreamChannel = StreamChannel;
 exports.convertWebWritableStreamToNodeWritable = convertWebWritableStreamToNodeWritable;
 exports.convertWebReadableStreamToNodeReadable = convertWebReadableStreamToNodeReadable;
@@ -73841,6 +73894,79 @@ const cryptoChannel_1 = __importDefault(__webpack_require__(/*! ./cryptoChannel 
 const stream_1 = __webpack_require__(/*! stream */ "./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Pipes two channels together, creating a bidirectional flow where
+ * messages sent to one channel are automatically forwarded to the other.
+ * @param channel1 The first channel to connect
+ * @param channel2 The second channel to connect
+ * @returns A Promise that resolves when both channels close
+ */
+function pipeChannels(channel1, channel2) {
+    let running = true;
+    // Start both piping directions
+    const pipe1to2 = async () => {
+        try {
+            await channel1.start();
+            await channel2.start();
+            console.log("pipe1to2");
+            while (running) {
+                try {
+                    const data = await channel1.receive();
+                    console.log("pipe1to2", data);
+                    if (!running || data.length === 0)
+                        break;
+                    channel2.send(data);
+                }
+                catch (error) {
+                    if (running)
+                        console.error("Error in pipe1to2:", error);
+                    break;
+                }
+            }
+        }
+        catch (error) {
+            console.error("Fatal error in pipe1to2:", error);
+        }
+    };
+    const pipe2to1 = async () => {
+        try {
+            while (running) {
+                console.log("pipe2to1");
+                try {
+                    const data = await channel2.receive();
+                    console.log("pipe2to1", data);
+                    if (!running || data.length === 0)
+                        break;
+                    channel1.send(data);
+                }
+                catch (error) {
+                    if (running)
+                        console.error("Error in pipe2to1:", error);
+                    break;
+                }
+            }
+        }
+        catch (error) {
+            console.error("Fatal error in pipe2to1:", error);
+        }
+    };
+    // Start the pipes
+    pipe1to2();
+    pipe2to1();
+    // Return function to stop piping
+    return async () => {
+        running = false;
+        await Promise.all([channel1.close(), channel2.close()]);
+    };
+}
+/**
+ * Utility function that stops an active channel pipe
+ * @param channel1 The first channel in the pipe
+ * @param channel2 The second channel in the pipe
+ */
+async function unpipeChannels(channel1, channel2) {
+    await Promise.all([channel1.close(), channel2.close()]);
+}
 function StreamChannel(channel) {
     const onData = async (callback) => {
         let message = await channel.receive();
@@ -73992,7 +74118,11 @@ function convertWebReadableStreamToNodeReadable(webReadableStream) {
 }
 class MemoryChannel {
     constructor() {
-        this.lock = false;
+        this.messageQueue = [];
+        this.waitingResolvers = [];
+        this.connected = false;
+        this.connectedCallbacks = [];
+        this.closed = false;
     }
     setChannel(chan, name) {
         this.name = name;
@@ -74006,7 +74136,12 @@ class MemoryChannel {
         return input;
     }
     onConnected(callback) {
-        this._onConnected = callback;
+        if (this.connected) {
+            callback();
+        }
+        else {
+            this.connectedCallbacks.push(callback);
+        }
     }
     static createEncryptedBidirectionnal(key = cryptoChannel_1.default.generateKey()) {
         const input = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
@@ -74028,37 +74163,69 @@ class MemoryChannel {
         this.injector = injector;
     }
     async start() {
-        // noop
+        this.connected = true;
+        this.connectedCallbacks.forEach((callback) => callback());
+        this.connectedCallbacks = []; // Clear callbacks after calling them
     }
     async send(data) {
-        // the other end might not listen yet
-        while (this.lock || !this.otherend?.receiver) {
-            // console.log(this.lock);
-            await delay(10);
+        if (this.closed) {
+            throw new Error("Cannot send on closed channel");
         }
-        this.lock = true;
-        const receiver = this.otherend.receiver;
-        delete this.otherend.receiver;
-        this.otherend._onConnected?.();
-        delete this.otherend._onConnected;
-        if (this.logger)
+        if (!this.otherend) {
+            throw new Error("No other end connected to this channel");
+        }
+        // Log the data if a logger is set
+        if (this.logger) {
             this.logger(data);
-        if (this.injector) {
-            const injected = await this.injector(data);
-            receiver(injected);
         }
-        else
-            receiver(data);
-        this.lock = false;
+        // Process data through injector if present
+        let processedData = data;
+        if (this.injector) {
+            processedData = await this.injector(data);
+        }
+        // // Signal that this end is connected
+        if (!this.connected) {
+            await this.start();
+        }
+        // Deliver the message to the other end
+        this.otherend.deliverMessage(processedData);
+    }
+    deliverMessage(data) {
+        // If there are waiting receivers, deliver directly to the first one
+        if (this.waitingResolvers.length > 0) {
+            const resolver = this.waitingResolvers.shift();
+            resolver(data);
+        }
+        else {
+            // Otherwise queue the message
+            this.messageQueue.push(data);
+        }
     }
     async receive() {
-        while (this.receiver) {
-            console.log(this.lock);
-            await delay(10);
+        if (this.closed) {
+            throw new Error("Cannot receive on closed channel");
         }
-        return new Promise((resolve) => (this.receiver = resolve));
+        //console.log(this);
+        // If there are queued messages, return the first one
+        if (this.messageQueue.length > 0) {
+            return this.messageQueue.shift();
+        }
+        // Otherwise, wait for a message to arrive
+        return new Promise((resolve) => {
+            this.waitingResolvers.push(resolve);
+        });
     }
-    async close() { }
+    async close() {
+        this.closed = true;
+        // Clear any waiting receivers with an error
+        while (this.waitingResolvers.length > 0) {
+            const resolver = this.waitingResolvers.shift();
+            // Resolve with empty buffer to indicate channel closed
+            resolver(buffer_1.Buffer.alloc(0));
+        }
+        // Clear the message queue
+        this.messageQueue = [];
+    }
 }
 exports.MemoryChannel = MemoryChannel;
 
@@ -74177,8 +74344,8 @@ const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 Object.defineProperty(exports, "Buffer", ({ enumerable: true, get: function () { return buffer_1.Buffer; } }));
-const sha256_1 = __webpack_require__(/*! @noble/hashes/sha256 */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha256.js");
-const sha512_1 = __webpack_require__(/*! @noble/hashes/sha512 */ "./node_modules/.pnpm/@noble+hashes@1.7.2/node_modules/@noble/hashes/sha512.js");
+const sha256_1 = __webpack_require__(/*! @noble/hashes/sha256 */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha256.js");
+const sha512_1 = __webpack_require__(/*! @noble/hashes/sha512 */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha512.js");
 const getAlgorithm = (alg) => {
     const cleanAlg = alg.replaceAll("-", "").toLowerCase();
     if (cleanAlg === "sha256")
@@ -74301,10 +74468,10 @@ const crypto_1 = __importDefault(__webpack_require__(/*! crypto */ "./node_modul
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const crypto_2 = __webpack_require__(/*! ../crypto */ "./src/crypto.ts");
 const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
-const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/ed25519.js");
-const p256_1 = __webpack_require__(/*! @noble/curves/p256 */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p256.js");
-const p384_1 = __webpack_require__(/*! @noble/curves/p384 */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p384.js");
-const p521_1 = __webpack_require__(/*! @noble/curves/p521 */ "./node_modules/.pnpm/@noble+curves@1.8.2/node_modules/@noble/curves/p521.js");
+const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/ed25519.js");
+const p256_1 = __webpack_require__(/*! @noble/curves/p256 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p256.js");
+const p384_1 = __webpack_require__(/*! @noble/curves/p384 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p384.js");
+const p521_1 = __webpack_require__(/*! @noble/curves/p521 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p521.js");
 const x509_1 = __webpack_require__(/*! @peculiar/x509 */ "./node_modules/.pnpm/@peculiar+x509@1.12.3/node_modules/@peculiar/x509/build/x509.es.js");
 const credentials = {};
 //const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
@@ -75220,6 +75387,98 @@ describe("Channel tests", () => {
         assert_1.default.equal("hello world", message?.toString("utf-8"));
     });
 });
+// describe("Channel pipe tests", () => {
+//   it("should pipe data between two memory channels", async () => {
+//     // Create endpoints for A and B
+//     const channelA = MemoryChannel.createBidirectionnal();
+//     const channelB = MemoryChannel.createBidirectionnal();
+//     console.log("started");
+//     // Connect channels to receive endpoints
+//     const receiverA = channelA.otherend!;
+//     const receiverB = channelB.otherend!;
+//     channelA.setLogger(console.log);
+//     channelB.setLogger(console.log);
+//     // Start piping between the two channels
+//     const unpipe = pipeChannels(channelA, channelB);
+//     await delay(10);
+//     const messageAtB = receiverB.receive();
+//     // Send data from A to B
+//     channelA.send(Buffer.from("hello from A", "utf-8"));
+//     // Receive on B's side
+//     console.log(await messageAtB);
+//     console.log("Data sent from A to B");
+//     // Send data from B to A
+//     await channelB.send(Buffer.from("hello from B", "utf-8"));
+//     // Receive on A's side
+//     const messageAtA = await receiverA.receive();
+//     // Clean up
+//     await unpipe();
+//     // Verify the data was correctly transmitted
+//     assert.equal(messageAtB.toString("utf-8"), "hello from A");
+//     assert.equal(messageAtA.toString("utf-8"), "hello from B");
+//   });
+//   it("should pipe data between encrypted memory channels", async () => {
+//     // Create encrypted endpoints
+//     const channelA = MemoryChannel.createEncryptedBidirectionnal();
+//     const channelB = MemoryChannel.createEncryptedBidirectionnal();
+//     // Connect channels to receive endpoints
+//     const receiverA = channelA.otherend!;
+//     const receiverB = channelB.otherend!;
+//     // Start piping
+//     const unpipe = pipeChannels(channelA, channelB);
+//     // Send multiple messages from A to B
+//     await channelA.send(Buffer.from("message 1", "utf-8"));
+//     await channelA.send(Buffer.from("message 2", "utf-8"));
+//     // Receive on B
+//     const message1AtB = await receiverB.receive();
+//     const message2AtB = await receiverB.receive();
+//     // Clean up
+//     await unpipe();
+//     // Verify the data was correctly transmitted
+//     assert.equal(message1AtB.toString("utf-8"), "message 1");
+//     assert.equal(message2AtB.toString("utf-8"), "message 2");
+//   });
+//   it("should handle large data transfers", async () => {
+//     // Create endpoints
+//     const channelA = MemoryChannel.createBidirectionnal();
+//     const channelB = MemoryChannel.createBidirectionnal();
+//     // Connect channels to receive endpoints
+//     const receiverB = channelB.otherend!;
+//     // Start piping
+//     const unpipe = pipeChannels(channelA, channelB);
+//     // Create a large buffer (1MB)
+//     const largeData = Buffer.alloc(1024 * 1024);
+//     largeData.fill(42);
+//     // Send large data from A to B
+//     await channelA.send(largeData);
+//     // Receive on B
+//     const receivedData = await receiverB.receive();
+//     // Clean up
+//     await unpipe();
+//     // Verify the data was correctly transmitted
+//     assert.equal(receivedData.length, largeData.length);
+//     assert.ok(receivedData.equals(largeData));
+//   });
+//   it("should handle bidirectional communication simultaneously", async () => {
+//     // Create endpoints
+//     const channelA = MemoryChannel.createBidirectionnal();
+//     const channelB = MemoryChannel.createBidirectionnal();
+//     // Connect channels to receive endpoints
+//     const receiverA = channelA.otherend!;
+//     const receiverB = channelB.otherend!;
+//     // Start piping
+//     const unpipe = pipeChannels(channelA, channelB);
+//     // Send messages in both directions
+//     await Promise.all([channelA.send(Buffer.from("from A to B", "utf-8")), channelB.send(Buffer.from("from B to A", "utf-8"))]);
+//     // Receive in both directions
+//     const [messageAtB, messageAtA] = await Promise.all([receiverB.receive(), receiverA.receive()]);
+//     // Clean up
+//     await unpipe();
+//     // Verify bidirectional data transmission
+//     assert.equal(messageAtB.toString("utf-8"), "from A to B");
+//     assert.equal(messageAtA.toString("utf-8"), "from B to A");
+//   });
+// });
 
 
 /***/ }),
@@ -76590,6 +76849,16 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 
 /***/ }),
 
+/***/ "?2534":
+/*!************************!*\
+  !*** buffer (ignored) ***!
+  \************************/
+/***/ (() => {
+
+/* (ignored) */
+
+/***/ }),
+
 /***/ "?718d":
 /*!************************!*\
   !*** crypto (ignored) ***!
@@ -76634,16 +76903,6 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 /*!********************!*\
   !*** fs (ignored) ***!
   \********************/
-/***/ (() => {
-
-/* (ignored) */
-
-/***/ }),
-
-/***/ "?c167":
-/*!************************!*\
-  !*** buffer (ignored) ***!
-  \************************/
 /***/ (() => {
 
 /* (ignored) */

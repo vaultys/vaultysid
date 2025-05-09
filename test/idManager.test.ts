@@ -184,6 +184,62 @@ describe("SRG challenge with IdManager", () => {
     }
   });
 
+  it("fail a challenge if user1 refuse", async () => {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
+      const channel = MemoryChannel.createBidirectionnal();
+      if (!channel.otherend) assert.fail();
+      const s1 = MemoryStorage(() => "");
+      const s2 = MemoryStorage(() => "");
+      const manager1 = new IdManager(id1, s1);
+      const manager2 = new IdManager(await VaultysId.generateMachine(), s2);
+      const metadata1 = {
+        name: "a",
+        email: "b",
+        phone: "c",
+      };
+      const metadata2 = {
+        name: "d",
+        email: "e",
+        phone: "f",
+      };
+
+      try {
+        await Promise.all([manager1.askContact(channel, metadata1, () => Promise.resolve(false)), manager2.acceptContact(channel.otherend, metadata2)]);
+      } catch (e) {
+        assert.equal(e.message, "Error: Contact refused");
+      }
+    }
+  });
+
+  it("fail a challenge if user2 refuse", async () => {
+    for (let i = 0; i < 10; i++) {
+      const id1 = await createRandomVaultysId();
+      const channel = MemoryChannel.createBidirectionnal();
+      if (!channel.otherend) assert.fail();
+      const s1 = MemoryStorage(() => "");
+      const s2 = MemoryStorage(() => "");
+      const manager1 = new IdManager(id1, s1);
+      const manager2 = new IdManager(await VaultysId.generateMachine(), s2);
+      const metadata1 = {
+        name: "a",
+        email: "b",
+        phone: "c",
+      };
+      const metadata2 = {
+        name: "d",
+        email: "e",
+        phone: "f",
+      };
+
+      try {
+        await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2, () => Promise.resolve(false))]);
+      } catch (e) {
+        assert.equal(e.message, "Error: Contact refused");
+      }
+    }
+  });
+
   it("pass a challenge over encrypted Channel", async () => {
     for (let i = 0; i < 10; i++) {
       const id1 = await createRandomVaultysId();

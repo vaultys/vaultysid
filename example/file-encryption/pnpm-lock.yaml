@@ -15,8 +15,8 @@ importers:
         specifier: ^2
         version: 2.2.6
       '@vaultys/channel-peerjs':
-        specifier: ^2.4.1
-        version: 2.4.1
+        specifier: ^2.4.2
+        version: 2.4.2
       '@vaultys/id':
         specifier: link:../..
         version: link:../..
@@ -696,8 +696,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@vaultys/channel-peerjs@2.4.1':
-    resolution: {integrity: sha512-b675IYpsD/yj9Gs1qa+SVMkQgWTm48fFDySQm61i+5G5DMVFcKoLyQ/BkmBAr4lWPnor9FS7QWeJ+GsLtuVRmw==}
+  '@vaultys/channel-peerjs@2.4.2':
+    resolution: {integrity: sha512-p6xZ902U1hgc0VMUYTyWjXWrC/NN47TFnJwZA53/XZWoYTHCzsGse91JA9PaiN49MehBOx3iFahFN3FA7kJQvQ==}
 
   '@vaultys/id@2.4.4':
     resolution: {integrity: sha512-LeVyqAAZDXWoPlcRVHNpnBES/gAjMoOJEE/nf038/hSkY7y2Ho7sCAkAtA1R0M9X5Kzgb5t/c9DcO7EiQ3Jd4g==}
@@ -2730,7 +2730,7 @@ snapshots:
   '@unrs/resolver-binding-win32-x64-msvc@1.5.0':
     optional: true
 
-  '@vaultys/channel-peerjs@2.4.1':
+  '@vaultys/channel-peerjs@2.4.2':
     dependencies:
       '@vaultys/id': 2.4.4
       peerjs: 1.5.4

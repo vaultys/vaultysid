@@ -9,6 +9,20 @@ export type Channel = {
     getConnectionString(): string;
     fromConnectionString(conn: string, options?: any): Channel | null;
 };
+/**
+ * Pipes two channels together, creating a bidirectional flow where
+ * messages sent to one channel are automatically forwarded to the other.
+ * @param channel1 The first channel to connect
+ * @param channel2 The second channel to connect
+ * @returns A Promise that resolves when both channels close
+ */
+export declare function pipeChannels(channel1: Channel, channel2: Channel): () => Promise<void>;
+/**
+ * Utility function that stops an active channel pipe
+ * @param channel1 The first channel in the pipe
+ * @param channel2 The second channel in the pipe
+ */
+export declare function unpipeChannels(channel1: Channel, channel2: Channel): Promise<void>;
 export declare function StreamChannel(channel: Channel): {
     getReadStream: () => Readable;
     getWriteStream: () => Stream.Writable;
@@ -21,12 +35,14 @@ export declare function convertWebWritableStreamToNodeWritable(webWritableStream
 export declare function convertWebReadableStreamToNodeReadable(webReadableStream: ReadableStream): Readable;
 export declare class MemoryChannel implements Channel {
     name?: string;
-    lock: boolean;
     otherend?: MemoryChannel;
-    receiver?: (data: Buffer) => void;
+    private messageQueue;
+    private waitingResolvers;
+    private connected;
+    private connectedCallbacks;
+    private closed;
     logger?: (data: Buffer) => void;
     injector?: (data: Buffer) => Promise<Buffer> | Buffer;
-    _onConnected?: () => void;
     setChannel(chan: MemoryChannel, name?: string): void;
     static createBidirectionnal(): MemoryChannel;
     onConnected(callback: () => void): void;
@@ -37,6 +53,7 @@ export declare class MemoryChannel implements Channel {
     setInjector(injector: (data: Buffer) => Buffer): void;
     start(): Promise<void>;
     send(data: Buffer): Promise<void>;
+    private deliverMessage;
     receive(): Promise<Buffer>;
     close(): Promise<void>;
 }

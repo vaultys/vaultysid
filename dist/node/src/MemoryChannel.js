@@ -4,6 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MemoryChannel = void 0;
+exports.pipeChannels = pipeChannels;
+exports.unpipeChannels = unpipeChannels;
 exports.StreamChannel = StreamChannel;
 exports.convertWebWritableStreamToNodeWritable = convertWebWritableStreamToNodeWritable;
 exports.convertWebReadableStreamToNodeReadable = convertWebReadableStreamToNodeReadable;
@@ -11,6 +13,79 @@ const cryptoChannel_1 = __importDefault(require("./cryptoChannel"));
 const stream_1 = require("stream");
 const buffer_1 = require("buffer/");
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Pipes two channels together, creating a bidirectional flow where
+ * messages sent to one channel are automatically forwarded to the other.
+ * @param channel1 The first channel to connect
+ * @param channel2 The second channel to connect
+ * @returns A Promise that resolves when both channels close
+ */
+function pipeChannels(channel1, channel2) {
+    let running = true;
+    // Start both piping directions
+    const pipe1to2 = async () => {
+        try {
+            await channel1.start();
+            await channel2.start();
+            console.log("pipe1to2");
+            while (running) {
+                try {
+                    const data = await channel1.receive();
+                    console.log("pipe1to2", data);
+                    if (!running || data.length === 0)
+                        break;
+                    channel2.send(data);
+                }
+                catch (error) {
+                    if (running)
+                        console.error("Error in pipe1to2:", error);
+                    break;
+                }
+            }
+        }
+        catch (error) {
+            console.error("Fatal error in pipe1to2:", error);
+        }
+    };
+    const pipe2to1 = async () => {
+        try {
+            while (running) {
+                console.log("pipe2to1");
+                try {
+                    const data = await channel2.receive();
+                    console.log("pipe2to1", data);
+                    if (!running || data.length === 0)
+                        break;
+                    channel1.send(data);
+                }
+                catch (error) {
+                    if (running)
+                        console.error("Error in pipe2to1:", error);
+                    break;
+                }
+            }
+        }
+        catch (error) {
+            console.error("Fatal error in pipe2to1:", error);
+        }
+    };
+    // Start the pipes
+    pipe1to2();
+    pipe2to1();
+    // Return function to stop piping
+    return async () => {
+        running = false;
+        await Promise.all([channel1.close(), channel2.close()]);
+    };
+}
+/**
+ * Utility function that stops an active channel pipe
+ * @param channel1 The first channel in the pipe
+ * @param channel2 The second channel in the pipe
+ */
+async function unpipeChannels(channel1, channel2) {
+    await Promise.all([channel1.close(), channel2.close()]);
+}
 function StreamChannel(channel) {
     const onData = async (callback) => {
         let message = await channel.receive();
@@ -162,7 +237,11 @@ function convertWebReadableStreamToNodeReadable(webReadableStream) {
 }
 class MemoryChannel {
     constructor() {
-        this.lock = false;
+        this.messageQueue = [];
+        this.waitingResolvers = [];
+        this.connected = false;
+        this.connectedCallbacks = [];
+        this.closed = false;
     }
     setChannel(chan, name) {
         this.name = name;
@@ -176,7 +255,12 @@ class MemoryChannel {
         return input;
     }
     onConnected(callback) {
-        this._onConnected = callback;
+        if (this.connected) {
+            callback();
+        }
+        else {
+            this.connectedCallbacks.push(callback);
+        }
     }
     static createEncryptedBidirectionnal(key = cryptoChannel_1.default.generateKey()) {
         const input = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
@@ -198,36 +282,68 @@ class MemoryChannel {
         this.injector = injector;
     }
     async start() {
-        // noop
+        this.connected = true;
+        this.connectedCallbacks.forEach((callback) => callback());
+        this.connectedCallbacks = []; // Clear callbacks after calling them
     }
     async send(data) {
-        // the other end might not listen yet
-        while (this.lock || !this.otherend?.receiver) {
-            // console.log(this.lock);
-            await delay(10);
+        if (this.closed) {
+            throw new Error("Cannot send on closed channel");
         }
-        this.lock = true;
-        const receiver = this.otherend.receiver;
-        delete this.otherend.receiver;
-        this.otherend._onConnected?.();
-        delete this.otherend._onConnected;
-        if (this.logger)
+        if (!this.otherend) {
+            throw new Error("No other end connected to this channel");
+        }
+        // Log the data if a logger is set
+        if (this.logger) {
             this.logger(data);
-        if (this.injector) {
-            const injected = await this.injector(data);
-            receiver(injected);
         }
-        else
-            receiver(data);
-        this.lock = false;
+        // Process data through injector if present
+        let processedData = data;
+        if (this.injector) {
+            processedData = await this.injector(data);
+        }
+        // // Signal that this end is connected
+        if (!this.connected) {
+            await this.start();
+        }
+        // Deliver the message to the other end
+        this.otherend.deliverMessage(processedData);
+    }
+    deliverMessage(data) {
+        // If there are waiting receivers, deliver directly to the first one
+        if (this.waitingResolvers.length > 0) {
+            const resolver = this.waitingResolvers.shift();
+            resolver(data);
+        }
+        else {
+            // Otherwise queue the message
+            this.messageQueue.push(data);
+        }
     }
     async receive() {
-        while (this.receiver) {
-            console.log(this.lock);
-            await delay(10);
+        if (this.closed) {
+            throw new Error("Cannot receive on closed channel");
         }
-        return new Promise((resolve) => (this.receiver = resolve));
+        //console.log(this);
+        // If there are queued messages, return the first one
+        if (this.messageQueue.length > 0) {
+            return this.messageQueue.shift();
+        }
+        // Otherwise, wait for a message to arrive
+        return new Promise((resolve) => {
+            this.waitingResolvers.push(resolve);
+        });
     }
-    async close() { }
+    async close() {
+        this.closed = true;
+        // Clear any waiting receivers with an error
+        while (this.waitingResolvers.length > 0) {
+            const resolver = this.waitingResolvers.shift();
+            // Resolve with empty buffer to indicate channel closed
+            resolver(buffer_1.Buffer.alloc(0));
+        }
+        // Clear the message queue
+        this.messageQueue = [];
+    }
 }
 exports.MemoryChannel = MemoryChannel;

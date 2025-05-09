@@ -9,7 +9,7 @@
     "tauri": "tauri"
   },
   "dependencies": {
-    "@vaultys/channel-peerjs": "^2.4.1",
+    "@vaultys/channel-peerjs": "^2.4.2",
     "@vaultys/id": "link:../..",
     "file-saver": "^2.0.5",
     "next": "^15.3.1",
