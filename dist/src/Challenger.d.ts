@@ -1,6 +1,7 @@
 import VaultysId from "./VaultysId";
 import { Buffer } from "buffer/";
 export type ChallengeType = {
+    version: 0 | 1;
     protocol: string;
     service: string;
     timestamp: number;
@@ -20,7 +21,7 @@ export default class Challenger {
     hisKey: Buffer | undefined;
     liveliness: number;
     challenge: ChallengeType | undefined;
-    version: number | undefined;
+    version: 0 | 1;
     constructor(vaultysId: VaultysId, liveliness?: number);
     static verifyCertificate(certificate: Buffer): Promise<boolean>;
     static fromCertificate(certificate: Buffer, liveliness?: number): Promise<Challenger | undefined>;
@@ -36,7 +37,7 @@ export default class Challenger {
         sign2: Buffer;
         metadata: object;
     }) => Buffer;
-    static serializeCertificate: (challenge: ChallengeType, version?: 0 | 1) => Buffer;
+    static serializeCertificate: (challenge: ChallengeType) => Buffer;
     setChallenge(challengeString: Buffer): Promise<void>;
     getContext(): {
         protocol: string | undefined;

@@ -46,6 +46,7 @@ const instanciateApp = (a) => {
 };
 class IdManager {
     constructor(vaultysId, store) {
+        this.protocol_version = 0;
         // alias since this is symetric key encryption
         this.acceptEncryptFile = this.acceptDecryptFile;
         this.vaultysId = vaultysId;
@@ -58,6 +59,9 @@ class IdManager {
         else
             this.store.set("secret", this.vaultysId.getSecret());
         this.store.save();
+    }
+    setProtocolVersion(version) {
+        this.protocol_version = version;
     }
     static async fromStore(store) {
         const entropy = store.get("entropy");
@@ -527,9 +531,8 @@ class IdManager {
         });
     }
     async startSRP(channel, protocol, service, metadata = {}, accept) {
-        const idV0 = VaultysId_1.default.fromSecret(this.vaultysId.getSecret()).toVersion(0);
-        const challenger = new Challenger_1.default(idV0);
-        challenger.createChallenge(protocol, service, 0, metadata);
+        const challenger = new Challenger_1.default(this.vaultysId);
+        challenger.createChallenge(protocol, service, this.protocol_version, metadata);
         //console.log(challenger);
         const cert = challenger.getCertificate();
         if (!cert) {
@@ -575,8 +578,7 @@ class IdManager {
         }
     }
     async acceptSRP(channel, protocol, service, metadata = {}, accept) {
-        const idV0 = VaultysId_1.default.fromSecret(this.vaultysId.getSecret()).toVersion(0);
-        const challenger = new Challenger_1.default(idV0);
+        const challenger = new Challenger_1.default(this.vaultysId);
         try {
             const message = await channel.receive();
             const chal = Challenger_1.default.deserializeCertificate(message);

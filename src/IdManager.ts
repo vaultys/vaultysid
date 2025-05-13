@@ -68,6 +68,8 @@ const instanciateApp = (a: StoredApp) => {
 export default class IdManager {
   vaultysId: VaultysId;
   store: Store;
+  protocol_version: 0 | 1 = 0;
+
   constructor(vaultysId: VaultysId, store: Store) {
     this.vaultysId = vaultysId;
     this.store = store;
@@ -77,6 +79,10 @@ export default class IdManager {
     if (this.vaultysId.keyManager.entropy) this.store.set("entropy", this.vaultysId.keyManager.entropy);
     else this.store.set("secret", this.vaultysId.getSecret());
     this.store.save();
+  }
+
+  setProtocolVersion(version: 0 | 1) {
+    this.protocol_version = version;
   }
 
   static async fromStore(store: Store) {
@@ -571,9 +577,8 @@ export default class IdManager {
   }
 
   async startSRP(channel: Channel, protocol: string, service: string, metadata: Record<string, string> = {}, accept?: (contact: VaultysId) => Promise<boolean>) {
-    const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
-    const challenger = new Challenger(idV0);
-    challenger.createChallenge(protocol, service, 0, metadata);
+    const challenger = new Challenger(this.vaultysId);
+    challenger.createChallenge(protocol, service, this.protocol_version, metadata);
     //console.log(challenger);
     const cert = challenger.getCertificate();
     if (!cert) {
@@ -620,8 +625,7 @@ export default class IdManager {
   }
 
   async acceptSRP(channel: Channel, protocol: string, service: string, metadata: Record<string, string> = {}, accept?: (contact: VaultysId) => Promise<boolean>) {
-    const idV0 = VaultysId.fromSecret(this.vaultysId.getSecret()).toVersion(0);
-    const challenger = new Challenger(idV0);
+    const challenger = new Challenger(this.vaultysId);
     try {
       const message = await channel.receive();
       const chal = Challenger.deserializeCertificate(message);

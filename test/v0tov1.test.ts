@@ -76,7 +76,7 @@ describe("VaultysId Migration", () => {
 describe("Symetric Proof of Relationship - SRG - V0", () => {
   it("Perform Protocol with KeyManager", async () => {
     const vaultysId1 = await createRandomVaultysId();
-    const challenger1 = new Challenger(vaultysId1.toVersion(0));
+    const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await createRandomVaultysId();
     const challenger2 = new Challenger(vaultysId2.toVersion(0));
     assert.equal(challenger1.isComplete(), false);
@@ -93,24 +93,17 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
-  it("Fail for different vaultysId versions", async () => {
+  it("Succeed for different vaultysId versions", async () => {
     const vaultysId1 = await createRandomVaultysId();
-    const challenger1 = new Challenger(vaultysId1.toVersion(0));
+    const challenger1 = new Challenger(vaultysId1);
     const vaultysId2 = await createRandomVaultysId();
-    const challenger2 = new Challenger(vaultysId2);
+    const challenger2 = new Challenger(vaultysId2.toVersion(0));
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth", 0);
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
-    try {
-      await challenger2.update(challenger1.getCertificate());
-    } catch (err) {
-      // @ts-expect-error useless type check
-      assert.equal(err?.message, "[COMPLETE] failed the verification of pk2");
-      return;
-    }
-    assert.fail("The protocol should have failed");
+    assert.equal(challenger1.toString(), challenger2.toString());
   });
 });
 

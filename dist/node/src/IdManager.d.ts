@@ -27,7 +27,9 @@ export type File = {
 export default class IdManager {
     vaultysId: VaultysId;
     store: Store;
+    protocol_version: 0 | 1;
     constructor(vaultysId: VaultysId, store: Store);
+    setProtocolVersion(version: 0 | 1): void;
     static fromStore(store: Store): Promise<IdManager>;
     merge(otherStore: Store, master?: boolean): void;
     isHardware(): boolean;
