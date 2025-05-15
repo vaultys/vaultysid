@@ -19,7 +19,10 @@ export type ChallengeType = {
   nonce?: Buffer;
   sign1?: Buffer;
   sign2?: Buffer;
-  metadata?: object;
+  metadata: {
+    pk1?: Record<string, string>;
+    pk2?: Record<string, string>;
+  };
   state: number;
   error?: string;
 };
@@ -301,7 +304,7 @@ export default class Challenger {
     };
   }
 
-  createChallenge(protocol: string, service: string, version: 0 | 1 = 0, metadata = {}) {
+  createChallenge(protocol: string, service: string, version: 0 | 1 = 0, metadata?: Record<string, string>) {
     this.version = version;
     if (this.state == UNINITIALISED) {
       this.mykey = this.vaultysId.toVersion(version).id;
@@ -310,7 +313,7 @@ export default class Challenger {
         version,
         protocol,
         service,
-        metadata,
+        metadata: metadata ? { pk1: metadata } : {},
         timestamp: Date.now(),
         pk1: this.mykey,
         nonce: randomBytes(16),
@@ -390,7 +393,7 @@ export default class Challenger {
     }
   }
 
-  async update(challengeString: Buffer, metadata = {}) {
+  async update(challengeString: Buffer, metadata?: Record<string, string>) {
     if (this.state === ERROR) {
       throw new Error("Can't update ERRORneous challenge");
     } else if (this.state === COMPLETE) {
@@ -411,12 +414,18 @@ export default class Challenger {
         this.state = ERROR;
         throw new Error("challenge timestamp failed the liveliness");
       }
+
       this.version = tempchallenge.version = tempchallenge.version ? 1 : 0;
       this.vaultysId.toVersion(this.version);
       if (this.state === UNINITIALISED && tempchallenge.state === INIT) {
+        if (tempchallenge.metadata.pk2) {
+          this.state = ERROR;
+          throw new Error("Metadata is malformed: pk2 is already set");
+        }
         this.challenge = tempchallenge;
         this.mykey = this.challenge.pk2 = this.vaultysId.id;
         this.hisKey = this.challenge.pk1;
+        if (metadata) this.challenge.metadata.pk2 = metadata;
         this.challenge.nonce = Buffer.concat([this.challenge.nonce!, randomBytes(16)]);
         const serialized = this.getUnsignedChallenge();
         this.challenge.sign2 = await this.vaultysId.signChallenge(serialized);

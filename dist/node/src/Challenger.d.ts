@@ -10,7 +10,10 @@ export type ChallengeType = {
     nonce?: Buffer;
     sign1?: Buffer;
     sign2?: Buffer;
-    metadata?: object;
+    metadata: {
+        pk1?: Record<string, string>;
+        pk2?: Record<string, string>;
+    };
     state: number;
     error?: string;
 };
@@ -42,9 +45,12 @@ export default class Challenger {
     getContext(): {
         protocol: string | undefined;
         service: string | undefined;
-        metadata: object | undefined;
+        metadata: {
+            pk1?: Record<string, string>;
+            pk2?: Record<string, string>;
+        } | undefined;
     };
-    createChallenge(protocol: string, service: string, version?: 0 | 1, metadata?: {}): void;
+    createChallenge(protocol: string, service: string, version?: 0 | 1, metadata?: Record<string, string>): void;
     getCertificate(): Buffer;
     getUnsignedChallenge(): Buffer;
     getContactDid(): string | null;
@@ -53,5 +59,5 @@ export default class Challenger {
     hasFailed(): boolean;
     isComplete(): boolean;
     init(challengeString: Buffer): Promise<void>;
-    update(challengeString: Buffer, metadata?: {}): Promise<void>;
+    update(challengeString: Buffer, metadata?: Record<string, string>): Promise<void>;
 }

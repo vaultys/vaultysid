@@ -281,7 +281,7 @@ class Challenger {
             metadata: this.challenge?.metadata,
         };
     }
-    createChallenge(protocol, service, version = 0, metadata = {}) {
+    createChallenge(protocol, service, version = 0, metadata) {
         this.version = version;
         if (this.state == UNINITIALISED) {
             this.mykey = this.vaultysId.toVersion(version).id;
@@ -290,7 +290,7 @@ class Challenger {
                 version,
                 protocol,
                 service,
-                metadata,
+                metadata: metadata ? { pk1: metadata } : {},
                 timestamp: Date.now(),
                 pk1: this.mykey,
                 nonce: (0, crypto_1.randomBytes)(16),
@@ -366,7 +366,7 @@ class Challenger {
             return;
         }
     }
-    async update(challengeString, metadata = {}) {
+    async update(challengeString, metadata) {
         if (this.state === ERROR) {
             throw new Error("Can't update ERRORneous challenge");
         }
@@ -392,9 +392,15 @@ class Challenger {
             this.version = tempchallenge.version = tempchallenge.version ? 1 : 0;
             this.vaultysId.toVersion(this.version);
             if (this.state === UNINITIALISED && tempchallenge.state === INIT) {
+                if (tempchallenge.metadata.pk2) {
+                    this.state = ERROR;
+                    throw new Error("Metadata is malformed: pk2 is already set");
+                }
                 this.challenge = tempchallenge;
                 this.mykey = this.challenge.pk2 = this.vaultysId.id;
                 this.hisKey = this.challenge.pk1;
+                if (metadata)
+                    this.challenge.metadata.pk2 = metadata;
                 this.challenge.nonce = buffer_1.Buffer.concat([this.challenge.nonce, (0, crypto_1.randomBytes)(16)]);
                 const serialized = this.getUnsignedChallenge();
                 this.challenge.sign2 = await this.vaultysId.signChallenge(serialized);

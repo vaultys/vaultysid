@@ -598,7 +598,7 @@ class IdManager {
                 channel.send(buffer_1.Buffer.from([0]));
                 throw new Error("Contact refused");
             }
-            await challenger.update(message);
+            await challenger.update(message, metadata);
         }
         catch (error) {
             channel.send(buffer_1.Buffer.from([0]));
