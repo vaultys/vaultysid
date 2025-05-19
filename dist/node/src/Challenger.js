@@ -101,13 +101,13 @@ const deserialize = (challenge) => {
         state: ERROR,
         error: "",
     };
+    if (!unpacked.version) {
+        unpacked.version = 0;
+    }
     const result = {
         ...unpacked,
         ...state,
     };
-    if (!unpacked.version) {
-        unpacked.version = 0;
-    }
     try {
         if (!result.timestamp || !result.protocol || !result.service) {
             result.state = ERROR;
@@ -250,6 +250,7 @@ class Challenger {
             throw new Error(this.challenge.error);
         }
         else if (this.challenge.state === INIT) {
+            //this.vaultysId.toVersion(this.challenge.version);
             this.mykey = this.vaultysId.id;
             this.challenge.pk2 = this.mykey;
             this.hisKey = this.challenge.pk1;
@@ -261,6 +262,7 @@ class Challenger {
             this.challenge.state = this.state = STEP1;
         }
         else if (this.challenge.state === COMPLETE) {
+            //this.vaultysId.toVersion(this.challenge.version);
             this.mykey = this.vaultysId.id;
             if (!this.challenge.pk1?.equals(this.mykey) && !this.challenge.pk1?.equals(this.mykey)) {
                 this.state = ERROR;
