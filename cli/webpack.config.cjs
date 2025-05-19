@@ -14,10 +14,11 @@ module.exports = {
     extensions: [".ts", ".js"],
     alias: {
       "@": path.resolve(__dirname),
+      buffer: path.resolve(__dirname, "./node_modules/buffer"),
     },
   },
   optimization: {
-    minimize: false,
+    minimize: true,
   },
   module: {
     rules: [

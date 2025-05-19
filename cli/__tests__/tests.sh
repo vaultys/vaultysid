@@ -6,7 +6,7 @@ result() {
 }
 
 # Add the directory containing vaultysid-cli to PATH
-SCRIPT_DIR="$( pwd )"
+SCRIPT_DIR="$( pwd )/bin"
 export PATH="$SCRIPT_DIR/..:$PATH"
 if [ -f "$SCRIPT_DIR/vaultysid-cli" ]; then
     VAULTYSID_CLI="$SCRIPT_DIR/vaultysid-cli"

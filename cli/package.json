@@ -7,7 +7,7 @@
     "vaultysid-cli": "./out/cli.js"
   },
   "scripts": {
-    "build": "tsc && pkg .",
+    "build": "webpack && pkg --experimental-require-module --compress GZip .",
     "start": "node out/cli.js",
     "test": "mocha test/vaultysid-cli.test.js"
   },
@@ -16,13 +16,13 @@
   "license": "ISC",
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
-    "@types/node": "^22.7.5",
+    "@types/node": "^22.15.19",
     "@types/yargs": "^17.0.33",
-    "mocha": "^10.7.3",
-    "pkg": "^5.8.1",
-    "ts-loader": "^9.5.1",
-    "typescript": "^5.6.2",
-    "webpack": "^5.95.0",
+    "@yao-pkg/pkg": "^6.5.1",
+    "mocha": "^10.8.2",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.99.8",
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
@@ -32,10 +32,11 @@
   "pkg": {
     "scripts": "out/cli.js",
     "targets": [
-      "node18-linux-x64",
-      "node18-macos-x64",
-      "node18-win-x64",
-      "node18-win-arm64"
+      "node22-linux-x64",
+      "node22-macos-x64",
+      "node22-macos-arm64",
+      "node22-win-x64",
+      "node22-win-arm64"
     ],
     "outputPath": "bin"
   },

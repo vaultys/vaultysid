@@ -1,7 +1,7 @@
 const { execFile } = require("child_process");
 const assert = require("assert");
 const path = require("path");
-const { VaultysId } = require("../../vaultysid/web/vaultysid.min.js");
+const { VaultysId } = require("../../dist/browser/vaultysid.min.js");
 
 // Assuming vaultysid-cli is in the parent directory of the test file
 const VAULTYSID_CLI = path.join(__dirname, "../bin", "vaultysid-cli");
@@ -92,10 +92,7 @@ describe("vaultysid-cli", function () {
   });
 
   it("should deserialize certificate", async function () {
-    const result = await execFileAsync(VAULTYSID_CLI, [
-      "deserializeCertificate",
-      "iahwcm90b2NvbKNwMnCnc2VydmljZahyZWdpc3Rlcql0aW1lc3RhbXDPAAABko9gLwijcGsxxHQBhKF2AKFwxQAgthOolbL2HWtbnAkuAyLHAjfbnS8njgLhHlxWlosbC6uheMUAIBXMRt4jV1gxWK5/TF1jNx0kD+v2qKTWFnfEDQsrOeIvoWXFACCwkdnz8o6yhL86amqfB4/nUoznXnmSs9wAIIT30iGhaaNwazLEdACEoXYAoXDFACARZg0feo56ckkSEU8xc0G/xCH5vjeLeQjP9/KtRC4X76F4xQAg9qbrfdWleMqBsN8y7qPmZ1/ObCqFxeQmIopZBwJGfa2hZcUAIHKiC8fHbhLl902mhMbl/h04JvVnWLBCyAGb22orn5dVpW5vbmNlxCAofLkkt7f/YFen3ve05OcpDl8AFJRnejfZbMC6q37gOqVzaWduMcRAby4aZAta/aZL/8NxtqX8NnDUMTfXZ44qEdW5QVl3Gp/nh7sNDtdJfpF3XdJ1bJ7FtinGDDtTkRCzW5Hm9S+EAqVzaWduMsRA0xyketeALY1yA/KbPo7gTWTGdBVyxmG4u60kQJ2WtTDdjhVnCVzlb56xZtWhtGX/DJxw43yEehPyPxI/HvgwB6htZXRhZGF0YYA=",
-    ]);
+    const result = await execFileAsync(VAULTYSID_CLI, ["deserializeCertificate", "iahwcm90b2NvbKNwMnCnc2VydmljZahyZWdpc3Rlcql0aW1lc3RhbXDPAAABko9gLwijcGsxxHQBhKF2AKFwxQAgthOolbL2HWtbnAkuAyLHAjfbnS8njgLhHlxWlosbC6uheMUAIBXMRt4jV1gxWK5/TF1jNx0kD+v2qKTWFnfEDQsrOeIvoWXFACCwkdnz8o6yhL86amqfB4/nUoznXnmSs9wAIIT30iGhaaNwazLEdACEoXYAoXDFACARZg0feo56ckkSEU8xc0G/xCH5vjeLeQjP9/KtRC4X76F4xQAg9qbrfdWleMqBsN8y7qPmZ1/ObCqFxeQmIopZBwJGfa2hZcUAIHKiC8fHbhLl902mhMbl/h04JvVnWLBCyAGb22orn5dVpW5vbmNlxCAofLkkt7f/YFen3ve05OcpDl8AFJRnejfZbMC6q37gOqVzaWduMcRAby4aZAta/aZL/8NxtqX8NnDUMTfXZ44qEdW5QVl3Gp/nh7sNDtdJfpF3XdJ1bJ7FtinGDDtTkRCzW5Hm9S+EAqVzaWduMsRA0xyketeALY1yA/KbPo7gTWTGdBVyxmG4u60kQJ2WtTDdjhVnCVzlb56xZtWhtGX/DJxw43yEehPyPxI/HvgwB6htZXRhZGF0YYA="]);
     const data = Buffer.from(result, "base64").toString("utf-8");
     const certificate = JSON.parse(data);
     assert.deepEqual(certificate, {
