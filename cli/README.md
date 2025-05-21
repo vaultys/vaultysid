@@ -1,1 +1,0 @@
-# vaultysid-cli
