@@ -68,7 +68,7 @@ const writeInt = (name: string, value: number) => {
   return Buffer.concat([start, end]);
 };
 
-const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }: { protocol: string; service: string; timestamp: number; pk1?: Buffer; pk2?: Buffer; nonce?: Buffer; metadata?: object }) => {
+const encode_v0 = ({ version, protocol, service, timestamp, pk1, pk2, nonce, metadata }: { version: 0 | 1; protocol: string; service: string; timestamp: number; pk1?: Buffer; pk2?: Buffer; nonce?: Buffer; metadata?: object }) => {
   const p = Buffer.concat([
     Buffer.from([0x87]),
     writeString("protocol", protocol),
@@ -85,7 +85,7 @@ const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }: 
   return p;
 };
 
-const encode_v0_full = ({ protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }: { protocol: string; service: string; timestamp: number; pk1: Buffer; pk2: Buffer; nonce: Buffer; sign1: Buffer; sign2: Buffer; metadata: object }) => {
+const encode_v0_full = ({ version, protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }: { version: 0 | 1; protocol: string; service: string; timestamp: number; pk1: Buffer; pk2: Buffer; nonce: Buffer; sign1: Buffer; sign2: Buffer; metadata: object }) => {
   const p = Buffer.concat([
     Buffer.from([0x89]),
     writeString("protocol", protocol),
@@ -264,6 +264,7 @@ export default class Challenger {
     }
 
     this.challenge = deserialize(challengeString);
+    this.version = this.challenge.version;
 
     if (!isLive(this.challenge, this.liveliness)) {
       this.state = ERROR;
@@ -376,6 +377,7 @@ export default class Challenger {
         throw new Error("challenge is not corresponding to the right id");
       }
       this.challenge = tempchallenge;
+      this.version = tempchallenge.version;
       this.mykey = this.challenge.pk2 = this.vaultysId.id;
       this.hisKey = this.challenge.pk1;
       this.challenge.state = this.state = INIT;
@@ -387,6 +389,7 @@ export default class Challenger {
         throw new Error("challenge is not corresponding to the right id");
       }
       this.challenge = tempchallenge;
+      this.version = tempchallenge.version;
       this.mykey = this.challenge.pk2;
       this.hisKey = this.challenge.pk1;
       this.state = this.challenge.state = STEP1;
@@ -416,7 +419,7 @@ export default class Challenger {
         throw new Error("challenge timestamp failed the liveliness");
       }
 
-      this.version = tempchallenge.version = tempchallenge.version ? 1 : 0;
+      this.version = tempchallenge.version;
       this.vaultysId.toVersion(this.version);
       if (this.state === UNINITIALISED && tempchallenge.state === INIT) {
         if (tempchallenge.metadata.pk2) {

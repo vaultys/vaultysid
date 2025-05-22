@@ -59,6 +59,34 @@ describe("Symetric Proof of Relationship - SRG - v1", () => {
     assert.equal(challenger1.toString(), challenger2.toString());
   });
 
+  it("Perform Protocol downgrading to v0", async () => {
+    const vaultysId1 = await createRandomVaultysId();
+    const challenger1 = new Challenger(vaultysId1);
+    const vaultysId2 = await createRandomVaultysId();
+    const challenger2 = new Challenger(vaultysId2);
+    assert.equal(challenger1.isComplete(), false);
+    assert.equal(challenger1.hasFailed(), false);
+    challenger1.createChallenge("p2p", "auth", 0);
+    //console.log(challenger1.challenge);
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, -1);
+    await challenger2.update(challenger1.getCertificate());
+    assert.equal(challenger1.state, 0);
+    assert.equal(challenger2.state, 1);
+    await challenger1.update(challenger2.getCertificate());
+    assert.equal(challenger1.state, 2);
+    assert.equal(challenger2.state, 1);
+    assert.ok(challenger1.isComplete());
+    assert.ok(!challenger2.isComplete());
+    await challenger2.update(challenger1.getCertificate());
+    assert.equal(challenger1.state, 2);
+    assert.equal(challenger2.state, 2);
+    // SYMETRIC PROOF
+    assert.ok(challenger1.isComplete());
+    assert.ok(challenger2.isComplete());
+    assert.equal(challenger1.toString(), challenger2.toString());
+  });
+
   it("Perform Stateless Protocol", async () => {
     const vaultysId1 = await createRandomVaultysId();
     const vaultysId2 = await createRandomVaultysId();

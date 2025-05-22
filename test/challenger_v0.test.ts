@@ -4,6 +4,9 @@ import assert from "assert";
 import "./shims";
 import { randomBytes } from "../src/crypto";
 import { createRandomVaultysId } from "./utils";
+import { decode } from "@msgpack/msgpack";
+import { dearmorAndDecrypt } from "@samuelthomas2774/saltpack";
+import { decrypt } from "../src/cryptoChannel";
 
 const testCertificate = (rogueCert: Buffer) => {
   try {
@@ -365,6 +368,29 @@ describe("Symetric Proof of Relationship - SRG - v0", () => {
     assert.equal(result.error, "");
     assert.equal(result.state, 2);
   });
+
+  it("Should deserialize a succesful v0 certificate 2", async () => {
+    const message = "QNGwy7yyIskbWees8qH39YHp6QpODl4Gsp970YFp3j+VjWbU2j1wAw7qLMWk0Ra0YeE6mVcENvohrXRfGdcM763qrYTgpFj72+jznW6szC+XxvDFkwCm9tba/qj6H+wpoDKphscI7UzJ8J1RoKytcLl3yg5BF6ikoJW0DMG58jE/T44tyEVhS0XVD5buSF6nGgam0Hge/rOMIh4Z0G6W5XQzEjMlobk7HYEV4nQAxRV8qaSLPtspF1ZcPgke2Q278n/KTwd65Nq+YYkr6cFPkxkmz9jZx9Zv0jKGiOw48MuirweOnD2AtvkpWq5fg6vi+pNZ/tymfIxwQ9LTnYbyKOwMR6/OzTulrbOBNftwDb2+PXLLT9Y=";
+    const key = "9ee1d044677cac34984b2da0acbc66d238e884a5e944cde54b96be77e3fc1e8e";
+    const cert = decrypt(Buffer.from(message, "base64"), Buffer.from(key, "hex"));
+    // console.log(dearmorAndDecrypt(cert));
+    // console.log(decode(cert));
+    const result = Challenger.deserializeCertificate(cert);
+    assert.equal(result.error, "");
+    assert.equal(result.state, 0);
+  });
+
+  it("Should deserialize a succesful v0 certificate 3", async () => {
+    const message = "Cf+KnycFC0odoGv9Yxjc2JvUgZSYBNmzBN1UomUz/3VzXds3K/Fr2odh9ZI4q86ZmFsKu/bIxsXhDNg2sM7PhESvgpAJte+3QfVD8e1pzSG4+mqQs2HSkXm5xo6gcPfoN7OyJfzUbaDW5ts1Cy9dIWxJpr8JcT6BUofVgoQk4loi8LPsDdsA4Kxk6FaAE05CeqvuglYayaOnOk/u+cQFHN9rBHe2cpHCrgQAr4Qa+MeLMo4GU7pB4Qd4nA7AQxDBXJqR+tVvPIA2GZWb/EW2OGDFU7YzRJJLP7RdXnjcsSYRkUzuCPpI7l7vfaVy8nxNqy9PkEIPlzyO3TCHOHqHWlEy2YN8O1Mx";
+    const key = "cc4dfd01327a30e10d9286344d485f2e4807ddb4c3e007f8b7fba20bb6c16985";
+    const cert = decrypt(Buffer.from(message, "base64"), Buffer.from(key, "hex"));
+    //console.log(dearmorAndDecrypt(cert));
+    console.log(decode(cert));
+    const result = Challenger.deserializeCertificate(cert);
+    assert.equal(result.error, "");
+    assert.equal(result.state, 0);
+  });
+
   /*
   it("Fail with tampered certificate (FIDO2)", async () => {
     const attestation1 = await navigator.credentials.create(

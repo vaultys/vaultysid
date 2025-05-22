@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/id",
-  "version": "2.4.7",
+  "version": "2.4.8",
   "exports": {
     ".": {
       "browser": "./dist/browser/vaultys.min.js",
@@ -62,7 +62,7 @@
     "webpack-cli": "^6.0.1"
   },
   "dependencies": {
-    "@msgpack/msgpack": "3.1.1",
+    "@msgpack/msgpack": "^3.1.1",
     "@noble/curves": "^1.9.0",
     "@noble/hashes": "^1.8.0",
     "@peculiar/x509": "^1.12.3",

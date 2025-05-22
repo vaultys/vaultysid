@@ -61,7 +61,7 @@ const writeInt = (name, value) => {
     }
     return buffer_1.Buffer.concat([start, end]);
 };
-const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }) => {
+const encode_v0 = ({ version, protocol, service, timestamp, pk1, pk2, nonce, metadata }) => {
     const p = buffer_1.Buffer.concat([
         buffer_1.Buffer.from([0x87]),
         writeString("protocol", protocol),
@@ -77,7 +77,7 @@ const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }) 
     // console.log(p.toString("base64"));
     return p;
 };
-const encode_v0_full = ({ protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }) => {
+const encode_v0_full = ({ version, protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }) => {
     const p = buffer_1.Buffer.concat([
         buffer_1.Buffer.from([0x89]),
         writeString("protocol", protocol),
@@ -240,6 +240,7 @@ class Challenger {
             throw new Error("Challenger already initialised, can't reset the state");
         }
         this.challenge = deserialize(challengeString);
+        this.version = this.challenge.version;
         if (!isLive(this.challenge, this.liveliness)) {
             this.state = ERROR;
             this.challenge.error = "challenge timestamp failed the liveliness at first signature";
@@ -351,6 +352,7 @@ class Challenger {
                 throw new Error("challenge is not corresponding to the right id");
             }
             this.challenge = tempchallenge;
+            this.version = tempchallenge.version;
             this.mykey = this.challenge.pk2 = this.vaultysId.id;
             this.hisKey = this.challenge.pk1;
             this.challenge.state = this.state = INIT;
@@ -362,6 +364,7 @@ class Challenger {
                 throw new Error("challenge is not corresponding to the right id");
             }
             this.challenge = tempchallenge;
+            this.version = tempchallenge.version;
             this.mykey = this.challenge.pk2;
             this.hisKey = this.challenge.pk1;
             this.state = this.challenge.state = STEP1;
@@ -391,7 +394,7 @@ class Challenger {
                 this.state = ERROR;
                 throw new Error("challenge timestamp failed the liveliness");
             }
-            this.version = tempchallenge.version = tempchallenge.version ? 1 : 0;
+            this.version = tempchallenge.version;
             this.vaultysId.toVersion(this.version);
             if (this.state === UNINITIALISED && tempchallenge.state === INIT) {
                 if (tempchallenge.metadata.pk2) {

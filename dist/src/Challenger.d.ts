@@ -29,7 +29,8 @@ export default class Challenger {
     static verifyCertificate(certificate: Buffer): Promise<boolean>;
     static fromCertificate(certificate: Buffer, liveliness?: number): Promise<Challenger | undefined>;
     static deserializeCertificate: (challenge: Buffer) => ChallengeType;
-    static serializeCertificate_v0: ({ protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }: {
+    static serializeCertificate_v0: ({ version, protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }: {
+        version: 0 | 1;
         protocol: string;
         service: string;
         timestamp: number;
