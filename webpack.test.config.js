@@ -11,13 +11,13 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.tsx?$/,
+        test: /\.ts$/,
         use: "ts-loader",
       },
     ],
   },
   resolve: {
-    extensions: [".tsx", ".ts", ".js"],
+    extensions: [".ts", ".js"],
     fallback: {
       crypto: require.resolve("crypto-browserify"),
       buffer: require.resolve("buffer/"),
