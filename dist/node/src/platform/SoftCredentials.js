@@ -263,7 +263,7 @@ class SoftCredentials {
         const credential = new SoftCredentials();
         const publicKey = options.publicKey;
         credential.options = publicKey;
-        credential.rpId = publicKey.rp.id;
+        credential.rpId = publicKey.rp.id || publicKey.rp.name;
         credential.userHandle = buffer_1.Buffer.from(publicKey.user.id.toString(), "base64");
         credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
         credential.alg = publicKey.pubKeyCredParams[0].alg;
