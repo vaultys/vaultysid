@@ -403,6 +403,10 @@ class Challenger {
                 throw new Error(tempchallenge.error);
             }
             if (!isLive(tempchallenge, this.liveliness)) {
+                // console.log(this.liveliness);
+                // const time = Date.now();
+                // console.log(time - tempchallenge.timestamp, this.liveliness);
+                // console.log(tempchallenge.timestamp > time - this.liveliness && tempchallenge.timestamp < time + this.liveliness);
                 this.state = ERROR;
                 throw new Error("challenge timestamp failed the liveliness");
             }
