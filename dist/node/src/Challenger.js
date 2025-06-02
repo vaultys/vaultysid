@@ -13,7 +13,19 @@ const INIT = 0;
 const STEP1 = 1;
 const COMPLETE = 2;
 const writeString = (name, value) => buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii"), buffer_1.Buffer.from([0xa0 + value.length]), buffer_1.Buffer.from(value, "ascii")]);
-const writeBuffer = (name, value) => buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii"), buffer_1.Buffer.from([0xc5, value.length >> 8, value.length]), value]);
+const writeBuffer = (name, value) => {
+    const nameHeader = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii")]);
+    let lengthHeader;
+    if (value.length <= 65535) {
+        // bin16: binary data whose length is upto (2^16)-1 bytes
+        lengthHeader = buffer_1.Buffer.from([0xc5, (value.length >> 8) & 0xff, value.length & 0xff]);
+    }
+    else {
+        // bin32: binary data whose length is upto (2^32)-1 bytes
+        lengthHeader = buffer_1.Buffer.from([0xc6, (value.length >> 24) & 0xff, (value.length >> 16) & 0xff, (value.length >> 8) & 0xff, value.length & 0xff]);
+    }
+    return buffer_1.Buffer.concat([nameHeader, lengthHeader, value]);
+};
 const writeInt = (name, value) => {
     // console.log(value)
     const start = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii")]);
@@ -131,7 +143,7 @@ const deserialize = (challenge) => {
             const id1 = VaultysId_1.default.fromId(result.pk1);
             const id2 = VaultysId_1.default.fromId(result.pk2);
             if (id1.version !== unpacked.version || id2.version !== unpacked.version) {
-                console.log(id1.version, id2.version, unpacked.version);
+                //console.log(id1.version, id2.version, unpacked.version);
                 result.state = ERROR;
                 result.error = "[COMPLETE] pk1 and pk2 are using different serialization version";
             }
@@ -373,20 +385,20 @@ class Challenger {
     }
     async update(challengeString, metadata) {
         if (this.state === ERROR) {
-            throw new Error("Can't update ERRORneous challenge");
+            throw new Error("Can't update errorneous challenge");
         }
         else if (this.state === COMPLETE) {
             throw new Error("Can't update COMPLETE challenge");
         }
         else {
             const tempchallenge = deserialize(challengeString);
-            // console.log(tempchallenge);
             // console.log(this.state, tempchallenge.state);
             if (!tempchallenge) {
                 this.state = ERROR;
                 throw new Error("Can't read the new incoming challenge");
             }
             if (tempchallenge.state === ERROR) {
+                //console.log(tempchallenge.pk1?.length, tempchallenge.pk2?.length);
                 this.state = ERROR;
                 throw new Error(tempchallenge.error);
             }
@@ -485,7 +497,7 @@ class Challenger {
                 this.state = COMPLETE;
             }
             else {
-                console.log(tempchallenge);
+                //console.log(tempchallenge);
                 const error = `The challenge is in an expected state. Received state = '${tempchallenge.state}', expected state = '${this.state + 1}'`;
                 this.state = ERROR;
                 throw new Error(error);

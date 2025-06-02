@@ -5,12 +5,15 @@ import KeyManager from "./KeyManager";
 import SoftCredentials from "./platform/SoftCredentials";
 import { getWebAuthnProvider } from "./platform/webauthn";
 import { Buffer } from "buffer/";
+import PQManager from "./PQManager";
+import { PQ_COSE_ALG } from "./pqCrypto";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
 const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
 const TYPE_FIDO2PRF = 4;
+const TYPE_PQ_SOFTWARE = 5;
 
 type StringifiedBuffer = {
   data: number[];
@@ -66,14 +69,17 @@ export default class VaultysId {
       // Buffer thing
       cleanId = Buffer.from(id);
     }
-    if (typeof id == "string") {
+    if (typeof id === "string") {
       cleanId = Buffer.from(id, encoding);
     }
     const type = cleanId[0];
-    if (type == TYPE_FIDO2) {
+    if (type === TYPE_PQ_SOFTWARE) {
+      const pqm = PQManager.fromId(cleanId.slice(1));
+      return new VaultysId(pqm, certificate, type);
+    } else if (type === TYPE_FIDO2) {
       const f2m = Fido2Manager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
-    } else if (type == TYPE_FIDO2PRF) {
+    } else if (type === TYPE_FIDO2PRF) {
       const f2m = Fido2PRFManager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
     } else {
@@ -81,6 +87,41 @@ export default class VaultysId {
       return new VaultysId(km, certificate, type);
     }
   }
+
+  static createPublicKeyCredentialOptionsPQC = (): PublicKeyCredentialCreationOptions => {
+    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
+    const hint = "security-key";
+
+    const options: PublicKeyCredentialCreationOptions = {
+      challenge: randomBytes(32),
+      rp: {
+        name: "Vaultys ID",
+      },
+      user: {
+        id: randomBytes(16),
+        name: "Vaultys ID",
+        displayName: "Vaultys Wallet ID",
+      },
+      attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
+      authenticatorSelection: {
+        authenticatorAttachment: "cross-platform",
+        residentKey: "discouraged",
+        userVerification: "preferred",
+      },
+      // @ts-ignore not yet in dom types
+      hints: [hint],
+      extensions: {
+        prf: {
+          eval: {
+            first: Buffer.from("VaultysID salt", "utf-8"),
+          },
+        },
+      },
+      pubKeyCredParams: [{ type: "public-key", alg: PQ_COSE_ALG.DILITHIUM2 }],
+    };
+
+    return options;
+  };
 
   static createPublicKeyCredentialCreationOptions = (passkey: boolean): PublicKeyCredentialCreationOptions => {
     const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
@@ -156,9 +197,13 @@ export default class VaultysId {
 
   static async fromEntropy(entropy: Buffer, type: number) {
     const cleanedEntropy = entropy as Buffer;
-    const km = await KeyManager.create_Id25519_fromEntropy(cleanedEntropy);
-
-    return new VaultysId(km, undefined, type);
+    if (type === TYPE_PQ_SOFTWARE) {
+      const km = await PQManager.create_PQ_fromEntropy(cleanedEntropy);
+      return new VaultysId(km, undefined, type);
+    } else {
+      const km = await KeyManager.create_Id25519_fromEntropy(cleanedEntropy);
+      return new VaultysId(km, undefined, type);
+    }
   }
 
   static async createWebauthn(passkey = true, onPRFEnabled?: () => Promise<boolean>) {
@@ -169,9 +214,19 @@ export default class VaultysId {
     else return VaultysId.fido2FromAttestation(attestation as PublicKeyCredential, onPRFEnabled);
   }
 
+  static async createPQC() {
+    const options = VaultysId.createPublicKeyCredentialOptionsPQC();
+    const webAuthn = getWebAuthnProvider();
+    const attestation = await webAuthn.create(options);
+    //console.log(attestation);
+    if (!attestation) return null;
+    else return VaultysId.fido2FromAttestation(attestation as PublicKeyCredential);
+  }
+
   static async fido2FromAttestation(attestation: PublicKeyCredential, onPRFEnabled?: () => Promise<boolean>) {
     // should be somehow valid.
     SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true);
+    //console.log(SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true));
     if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
       const f2m = await Fido2PRFManager.createFromAttestation(attestation);
       return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
@@ -193,10 +248,17 @@ export default class VaultysId {
     return VaultysId.fromEntropy(entropy, TYPE_PERSON);
   }
 
+  static async pqFromEntropy(entropy: Buffer) {
+    return VaultysId.fromEntropy(entropy, TYPE_PQ_SOFTWARE);
+  }
+
   static fromSecret(secret: string, encoding: BufferEncoding = "hex") {
     const secretBuffer = Buffer.from(secret, encoding);
     const type = secretBuffer[0];
-    if (type == TYPE_FIDO2) {
+    if (type == TYPE_PQ_SOFTWARE) {
+      const pqm = PQManager.fromSecret(secretBuffer.slice(1));
+      return new VaultysId(pqm, undefined, type);
+    } else if (type == TYPE_FIDO2) {
       const f2m = Fido2Manager.fromSecret(secretBuffer.slice(1));
       return new VaultysId(f2m, undefined, type);
     } else if (type == TYPE_FIDO2PRF) {
@@ -207,9 +269,15 @@ export default class VaultysId {
       return new VaultysId(km, undefined, type);
     }
   }
+
   static async generatePerson() {
     const km = await KeyManager.generate_Id25519();
     return new VaultysId(km, undefined, TYPE_PERSON);
+  }
+
+  static async generatePostQuantum() {
+    const km = await PQManager.generate_PQ();
+    return new VaultysId(km, undefined, TYPE_PQ_SOFTWARE);
   }
 
   static async generateOrganization() {

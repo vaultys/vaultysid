@@ -2,6 +2,8 @@ import { Buffer } from "buffer/";
 type SoftKeyPair = {
     privateKey: Uint8Array;
     publicKey: Uint8Array;
+    algorithm?: string;
+    isDILITHIUM?: boolean;
 };
 export default class SoftCredentials {
     signCount: number;
@@ -27,7 +29,7 @@ export default class SoftCredentials {
     static simpleVerify(COSEPublicKey: Buffer, response: AuthenticatorAssertionResponse, userVerification?: boolean): boolean;
     static getCOSEPublicKey(attestation: PublicKeyCredential): Buffer | undefined;
     static verifyPackedAttestation(attestation: AuthenticatorAttestationResponse, userVerification?: boolean): boolean;
-    static verify(attestation: PublicKeyCredential, assertion: PublicKeyCredential, userVerifiation?: boolean): boolean;
+    static verify(attestation: PublicKeyCredential, assertion: PublicKeyCredential, userVerifiation?: boolean): Promise<boolean>;
     static extractChallenge(clientDataJSON: ArrayBuffer): any;
     static get({ publicKey }: {
         publicKey: PublicKeyCredentialRequestOptions;

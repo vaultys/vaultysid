@@ -10,6 +10,7 @@ const SoftCredentials_1 = __importDefault(require("./platform/SoftCredentials"))
 const msgpack_1 = require("@msgpack/msgpack");
 const Fido2Manager_1 = __importDefault(require("./Fido2Manager"));
 const buffer_1 = require("buffer/");
+const pqCrypto_1 = require("./pqCrypto");
 const lookup = {
     usb: 1,
     nfc: 2,
@@ -34,11 +35,14 @@ const getAuthTypeFromCkey = (ckey) => {
 };
 const getSignerFromCkey = (ckey) => {
     const k = cbor_1.default.decode(ckey, { extendedResults: true }).value;
+    //console.log("getSignerFromCkey", k);
     let publicKey = buffer_1.Buffer.from([]);
     if (k.get(3) == -7)
         publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
     else if (k.get(3) == -8)
         publicKey = k.get(-2);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
+        publicKey = k.get(-101);
     return { publicKey };
 };
 class Fido2PRFManager extends Fido2Manager_1.default {

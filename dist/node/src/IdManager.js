@@ -620,6 +620,7 @@ class IdManager {
         }
         catch (error) {
             await channel.close();
+            //console.log(challenger);
             throw new Error(error);
         }
         if (challenger.isComplete()) {

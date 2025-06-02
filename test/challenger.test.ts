@@ -274,15 +274,15 @@ describe("Symetric Proof of Relationship - SRG - v1", () => {
 
   it("Pass for liveliness at third round", async () => {
     const vaultysId1 = await createRandomVaultysId();
-    const challenger1 = new Challenger(vaultysId1, 50);
+    const challenger1 = new Challenger(vaultysId1, 500);
     const vaultysId2 = await createRandomVaultysId();
-    const challenger2 = new Challenger(vaultysId2, 50);
+    const challenger2 = new Challenger(vaultysId2, 500);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
     challenger1.createChallenge("p2p", "auth", 1);
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
-    await delay(20);
+    await delay(200);
     await challenger2.update(challenger1.getCertificate());
 
     assert.ok(challenger1.isComplete());

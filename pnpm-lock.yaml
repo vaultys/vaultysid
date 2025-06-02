@@ -14,8 +14,11 @@ importers:
 
   .:
     dependencies:
+      '@asanrom/dilithium':
+        specifier: ^1.1.1
+        version: 1.1.1
       '@msgpack/msgpack':
-        specifier: 3.1.1
+        specifier: ^3.1.1
         version: 3.1.1
       '@noble/curves':
         specifier: ^1.9.0
@@ -140,6 +143,10 @@ importers:
         version: 6.0.1(webpack@5.99.8)
 
 packages:
+
+  '@asanrom/dilithium@1.1.1':
+    resolution: {integrity: sha512-TrSvroskkJJ30jBKPE9DkQdOpGYgaj24wnIJjfWDp0MaN7yMV0zWYWD9fGfSQGyVCXKa+jf0oF0PD2j7ePILCQ==}
+    engines: {node: '>= 16.0.0'}
 
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
@@ -1586,6 +1593,9 @@ packages:
     resolution: {integrity: sha512-8XPvpAA8uyhfteu8pIvQxpJZ7SYYdpUivZpGy6sFsBuKRY/7rQGavedeB8aK+Zkyq6upMFVL/9AW6vOYzfRyLg==}
     engines: {node: '>=10'}
 
+  long@5.2.1:
+    resolution: {integrity: sha512-GKSNGeNAtw8IryjjkhZxuKB3JzlcLTwjtiQCHKvqQet81I93kXslhDQruGI/QsddO83mcDToBVy7GqGS/zYf/A==}
+
   loupe@2.3.7:
     resolution: {integrity: sha512-zSMINGVYkdpYSOBmLi0D1Uo7JU9nVdQKrHxC8eYlV+9YKK9WePqAlL7lSlorG/U2Fw1w0hTBmaa/jrQ3UbPHtA==}
 
@@ -2037,6 +2047,9 @@ packages:
     resolution: {integrity: sha512-QMEp5B7cftE7APOjk5Y6xgrbWu+WkLVQwk8JNjZ8nKRciZaByEW6MubieAiToS7+dwvrjGhH8jRXz3MVd0AYqQ==}
     hasBin: true
 
+  sha3@2.1.4:
+    resolution: {integrity: sha512-S8cNxbyb0UGUM2VhRD4Poe5N58gJnJsLJ5vC7FYWGUmGhcsj4++WaIOBFVDxlG0W3To6xBuiRh+i0Qp2oNCOtg==}
+
   shallow-clone@3.0.1:
     resolution: {integrity: sha512-/6KqX+GVUdqPuPPd2LxDDxzX6CAbjJehAAOKlNpqqUpAqPM6HeL8f+o3a+JsyGjn2lv0WY8UsTgUJjU9Ok55NA==}
     engines: {node: '>=8'}
@@ -2374,6 +2387,13 @@ packages:
     resolution: {integrity: sha512-OdqJE9UDRPwWsrHjLN2F8bPxvwJBK22EHLWtanu0LSYr5YqzsaaW3RMgmjwr8Rypg5k+meEJdSPXJZXE/yqOMg==}
 
 snapshots:
+
+  '@asanrom/dilithium@1.1.1':
+    dependencies:
+      buffer: 6.0.3
+      long: 5.2.1
+      randombytes: 2.1.0
+      sha3: 2.1.4
 
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
@@ -4025,6 +4045,8 @@ snapshots:
       chalk: 4.1.2
       is-unicode-supported: 0.1.0
 
+  long@5.2.1: {}
+
   loupe@2.3.7:
     dependencies:
       get-func-name: 2.0.2
@@ -4497,6 +4519,10 @@ snapshots:
     dependencies:
       inherits: 2.0.4
       safe-buffer: 5.2.1
+
+  sha3@2.1.4:
+    dependencies:
+      buffer: 6.0.3
 
   shallow-clone@3.0.1:
     dependencies:

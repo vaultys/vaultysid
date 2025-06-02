@@ -667,6 +667,7 @@ export default class IdManager {
       await challenger.update(message);
     } catch (error) {
       await channel.close();
+      //console.log(challenger);
       throw new Error(error as string);
     }
     if (challenger.isComplete()) {

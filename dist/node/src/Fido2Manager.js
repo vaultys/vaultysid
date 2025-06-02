@@ -11,6 +11,7 @@ const KeyManager_1 = __importDefault(require("./KeyManager"));
 const msgpack_1 = require("@msgpack/msgpack");
 const SoftCredentials_1 = __importDefault(require("./platform/SoftCredentials"));
 const buffer_1 = require("buffer/");
+const pqCrypto_1 = require("./pqCrypto");
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
 const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
 const lookup = {
@@ -21,10 +22,20 @@ const lookup = {
     hybrid: 16,
     "smart-card": 32,
 };
+const encodeBinary = (data) => {
+    if (data.length <= 65535) {
+        // bin16: binary data whose length is upto (2^16)-1 bytes
+        return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+    }
+    else {
+        // bin32: binary data whose length is upto (2^32)-1 bytes
+        return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+    }
+};
 const serializeID_v0 = (km) => {
     const version = buffer_1.Buffer.from([0x83, 0xa1, 0x76, km.version]);
-    const ckey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x63, 0xc5, 0x00, km.ckey.length]), km.ckey]);
-    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length]), km.cypher.publicKey]);
+    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
+    const ckey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x63]), encodeBinary(km.ckey)]);
     return buffer_1.Buffer.concat([version, ckey, cypher]);
 };
 const getTransports = (num) => Object.keys(lookup).filter((i) => num && lookup[i]);
@@ -47,6 +58,8 @@ const getSignerFromCkey = (ckey) => {
         publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
     else if (k.get(3) == -8)
         publicKey = k.get(-2);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
+        publicKey = k.get(-101);
     return { publicKey };
 };
 class Fido2Manager extends KeyManager_1.default {

@@ -6,6 +6,7 @@ import KeyManager, { KeyPair } from "./KeyManager";
 import { decode, encode } from "@msgpack/msgpack";
 import SoftCredentials from "./platform/SoftCredentials";
 import { Buffer } from "buffer/";
+import { PQ_COSE_ALG } from "./pqCrypto";
 
 const sha512 = (data: Buffer) => hash("sha512", data);
 const sha256 = (data: Buffer) => hash("sha256", data);
@@ -41,10 +42,20 @@ const lookup: Record<LookupType, number> = {
   "smart-card": 32,
 };
 
+const encodeBinary = (data: Buffer): Buffer => {
+  if (data.length <= 65535) {
+    // bin16: binary data whose length is upto (2^16)-1 bytes
+    return Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+  } else {
+    // bin32: binary data whose length is upto (2^32)-1 bytes
+    return Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+  }
+};
+
 const serializeID_v0 = (km: Fido2Manager) => {
   const version = Buffer.from([0x83, 0xa1, 0x76, km.version]);
-  const ckey = Buffer.concat([Buffer.from([0xa1, 0x63, 0xc5, 0x00, km.ckey.length]), km.ckey]);
-  const cypher = Buffer.concat([Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length]), km.cypher.publicKey]);
+  const cypher = Buffer.concat([Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
+  const ckey = Buffer.concat([Buffer.from([0xa1, 0x63]), encodeBinary(km.ckey)]);
   return Buffer.concat([version, ckey, cypher]);
 };
 
@@ -65,6 +76,7 @@ const getSignerFromCkey = (ckey: Buffer) => {
   let publicKey: Buffer = Buffer.from([]);
   if (k.get(3) == -7) publicKey = Buffer.concat([Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
   else if (k.get(3) == -8) publicKey = k.get(-2);
+  else if (k.get(3) == PQ_COSE_ALG.DILITHIUM2) publicKey = k.get(-101);
   return { publicKey } as KeyPair;
 };
 

@@ -2,7 +2,7 @@ import { VaultysId } from "../";
 import SoftCredentials from "../src/platform/SoftCredentials";
 
 export const createRandomVaultysId = async (): Promise<VaultysId> => {
-  const types = [0, 1, 2];
+  const types = [0, 1, 2, 3, 4, 5];
   if (typeof window === "undefined") {
     types.push(3);
     types.push(4);
@@ -18,13 +18,15 @@ export const createRandomVaultysId = async (): Promise<VaultysId> => {
     case 2:
       return VaultysId.generateOrganization();
     case 3:
-      const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(Math.random() < 0.5 ? -7 : -8, false));
+      const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(Math.random() < 0.33 ? -7 : Math.random() < 0.5 ? -8 : -46, false));
       // @ts-expect-error mockup
       return VaultysId.fido2FromAttestation(attestation1);
     case 4:
-      const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(Math.random() < 0.5 ? -7 : -8, true));
+      const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(Math.random() < 0.33 ? -7 : Math.random() < 0.5 ? -8 : -46, true));
       // @ts-expect-error mockup
       return VaultysId.fido2FromAttestation(attestation2);
+    case 5:
+      return VaultysId.generatePostQuantum();
     default:
       return VaultysId.generatePerson();
   }

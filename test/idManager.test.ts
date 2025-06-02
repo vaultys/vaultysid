@@ -6,7 +6,6 @@ import "./shims";
 import { hash } from "../src/crypto";
 import { createRandomVaultysId } from "./utils";
 import { randomBytes } from "crypto";
-import Challenger from "../src/Challenger";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {

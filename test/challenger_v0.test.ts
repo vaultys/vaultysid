@@ -5,19 +5,7 @@ import "./shims";
 import { randomBytes } from "../src/crypto";
 import { createRandomVaultysId } from "./utils";
 import { decode } from "@msgpack/msgpack";
-import { dearmorAndDecrypt } from "@samuelthomas2774/saltpack";
 import { decrypt } from "../src/cryptoChannel";
-
-const testCertificate = (rogueCert: Buffer) => {
-  try {
-    const result = Challenger.deserializeCertificate(rogueCert);
-    return result;
-  } catch (error) {
-    return {
-      state: -2,
-    };
-  }
-};
 
 const delay = (ms: number = 1000) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -63,16 +51,18 @@ describe("Symetric Proof of Relationship - SRG - v0", () => {
   });
 
   it("Perform Stateless Protocol", async () => {
-    const vaultysId1 = await createRandomVaultysId();
-    const vaultysId2 = await createRandomVaultysId();
-    const init = await challengeNext(vaultysId1);
-    // console.log("init", Challenger.deserializeCertificate(init));
-    const step1 = await challengeNext(vaultysId2, init);
-    // console.log("step1", Challenger.deserializeCertificate(step1));
-    const complete = await challengeNext(vaultysId1, step1);
-    // console.log("complete", Challenger.deserializeCertificate(complete));
-    const finalise = await challengeNext(vaultysId2, complete, step1);
-    assert.equal(complete.toString("base64"), finalise.toString("base64"));
+    for (let i = 0; i < 10; i++) {
+      const vaultysId1 = await createRandomVaultysId();
+      const vaultysId2 = await createRandomVaultysId();
+      const init = await challengeNext(vaultysId1);
+      // console.log("init", Challenger.deserializeCertificate(init));
+      const step1 = await challengeNext(vaultysId2, init);
+      // console.log("step1", Challenger.deserializeCertificate(step1));
+      const complete = await challengeNext(vaultysId1, step1);
+      // console.log("complete", Challenger.deserializeCertificate(complete));
+      const finalise = await challengeNext(vaultysId2, complete, step1);
+      assert.equal(complete.toString("base64"), finalise.toString("base64"));
+    }
   });
 
   it("Perform Protocol attacking protocol", async () => {
@@ -385,7 +375,7 @@ describe("Symetric Proof of Relationship - SRG - v0", () => {
     const key = "cc4dfd01327a30e10d9286344d485f2e4807ddb4c3e007f8b7fba20bb6c16985";
     const cert = decrypt(Buffer.from(message, "base64"), Buffer.from(key, "hex"));
     //console.log(dearmorAndDecrypt(cert));
-    console.log(decode(cert));
+    // console.log(decode(cert));
     const result = Challenger.deserializeCertificate(cert);
     assert.equal(result.error, "");
     assert.equal(result.state, 0);

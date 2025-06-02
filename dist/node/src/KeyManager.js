@@ -51,10 +51,20 @@ const LEVEL_DERIVED = 2;
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
 const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
 const serializeID_v0 = (km) => {
+    const encodeBinary = (data) => {
+        if (data.length <= 65535) {
+            // bin16: binary data whose length is upto (2^16)-1 bytes
+            return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+        }
+        else {
+            // bin32: binary data whose length is upto (2^32)-1 bytes
+            return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+        }
+    };
     const version = buffer_1.Buffer.from([0x84, 0xa1, 0x76, 0]);
-    const proof = buffer_1.Buffer.from([0xa1, 0x70, 0xc5, 0x00, km.proof.length, ...km.proof]);
-    const sign = buffer_1.Buffer.from([0xa1, 0x78, 0xc5, 0x00, km.signer.publicKey.length, ...km.signer.publicKey]);
-    const cypher = buffer_1.Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length, ...km.cypher.publicKey]);
+    const proof = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x70]), encodeBinary(km.proof)]);
+    const sign = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x78]), encodeBinary(km.signer.publicKey)]);
+    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
     return buffer_1.Buffer.concat([version, proof, sign, cypher]);
 };
 const publicDerivePath = (node, path) => {

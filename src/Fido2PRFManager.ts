@@ -6,6 +6,7 @@ import { KeyPair } from "./KeyManager";
 import { decode, encode } from "@msgpack/msgpack";
 import Fido2Manager from "./Fido2Manager";
 import { Buffer } from "buffer/";
+import { PQ_COSE_ALG } from "./pqCrypto";
 
 declare global {
   interface Window {
@@ -47,9 +48,11 @@ const getAuthTypeFromCkey = (ckey: Buffer) => {
 
 const getSignerFromCkey = (ckey: Buffer) => {
   const k = cbor.decode(ckey, { extendedResults: true }).value;
+  //console.log("getSignerFromCkey", k);
   let publicKey: Buffer = Buffer.from([]);
   if (k.get(3) == -7) publicKey = Buffer.concat([Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
   else if (k.get(3) == -8) publicKey = k.get(-2);
+  else if (k.get(3) == PQ_COSE_ALG.DILITHIUM2) publicKey = k.get(-101);
   return { publicKey } as KeyPair;
 };
 
