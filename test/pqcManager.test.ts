@@ -6,8 +6,7 @@ import { randomBytes } from "../src/crypto";
 describe("PQC", () => {
   it("serder a VaultytsID (PQC)", async () => {
     const vaultysId = await VaultysId.createPQC();
-    assert.notEqual(vaultysId, null);
-    //console.log(vaultysId);
+    if (!vaultysId) assert.fail("VaultysId creation failed");
     assert.equal(vaultysId?.keyManager.signer.publicKey.length, 1312);
     const id2 = VaultysId.fromSecret(vaultysId?.getSecret());
 

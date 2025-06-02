@@ -103,7 +103,19 @@ const INIT = 0;
 const STEP1 = 1;
 const COMPLETE = 2;
 const writeString = (name, value) => buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii"), buffer_1.Buffer.from([0xa0 + value.length]), buffer_1.Buffer.from(value, "ascii")]);
-const writeBuffer = (name, value) => buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii"), buffer_1.Buffer.from([0xc5, value.length >> 8, value.length]), value]);
+const writeBuffer = (name, value) => {
+    const nameHeader = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii")]);
+    let lengthHeader;
+    if (value.length <= 65535) {
+        // bin16: binary data whose length is upto (2^16)-1 bytes
+        lengthHeader = buffer_1.Buffer.from([0xc5, (value.length >> 8) & 0xff, value.length & 0xff]);
+    }
+    else {
+        // bin32: binary data whose length is upto (2^32)-1 bytes
+        lengthHeader = buffer_1.Buffer.from([0xc6, (value.length >> 24) & 0xff, (value.length >> 16) & 0xff, (value.length >> 8) & 0xff, value.length & 0xff]);
+    }
+    return buffer_1.Buffer.concat([nameHeader, lengthHeader, value]);
+};
 const writeInt = (name, value) => {
     // console.log(value)
     const start = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii")]);
@@ -151,7 +163,7 @@ const writeInt = (name, value) => {
     }
     return buffer_1.Buffer.concat([start, end]);
 };
-const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }) => {
+const encode_v0 = ({ version, protocol, service, timestamp, pk1, pk2, nonce, metadata }) => {
     const p = buffer_1.Buffer.concat([
         buffer_1.Buffer.from([0x87]),
         writeString("protocol", protocol),
@@ -167,7 +179,7 @@ const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }) 
     // console.log(p.toString("base64"));
     return p;
 };
-const encode_v0_full = ({ protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }) => {
+const encode_v0_full = ({ version, protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }) => {
     const p = buffer_1.Buffer.concat([
         buffer_1.Buffer.from([0x89]),
         writeString("protocol", protocol),
@@ -191,6 +203,9 @@ const deserialize = (challenge) => {
         state: ERROR,
         error: "",
     };
+    if (!unpacked.version) {
+        unpacked.version = 0;
+    }
     const result = {
         ...unpacked,
         ...state,
@@ -206,7 +221,7 @@ const deserialize = (challenge) => {
         else if (!result.sign1 && result.nonce?.length === 32 && !!result.pk1 && !!result.pk2 && !!result.sign2) {
             result.state = STEP1;
             const id2 = VaultysId_1.default.fromId(result.pk2);
-            const challenge = serializeUnsigned(result, id2.version);
+            const challenge = serializeUnsigned(result);
             if (!id2.verifyChallenge(challenge, result.sign2, true)) {
                 result.state = ERROR;
                 result.error = "[STEP1] failed the verification of pk2";
@@ -217,11 +232,12 @@ const deserialize = (challenge) => {
             //console.log(result);
             const id1 = VaultysId_1.default.fromId(result.pk1);
             const id2 = VaultysId_1.default.fromId(result.pk2);
-            if (id1.version !== id2.version) {
+            if (id1.version !== unpacked.version || id2.version !== unpacked.version) {
+                //console.log(id1.version, id2.version, unpacked.version);
                 result.state = ERROR;
                 result.error = "[COMPLETE] pk1 and pk2 are using different serialization version";
             }
-            const challenge = serializeUnsigned(result, id1.version);
+            const challenge = serializeUnsigned(result);
             if (!id2.verifyChallenge(challenge, result.sign2, true)) {
                 result.state = ERROR;
                 result.error = "[COMPLETE] failed the verification of pk2";
@@ -240,14 +256,15 @@ const deserialize = (challenge) => {
 };
 const serialize = (data) => {
     if (data.state == INIT) {
-        const { protocol, service, timestamp, pk1, nonce, metadata } = data;
-        const picked = { protocol, service, timestamp, pk1, nonce, metadata };
+        const { version, protocol, service, timestamp, pk1, nonce, metadata } = data;
+        const picked = { version, protocol, service, timestamp, pk1, nonce, metadata };
         const encoded = (0, msgpack_1.encode)(picked);
         return buffer_1.Buffer.from(encoded);
     }
     if (data.state == STEP1) {
-        const { protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata } = data;
+        const { version, protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata } = data;
         const picked = {
+            version,
             protocol,
             service,
             timestamp,
@@ -261,8 +278,9 @@ const serialize = (data) => {
         return buffer_1.Buffer.from(encoded);
     }
     if (data.state == COMPLETE) {
-        const { protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata } = data;
+        const { version, protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata } = data;
         const picked = {
+            version,
             protocol,
             service,
             timestamp,
@@ -278,9 +296,9 @@ const serialize = (data) => {
     }
     return null;
 };
-const serializeUnsigned = (challenge, version = 0) => {
-    const { protocol, service, timestamp, pk1, pk2, nonce, metadata } = challenge;
-    const picked = { protocol, service, timestamp, pk1, pk2, nonce, metadata };
+const serializeUnsigned = (challenge) => {
+    const { version, protocol, service, timestamp, pk1, pk2, nonce, metadata } = challenge;
+    const picked = { version, protocol, service, timestamp, pk1, pk2, nonce, metadata };
     return version === 0 ? encode_v0(picked) : buffer_1.Buffer.from((0, msgpack_1.encode)(picked));
 };
 const isLive = (challenge, liveliness, time = Date.now()) => {
@@ -288,8 +306,10 @@ const isLive = (challenge, liveliness, time = Date.now()) => {
 };
 class Challenger {
     constructor(vaultysId, liveliness = 60 * 1000) {
+        this.version = 0;
         this.state = UNINITIALISED;
-        this.vaultysId = vaultysId;
+        // create a copy of VaultysId
+        this.vaultysId = VaultysId_1.default.fromSecret(vaultysId.getSecret());
         this.liveliness = liveliness;
     }
     static async verifyCertificate(certificate) {
@@ -298,14 +318,17 @@ class Challenger {
     }
     static async fromCertificate(certificate, liveliness) {
         const deser = deserialize(certificate);
+        if (!deser.version) {
+            deser.version = 0;
+        }
         if (deser.state === INIT) {
-            const challenger = new Challenger(VaultysId_1.default.fromId(deser.pk1).toVersion(0), liveliness);
+            const challenger = new Challenger(VaultysId_1.default.fromId(deser.pk1).toVersion(deser.version), liveliness);
             challenger.challenge = deser;
             challenger.mykey = deser.pk1;
             challenger.state = INIT;
         }
         else if (deser.state === STEP1) {
-            const challenger = new Challenger(VaultysId_1.default.fromId(deser.pk2).toVersion(0), liveliness);
+            const challenger = new Challenger(VaultysId_1.default.fromId(deser.pk2).toVersion(deser.version), liveliness);
             challenger.challenge = deser;
             challenger.mykey = deser.pk2;
             challenger.hisKey = deser.pk1;
@@ -319,6 +342,7 @@ class Challenger {
             throw new Error("Challenger already initialised, can't reset the state");
         }
         this.challenge = deserialize(challengeString);
+        this.version = this.challenge.version;
         if (!isLive(this.challenge, this.liveliness)) {
             this.state = ERROR;
             this.challenge.error = "challenge timestamp failed the liveliness at first signature";
@@ -329,6 +353,7 @@ class Challenger {
             throw new Error(this.challenge.error);
         }
         else if (this.challenge.state === INIT) {
+            //this.vaultysId.toVersion(this.challenge.version);
             this.mykey = this.vaultysId.id;
             this.challenge.pk2 = this.mykey;
             this.hisKey = this.challenge.pk1;
@@ -340,6 +365,7 @@ class Challenger {
             this.challenge.state = this.state = STEP1;
         }
         else if (this.challenge.state === COMPLETE) {
+            //this.vaultysId.toVersion(this.challenge.version);
             this.mykey = this.vaultysId.id;
             if (!this.challenge.pk1?.equals(this.mykey) && !this.challenge.pk1?.equals(this.mykey)) {
                 this.state = ERROR;
@@ -360,14 +386,16 @@ class Challenger {
             metadata: this.challenge?.metadata,
         };
     }
-    createChallenge(protocol, service, version = 1, metadata = {}) {
+    createChallenge(protocol, service, version = 0, metadata) {
+        this.version = version;
         if (this.state == UNINITIALISED) {
             this.mykey = this.vaultysId.toVersion(version).id;
             // console.log(this)
             this.challenge = {
+                version,
                 protocol,
                 service,
-                metadata,
+                metadata: metadata ? { pk1: metadata } : {},
                 timestamp: Date.now(),
                 pk1: this.mykey,
                 nonce: (0, crypto_1.randomBytes)(16),
@@ -386,7 +414,7 @@ class Challenger {
         return serialize(this.challenge) || buffer_1.Buffer.from([]);
     }
     getUnsignedChallenge() {
-        return serializeUnsigned(this.challenge, this.vaultysId.version);
+        return serializeUnsigned(this.challenge);
     }
     getContactDid() {
         if (!this.hisKey)
@@ -418,12 +446,15 @@ class Challenger {
             throw new Error("Can't init INITIALISED challenge");
         }
         const tempchallenge = deserialize(challengeString);
+        this.version = tempchallenge.version = tempchallenge.version ? 1 : 0;
+        this.vaultysId.toVersion(this.version);
         if (tempchallenge.state === INIT) {
             if (tempchallenge.pk2?.toString("base64") !== this.vaultysId.id.toString("base64")) {
                 this.state = ERROR;
                 throw new Error("challenge is not corresponding to the right id");
             }
             this.challenge = tempchallenge;
+            this.version = tempchallenge.version;
             this.mykey = this.challenge.pk2 = this.vaultysId.id;
             this.hisKey = this.challenge.pk1;
             this.challenge.state = this.state = INIT;
@@ -435,15 +466,16 @@ class Challenger {
                 throw new Error("challenge is not corresponding to the right id");
             }
             this.challenge = tempchallenge;
+            this.version = tempchallenge.version;
             this.mykey = this.challenge.pk2;
             this.hisKey = this.challenge.pk1;
             this.state = this.challenge.state = STEP1;
             return;
         }
     }
-    async update(challengeString, metadata = {}) {
+    async update(challengeString, metadata) {
         if (this.state === ERROR) {
-            throw new Error("Can't update ERRORneous challenge");
+            throw new Error("Can't update errorneous challenge");
         }
         else if (this.state === COMPLETE) {
             throw new Error("Can't update COMPLETE challenge");
@@ -456,6 +488,7 @@ class Challenger {
                 throw new Error("Can't read the new incoming challenge");
             }
             if (tempchallenge.state === ERROR) {
+                //console.log(tempchallenge.pk1?.length, tempchallenge.pk2?.length);
                 this.state = ERROR;
                 throw new Error(tempchallenge.error);
             }
@@ -463,10 +496,18 @@ class Challenger {
                 this.state = ERROR;
                 throw new Error("challenge timestamp failed the liveliness");
             }
+            this.version = tempchallenge.version;
+            this.vaultysId.toVersion(this.version);
             if (this.state === UNINITIALISED && tempchallenge.state === INIT) {
+                if (tempchallenge.metadata.pk2) {
+                    this.state = ERROR;
+                    throw new Error("Metadata is malformed: pk2 is already set");
+                }
                 this.challenge = tempchallenge;
                 this.mykey = this.challenge.pk2 = this.vaultysId.id;
                 this.hisKey = this.challenge.pk1;
+                if (metadata)
+                    this.challenge.metadata.pk2 = metadata;
                 this.challenge.nonce = buffer_1.Buffer.concat([this.challenge.nonce, (0, crypto_1.randomBytes)(16)]);
                 const serialized = this.getUnsignedChallenge();
                 this.challenge.sign2 = await this.vaultysId.signChallenge(serialized);
@@ -475,10 +516,11 @@ class Challenger {
             }
             if (this.state === UNINITIALISED && tempchallenge.state === STEP1) {
                 if (tempchallenge.pk1?.toString("base64") !== this.vaultysId.id.toString("base64")) {
+                    // console.log(this.vaultysId.version, this);
                     this.state = ERROR;
                     throw new Error("challenge is not corresponding to the right id");
                 }
-                const serialized = serializeUnsigned(tempchallenge, this.vaultysId.version);
+                const serialized = serializeUnsigned(tempchallenge);
                 tempchallenge.sign1 = await this.vaultysId.signChallenge(serialized);
                 this.challenge = tempchallenge;
                 this.mykey = this.challenge.pk1;
@@ -508,7 +550,7 @@ class Challenger {
                     this.state = ERROR;
                     throw new Error(`The challenge has been tampered with. Received pk1 = '${tempchallenge.pk1}', expected pk1 = '${this.mykey}'`);
                 }
-                const serialized = serializeUnsigned(tempchallenge, this.vaultysId.version);
+                const serialized = serializeUnsigned(tempchallenge);
                 if (!serialized) {
                     this.state = ERROR;
                     throw new Error("Error processing Challenge");
@@ -545,7 +587,7 @@ class Challenger {
                 this.state = COMPLETE;
             }
             else {
-                console.log(tempchallenge);
+                //console.log(tempchallenge);
                 const error = `The challenge is in an expected state. Received state = '${tempchallenge.state}', expected state = '${this.state + 1}'`;
                 this.state = ERROR;
                 throw new Error(error);
@@ -581,6 +623,7 @@ const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./dist/node/src/pqCrypto.js");
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
 const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
 const lookup = {
@@ -591,10 +634,20 @@ const lookup = {
     hybrid: 16,
     "smart-card": 32,
 };
+const encodeBinary = (data) => {
+    if (data.length <= 65535) {
+        // bin16: binary data whose length is upto (2^16)-1 bytes
+        return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+    }
+    else {
+        // bin32: binary data whose length is upto (2^32)-1 bytes
+        return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+    }
+};
 const serializeID_v0 = (km) => {
     const version = buffer_1.Buffer.from([0x83, 0xa1, 0x76, km.version]);
-    const ckey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x63, 0xc5, 0x00, km.ckey.length]), km.ckey]);
-    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length]), km.cypher.publicKey]);
+    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
+    const ckey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x63]), encodeBinary(km.ckey)]);
     return buffer_1.Buffer.concat([version, ckey, cypher]);
 };
 const getTransports = (num) => Object.keys(lookup).filter((i) => num && lookup[i]);
@@ -617,6 +670,8 @@ const getSignerFromCkey = (ckey) => {
         publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
     else if (k.get(3) == -8)
         publicKey = k.get(-2);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
+        publicKey = k.get(-101);
     return { publicKey };
 };
 class Fido2Manager extends KeyManager_1.default {
@@ -809,6 +864,7 @@ const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/Sof
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./dist/node/src/Fido2Manager.js"));
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./dist/node/src/pqCrypto.js");
 const lookup = {
     usb: 1,
     nfc: 2,
@@ -833,11 +889,14 @@ const getAuthTypeFromCkey = (ckey) => {
 };
 const getSignerFromCkey = (ckey) => {
     const k = cbor_1.default.decode(ckey, { extendedResults: true }).value;
+    //console.log("getSignerFromCkey", k);
     let publicKey = buffer_1.Buffer.from([]);
     if (k.get(3) == -7)
         publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
     else if (k.get(3) == -8)
         publicKey = k.get(-2);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
+        publicKey = k.get(-101);
     return { publicKey };
 };
 class Fido2PRFManager extends Fido2Manager_1.default {
@@ -1118,6 +1177,7 @@ const instanciateApp = (a) => {
 };
 class IdManager {
     constructor(vaultysId, store) {
+        this.protocol_version = 0;
         // alias since this is symetric key encryption
         this.acceptEncryptFile = this.acceptDecryptFile;
         this.vaultysId = vaultysId;
@@ -1130,6 +1190,9 @@ class IdManager {
         else
             this.store.set("secret", this.vaultysId.getSecret());
         this.store.save();
+    }
+    setProtocolVersion(version) {
+        this.protocol_version = version;
     }
     static async fromStore(store) {
         const entropy = store.get("entropy");
@@ -1599,9 +1662,8 @@ class IdManager {
         });
     }
     async startSRP(channel, protocol, service, metadata = {}, accept) {
-        const idV0 = VaultysId_1.default.fromSecret(this.vaultysId.getSecret()).toVersion(0);
-        const challenger = new Challenger_1.default(idV0);
-        challenger.createChallenge(protocol, service, 0, metadata);
+        const challenger = new Challenger_1.default(this.vaultysId);
+        challenger.createChallenge(protocol, service, this.protocol_version, metadata);
         //console.log(challenger);
         const cert = challenger.getCertificate();
         if (!cert) {
@@ -1647,8 +1709,7 @@ class IdManager {
         }
     }
     async acceptSRP(channel, protocol, service, metadata = {}, accept) {
-        const idV0 = VaultysId_1.default.fromSecret(this.vaultysId.getSecret()).toVersion(0);
-        const challenger = new Challenger_1.default(idV0);
+        const challenger = new Challenger_1.default(this.vaultysId);
         try {
             const message = await channel.receive();
             const chal = Challenger_1.default.deserializeCertificate(message);
@@ -1668,7 +1729,7 @@ class IdManager {
                 channel.send(buffer_1.Buffer.from([0]));
                 throw new Error("Contact refused");
             }
-            await challenger.update(message);
+            await challenger.update(message, metadata);
         }
         catch (error) {
             channel.send(buffer_1.Buffer.from([0]));
@@ -1690,6 +1751,7 @@ class IdManager {
         }
         catch (error) {
             await channel.close();
+            //console.log(challenger);
             throw new Error(error);
         }
         if (challenger.isComplete()) {
@@ -1810,10 +1872,20 @@ const LEVEL_DERIVED = 2;
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
 const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
 const serializeID_v0 = (km) => {
+    const encodeBinary = (data) => {
+        if (data.length <= 65535) {
+            // bin16: binary data whose length is upto (2^16)-1 bytes
+            return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+        }
+        else {
+            // bin32: binary data whose length is upto (2^32)-1 bytes
+            return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+        }
+    };
     const version = buffer_1.Buffer.from([0x84, 0xa1, 0x76, 0]);
-    const proof = buffer_1.Buffer.from([0xa1, 0x70, 0xc5, 0x00, km.proof.length, ...km.proof]);
-    const sign = buffer_1.Buffer.from([0xa1, 0x78, 0xc5, 0x00, km.signer.publicKey.length, ...km.signer.publicKey]);
-    const cypher = buffer_1.Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length, ...km.cypher.publicKey]);
+    const proof = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x70]), encodeBinary(km.proof)]);
+    const sign = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x78]), encodeBinary(km.signer.publicKey)]);
+    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
     return buffer_1.Buffer.concat([version, proof, sign, cypher]);
 };
 const publicDerivePath = (node, path) => {
@@ -2721,6 +2793,131 @@ const storagify = (object, save, destroy) => {
 
 /***/ }),
 
+/***/ "./dist/node/src/PQManager.js":
+/*!************************************!*\
+  !*** ./dist/node/src/PQManager.js ***!
+  \************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const saltpack_1 = __webpack_require__(/*! @samuelthomas2774/saltpack */ "./node_modules/.pnpm/@samuelthomas2774+saltpack@0.3.2/node_modules/@samuelthomas2774/saltpack/dist/index.js");
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const crypto_2 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./dist/node/src/pqCrypto.js");
+const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./dist/node/src/KeyManager.js"));
+const dilithium_1 = __webpack_require__(/*! @asanrom/dilithium */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/index.js");
+const LEVEL_ROOT = 1;
+const LEVEL_DERIVED = 2;
+const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
+const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
+class PQManager extends KeyManager_1.default {
+    constructor() {
+        super();
+        this.authType = "DilithiumVerificationKey2025";
+    }
+    static async create_PQ_fromEntropy(entropy, swapIndex = 0) {
+        const km = new PQManager();
+        km.entropy = entropy;
+        km.level = LEVEL_ROOT;
+        km.capability = "private";
+        const seed = sha512(entropy);
+        km.swapIndex = swapIndex;
+        km.proof = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from([]));
+        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(seed.slice(0, 32));
+        const seed2 = sha256(seed.slice(32, 64));
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static generate_PQ() {
+        return PQManager.create_PQ_fromEntropy((0, crypto_1.randomBytes)(32));
+    }
+    async getCypher() {
+        // todo fetch secretKey here
+        const cypher = this.cypher;
+        return {
+            hmac: (message) => cypher.secretKey
+                ? buffer_1.Buffer.from((0, crypto_2.createHmac)("sha256", buffer_1.Buffer.from(cypher.secretKey).toString("hex"))
+                    .update("VaultysID/" + message + "/end")
+                    .digest())
+                : undefined,
+            signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
+            decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
+            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
+        };
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const km = new PQManager();
+        km.version = data.v ?? 0;
+        km.level = LEVEL_DERIVED;
+        km.capability = "private";
+        km.proof = data.p;
+        km.signer = {
+            secretKey: data.x,
+            publicKey: buffer_1.Buffer.from(dilithium_1.DilithiumPrivateKey.fromBytes(data.x, dilithium_1.DilithiumLevel.get(2)).derivePublicKey().getBytes()),
+        };
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static instantiate(obj) {
+        const km = new PQManager();
+        km.version = obj.version ?? 0;
+        km.level = obj.level;
+        km.proof = obj.proof.data ? buffer_1.Buffer.from(obj.proof.data) : buffer_1.Buffer.from(obj.proof);
+        km.signer = {
+            publicKey: obj.signer.publicKey.data ? buffer_1.Buffer.from(obj.signer.publicKey.data) : buffer_1.Buffer.from(obj.signer.publicKey),
+        };
+        km.cypher = {
+            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
+        };
+        return km;
+    }
+    static fromId(id) {
+        const data = (0, msgpack_1.decode)(id);
+        const km = new PQManager();
+        km.version = data.v ?? 0;
+        km.level = LEVEL_DERIVED;
+        km.capability = "public";
+        km.proof = data.p;
+        km.signer = {
+            publicKey: data.x,
+        };
+        km.cypher = {
+            publicKey: data.e,
+        };
+        // console.log(km)
+        return km;
+    }
+    async sign(data) {
+        if (this.capability == "public")
+            return null;
+        return (0, pqCrypto_1.signDilithium)(data, this.signer.secretKey);
+    }
+    verify(data, signature, userVerificationIgnored) {
+        return (0, pqCrypto_1.verifyDilithium)(data, signature, this.signer.publicKey);
+    }
+}
+exports["default"] = PQManager;
+
+
+/***/ }),
+
 /***/ "./dist/node/src/VaultysId.js":
 /*!************************************!*\
   !*** ./dist/node/src/VaultysId.js ***!
@@ -2740,6 +2937,8 @@ const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./
 const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
 const webauthn_1 = __webpack_require__(/*! ./platform/webauthn */ "./dist/node/src/platform/webauthn.js");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const PQManager_1 = __importDefault(__webpack_require__(/*! ./PQManager */ "./dist/node/src/PQManager.js"));
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./dist/node/src/pqCrypto.js");
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
 const TYPE_ORGANIZATION = 2;
@@ -2788,27 +2987,39 @@ class VaultysId {
             // Buffer thing
             cleanId = buffer_1.Buffer.from(id);
         }
-        if (typeof id == "string") {
+        if (typeof id === "string") {
             cleanId = buffer_1.Buffer.from(id, encoding);
         }
         const type = cleanId[0];
-        if (type == TYPE_FIDO2) {
+        if (type === TYPE_FIDO2) {
             const f2m = Fido2Manager_1.default.fromId(cleanId.slice(1));
             return new VaultysId(f2m, certificate, type);
         }
-        else if (type == TYPE_FIDO2PRF) {
+        else if (type === TYPE_FIDO2PRF) {
             const f2m = Fido2PRFManager_1.default.fromId(cleanId.slice(1));
             return new VaultysId(f2m, certificate, type);
         }
         else {
-            const km = KeyManager_1.default.fromId(cleanId.slice(1));
-            return new VaultysId(km, certificate, type);
+            if (cleanId.length > 1312) {
+                const pqm = PQManager_1.default.fromId(cleanId.slice(1));
+                return new VaultysId(pqm, certificate, type);
+            }
+            else {
+                const km = KeyManager_1.default.fromId(cleanId.slice(1));
+                return new VaultysId(km, certificate, type);
+            }
         }
     }
-    static async fromEntropy(entropy, type) {
+    static async fromEntropy(entropy, type, pqc = false) {
         const cleanedEntropy = entropy;
-        const km = await KeyManager_1.default.create_Id25519_fromEntropy(cleanedEntropy);
-        return new VaultysId(km, undefined, type);
+        if (pqc) {
+            const km = await PQManager_1.default.create_PQ_fromEntropy(cleanedEntropy);
+            return new VaultysId(km, undefined, type);
+        }
+        else {
+            const km = await KeyManager_1.default.create_Id25519_fromEntropy(cleanedEntropy);
+            return new VaultysId(km, undefined, type);
+        }
     }
     static async createWebauthn(passkey = true, onPRFEnabled) {
         const options = VaultysId.createPublicKeyCredentialCreationOptions(passkey);
@@ -2819,9 +3030,20 @@ class VaultysId {
         else
             return VaultysId.fido2FromAttestation(attestation, onPRFEnabled);
     }
+    static async createPQC() {
+        const options = VaultysId.createPublicKeyCredentialOptionsPQC();
+        const webAuthn = (0, webauthn_1.getWebAuthnProvider)();
+        const attestation = await webAuthn.create(options);
+        //console.log(attestation);
+        if (!attestation)
+            return null;
+        else
+            return VaultysId.fido2FromAttestation(attestation);
+    }
     static async fido2FromAttestation(attestation, onPRFEnabled) {
         // should be somehow valid.
         SoftCredentials_1.default.verifyPackedAttestation(attestation.response, true);
+        //console.log(SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true));
         if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
             const f2m = await Fido2PRFManager_1.default.createFromAttestation(attestation);
             return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
@@ -2852,21 +3074,45 @@ class VaultysId {
             return new VaultysId(f2m, undefined, type);
         }
         else {
-            const km = KeyManager_1.default.fromSecret(secretBuffer.slice(1));
-            return new VaultysId(km, undefined, type);
+            if (secretBuffer.length > 1312) {
+                const pqm = PQManager_1.default.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(pqm, undefined, type);
+            }
+            else {
+                const km = KeyManager_1.default.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(km, undefined, type);
+            }
         }
     }
-    static async generatePerson() {
-        const km = await KeyManager_1.default.generate_Id25519();
-        return new VaultysId(km, undefined, TYPE_PERSON);
+    static async generatePerson(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
     }
-    static async generateOrganization() {
-        const km = await KeyManager_1.default.generate_Id25519();
-        return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+    static async generateOrganization(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
     }
-    static async generateMachine() {
-        const km = await KeyManager_1.default.generate_Id25519();
-        return new VaultysId(km, undefined, TYPE_MACHINE);
+    static async generateMachine(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
     }
     get relationshipCertificate() {
         return this.certificate;
@@ -3034,6 +3280,38 @@ class VaultysId {
         return cypher.hmac(message);
     }
 }
+VaultysId.createPublicKeyCredentialOptionsPQC = () => {
+    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
+    const hint = "security-key";
+    const options = {
+        challenge: (0, crypto_1.randomBytes)(32),
+        rp: {
+            name: "Vaultys ID",
+        },
+        user: {
+            id: (0, crypto_1.randomBytes)(16),
+            name: "Vaultys ID",
+            displayName: "Vaultys Wallet ID",
+        },
+        attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
+        authenticatorSelection: {
+            authenticatorAttachment: "cross-platform",
+            residentKey: "discouraged",
+            userVerification: "preferred",
+        },
+        // @ts-ignore not yet in dom types
+        hints: [hint],
+        extensions: {
+            prf: {
+                eval: {
+                    first: buffer_1.Buffer.from("VaultysID salt", "utf-8"),
+                },
+            },
+        },
+        pubKeyCredParams: [{ type: "public-key", alg: pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 }],
+    };
+    return options;
+};
 VaultysId.createPublicKeyCredentialCreationOptions = (passkey) => {
     const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
     const hint = passkey ? "client-device" : "security-key";
@@ -3254,6 +3532,7 @@ const p256_1 = __webpack_require__(/*! @noble/curves/p256 */ "./node_modules/.pn
 const p384_1 = __webpack_require__(/*! @noble/curves/p384 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p384.js");
 const p521_1 = __webpack_require__(/*! @noble/curves/p521 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p521.js");
 const x509_1 = __webpack_require__(/*! @peculiar/x509 */ "./node_modules/.pnpm/@peculiar+x509@1.12.3/node_modules/@peculiar/x509/build/x509.es.js");
+const pqCrypto_1 = __webpack_require__(/*! ../pqCrypto */ "./dist/node/src/pqCrypto.js");
 const credentials = {};
 //const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
 const COSEKEYS = {
@@ -3269,6 +3548,7 @@ const COSEKTY = {
     OKP: 1,
     EC2: 2,
     RSA: 3,
+    DILITHIUM: pqCrypto_1.PQ_COSE_KEY_TYPE.DILITHIUM,
 };
 const COSERSASCHEME = {
     "-3": "pss-sha256",
@@ -3296,6 +3576,7 @@ const COSEALGHASH = {
     "-261": "SHA-512",
     "-7": "SHA-256",
     "-36": "SHA-512",
+    [pqCrypto_1.PQ_COSE_ALG.DILITHIUM2.toString()]: "SHA-256", // DILITHIUM2 uses SHA-256 for hashing
 };
 const hash = (alg, message) => (0, crypto_2.hash)(alg.replace("-", ""), message);
 const base64ToPem = (b64cert) => {
@@ -3504,15 +3785,26 @@ class SoftCredentials {
         const credential = new SoftCredentials();
         const publicKey = options.publicKey;
         credential.options = publicKey;
-        credential.rpId = publicKey.rp.id;
+        credential.rpId = publicKey.rp.id || publicKey.rp.name;
         credential.userHandle = buffer_1.Buffer.from(publicKey.user.id.toString(), "base64");
         credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
-        credential.alg = publicKey.pubKeyCredParams[0].alg;
+        // Get the algorithm from pubKeyCredParams
+        const pubKeyCredParams = publicKey.pubKeyCredParams;
+        // Check if DILITHIUM is supported (look for PQ_COSE_ALG.DILITHIUM2 in the params)
+        const supportsDilithium = pubKeyCredParams.some((param) => param.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2);
+        // Set algorithm, prioritizing DILITHIUM if it's supported
+        if (supportsDilithium) {
+            credential.alg = pqCrypto_1.PQ_COSE_ALG.DILITHIUM2;
+        }
+        else {
+            credential.alg = publicKey.pubKeyCredParams[0].alg;
+        }
         if (credential.alg === -8) {
             const random = ed25519_1.ed25519.utils.randomPrivateKey();
             credential.keyPair = {
                 privateKey: random,
                 publicKey: ed25519_1.ed25519.getPublicKey(random),
+                algorithm: "EdDSA",
             };
             credential.coseKey = new Map();
             credential.coseKey.set(1, 1);
@@ -3526,6 +3818,7 @@ class SoftCredentials {
             credential.keyPair = {
                 privateKey: random,
                 publicKey: p256_1.p256.getPublicKey(random, false),
+                algorithm: "ES256",
             };
             credential.coseKey = new Map();
             credential.coseKey.set(1, 2);
@@ -3536,6 +3829,20 @@ class SoftCredentials {
             credential.coseKey.set(-2, x);
             credential.coseKey.set(-3, y);
             // console.log(extpk,x,y)
+        }
+        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2) {
+            // Generate DILITHIUM key pair
+            const { publicKey: dilithiumPk, secretKey: dilithiumSk } = (0, pqCrypto_1.generateDilithiumKeyPair)();
+            //console.log("PQC", dilithiumPk, dilithiumSk);
+            credential.keyPair = {
+                privateKey: dilithiumSk,
+                publicKey: dilithiumPk,
+                algorithm: "DILITHIUM2",
+                isDILITHIUM: true,
+            };
+            // Create COSE key representation
+            credential.coseKey = (0, pqCrypto_1.createDilithiumCoseKey)(dilithiumPk);
+            //console.log("PQC", credential);
         }
         const clientData = {
             type: "webauthn.create",
@@ -3604,17 +3911,25 @@ class SoftCredentials {
             const pubKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), x, y]);
             return verifyECDSA(data, pubKey, buffer_1.Buffer.from(response.signature));
         }
+        else if (ckey.get(1) === COSEKTY.DILITHIUM) {
+            // DILITHIUM
+            const publicKey = ckey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
+            // Verify DILITHIUM signature asynchronously
+            //console.log(data, publicKey, Buffer.from(response.signature));
+            return (0, pqCrypto_1.verifyDilithium)(data, buffer_1.Buffer.from(response.signature), publicKey);
+        }
         return false;
     }
     static getCOSEPublicKey(attestation) {
         const response = attestation.response;
         const ato = cbor_1.default.decode(response.attestationObject);
+        //console.log("getCOSEPublicKey", ato, parseAuthData(ato.authData));
         return parseAuthData(ato.authData).COSEPublicKey;
     }
     static verifyPackedAttestation(attestation, userVerification = false) {
         return verifyPackedAttestation(attestation, userVerification);
     }
-    static verify(attestation, assertion, userVerifiation = false) {
+    static async verify(attestation, assertion, userVerifiation = false) {
         //if (assertion.id !== attestation.id) return false;
         const hash = (0, crypto_2.hash)("sha256", buffer_1.Buffer.from(assertion.response.clientDataJSON));
         const ass = assertion.response;
@@ -3629,20 +3944,30 @@ class SoftCredentials {
         if ((userVerifiation && !authData.flags.uv) || !authData.COSEPublicKey)
             return false;
         const ckey = cbor_1.default.decode(authData.COSEPublicKey);
+        // Hash data for ES256
         if (ckey.get(3) == -7) {
             data = (0, crypto_2.hash)("sha256", data);
         }
-        if (ckey.get(1) == 1) {
+        // Get key type
+        const keyType = ckey.get(1);
+        if (keyType === 1) {
             // EdDSA
             const x = ckey.get(-2);
             return verifyEdDSA(data, x, buffer_1.Buffer.from(ass.signature));
         }
-        else if (ckey.get(1) == 2) {
+        else if (keyType === 2) {
             // ECDSA
             const x = ckey.get(-2);
             const y = ckey.get(-3);
             const pubKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), x, y]);
             return verifyECDSA(data, pubKey, buffer_1.Buffer.from(ass.signature));
+        }
+        else if (keyType === COSEKTY.DILITHIUM) {
+            // DILITHIUM
+            const publicKey = ckey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
+            // Verify DILITHIUM signature asynchronously
+            //console.log(data, publicKey, Buffer.from(ass.signature));
+            return (0, pqCrypto_1.verifyDilithium)(data, buffer_1.Buffer.from(ass.signature), publicKey);
         }
         return false;
     }
@@ -3679,6 +4004,10 @@ class SoftCredentials {
         }
         else if (credential.alg === -8) {
             signature = ed25519_1.ed25519.sign(toSign, credential.keyPair.privateKey);
+        }
+        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2) {
+            // DILITHIUM signing - this returns a Promise so we need to await it
+            signature = (0, pqCrypto_1.signDilithium)(toSign, credential.keyPair.privateKey);
         }
         const pkCredentials = {
             id,
@@ -3776,6 +4105,1996 @@ function getWebAuthnProvider(options) {
 function createCredentialRequest(alg, prf = false) {
     return SoftCredentials_1.default.createRequest(alg, prf);
 }
+
+
+/***/ }),
+
+/***/ "./dist/node/src/pqCrypto.js":
+/*!***********************************!*\
+  !*** ./dist/node/src/pqCrypto.js ***!
+  \***********************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+/**
+ * Post-Quantum Cryptography Operations
+ *
+ * This file contains implementations for post-quantum cryptographic algorithms
+ * starting with DILITHIUM for digital signatures.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PQ_COSE_KEY_PARAMS = exports.PQ_COSE_KEY_TYPE = exports.PQ_COSE_ALG = void 0;
+exports.generateDilithiumKeyPair = generateDilithiumKeyPair;
+exports.signDilithium = signDilithium;
+exports.verifyDilithium = verifyDilithium;
+exports.createDilithiumCoseKey = createDilithiumCoseKey;
+exports.getDilithiumKeyInfo = getDilithiumKeyInfo;
+const dilithium_1 = __webpack_require__(/*! @asanrom/dilithium */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/index.js");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+/**
+ * COSE algorithm identifiers for post-quantum algorithms
+ * Note: These values are provisional and may need to be updated as standards evolve
+ */
+exports.PQ_COSE_ALG = {
+    // DILITHIUM variants (using negative values as per COSE convention for new algorithms)
+    DILITHIUM2: -46, // Level 2 (128-bit security)
+    DILITHIUM3: -47, // Level 3 (192-bit security)
+    DILITHIUM5: -48, // Level 5 (256-bit security)
+};
+/**
+ * COSE key type for DILITHIUM
+ */
+exports.PQ_COSE_KEY_TYPE = {
+    DILITHIUM: 4, // Custom key type for DILITHIUM
+};
+/**
+ * COSE key parameter identifiers for DILITHIUM
+ */
+exports.PQ_COSE_KEY_PARAMS = {
+    DILITHIUM_MODE: -100, // Mode parameter (2, 3, or 5)
+    DILITHIUM_PK: -101, // Public key
+    DILITHIUM_SK: -102, // Secret key
+};
+/**
+ * Generate a DILITHIUM Level 2 key pair
+ * @returns Promise resolving to an object containing the key pair
+ */
+function generateDilithiumKeyPair(seed) {
+    const level = dilithium_1.DilithiumLevel.get(2); // Get the security level config (2, 3, or 5)
+    // Generate a key pair
+    const keyPair = dilithium_1.DilithiumKeyPair.generate(level, seed);
+    return {
+        publicKey: buffer_1.Buffer.from(keyPair.getPublicKey().toBase64(), "base64"),
+        secretKey: buffer_1.Buffer.from(keyPair.getPrivateKey().toBase64(), "base64"),
+    };
+}
+/**
+ * Sign a message using DILITHIUM Level 2
+ * @param message - The message to sign
+ * @param privateKey - The DILITHIUM private key
+ * @returns Promise resolving to signature as Uint8Array
+ */
+function signDilithium(message, secretKey) {
+    const DKey = dilithium_1.DilithiumPrivateKey.fromBytes(secretKey, dilithium_1.DilithiumLevel.get(2));
+    return buffer_1.Buffer.from(DKey.sign(message).getBytes());
+}
+/**
+ * Verify a DILITHIUM Level 2 signature
+ * @param message - The original message
+ * @param signature - The signature to verify
+ * @param publicKey - The DILITHIUM public key
+ * @returns Promise resolving to boolean indicating if signature is valid
+ */
+function verifyDilithium(message, signature, publicKey) {
+    // Ensure we're working with Uint8Array
+    const DKey = dilithium_1.DilithiumPublicKey.fromBytes(publicKey, dilithium_1.DilithiumLevel.get(2));
+    try {
+        return DKey.verifySignature(message, dilithium_1.DilithiumSignature.fromBytes(signature, dilithium_1.DilithiumLevel.get(2)));
+    }
+    catch (error) {
+        console.error("DILITHIUM verification error:", error);
+        return false;
+    }
+}
+/**
+ * Create a COSE key representation for a DILITHIUM public key
+ * @param publicKey - The DILITHIUM public key
+ * @returns Map representing the COSE key
+ */
+function createDilithiumCoseKey(publicKey) {
+    const coseKey = new Map();
+    // Standard COSE key parameters
+    coseKey.set(1, exports.PQ_COSE_KEY_TYPE.DILITHIUM); // kty: Key Type
+    coseKey.set(3, exports.PQ_COSE_ALG.DILITHIUM2); // alg: Algorithm
+    // DILITHIUM-specific parameters
+    coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_MODE, 2); // Level 2
+    coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_PK, publicKey);
+    return coseKey;
+}
+/**
+ * Get key size information for DILITHIUM
+ * @returns Object with key size information
+ */
+function getDilithiumKeyInfo() {
+    return {
+        publicKeySize: 1312, // Size in bytes for DILITHIUM2 public key
+        secretKeySize: 2544, // Size in bytes for DILITHIUM2 private key
+        signatureSize: 2420, // Size in bytes for DILITHIUM2 signature
+    };
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js":
+/*!*******************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js ***!
+  \*******************************************************************************************************/
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+// Constants
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.POLY_UNIFORM_NBLOCKS = exports.zetas = exports.POLY_UNIFORM_GAMMA1_NBLOCKS = exports.STREAM256_BLOCKBYTES = exports.STREAM128_BLOCKBYTES = exports.SHAKE256_RATE = exports.SHAKE128_RATE = exports.CRHBYTES = exports.SEEDBYTES = exports.POLYT1_PACKEDBYTES = exports.POLYT0_PACKEDBYTES = exports.D = exports.QINV = exports.Q = exports.N = void 0;
+exports.N = 256;
+exports.Q = 8380417;
+exports.QINV = 58728449;
+exports.D = 13;
+exports.POLYT0_PACKEDBYTES = 416;
+exports.POLYT1_PACKEDBYTES = 320;
+exports.SEEDBYTES = 32;
+exports.CRHBYTES = 48;
+exports.SHAKE128_RATE = 168;
+exports.SHAKE256_RATE = 136;
+exports.STREAM128_BLOCKBYTES = exports.SHAKE128_RATE;
+exports.STREAM256_BLOCKBYTES = exports.SHAKE256_RATE;
+exports.POLY_UNIFORM_GAMMA1_NBLOCKS = ((576 + exports.STREAM256_BLOCKBYTES - 1) / exports.STREAM256_BLOCKBYTES);
+exports.zetas = [
+    0, 25847, -2608894, -518909, 237124, -777960, -876248, 466468,
+    1826347, 2353451, -359251, -2091905, 3119733, -2884855, 3111497, 2680103, 2725464, 1024112, -1079900,
+    3585928, -549488, -1119584, 2619752, -2108549, -2118186, -3859737, -1399561, -3277672, 1757237, -19422,
+    4010497, 280005, 2706023, 95776, 3077325, 3530437, -1661693, -3592148, -2537516, 3915439, -3861115,
+    -3043716, 3574422, -2867647, 3539968, -300467, 2348700, -539299, -1699267, -1643818, 3505694, -3821735,
+    3507263, -2140649, -1600420, 3699596, 811944, 531354, 954230, 3881043, 3900724, -2556880, 2071892, -2797779,
+    -3930395, -1528703, -3677745, -3041255, -1452451, 3475950, 2176455, -1585221, -1257611, 1939314, -4083598,
+    -1000202, -3190144, -3157330, -3632928, 126922, 3412210, -983419, 2147896, 2715295, -2967645, -3693493,
+    -411027, -2477047, -671102, -1228525, -22981, -1308169, -381987, 1349076, 1852771, -1430430, -3343383,
+    264944, 508951, 3097992, 44288, -1100098, 904516, 3958618, -3724342, -8578, 1653064, -3249728, 2389356,
+    -210977, 759969, -1316856, 189548, -3553272, 3159746, -1851402, -2409325, -177440, 1315589, 1341330,
+    1285669, -1584928, -812732, -1439742, -3019102, -3881060, -3628969, 3839961, 2091667, 3407706, 2316500,
+    3817976, -3342478, 2244091, -2446433, -3562462, 266997, 2434439, -1235728, 3513181, -3520352, -3759364,
+    -1197226, -3193378, 900702, 1859098, 909542, 819034, 495491, -1613174, -43260, -522500, -655327, -3122442,
+    2031748, 3207046, -3556995, -525098, -768622, -3595838, 342297, 286988, -2437823, 4108315, 3437287,
+    -3342277, 1735879, 203044, 2842341, 2691481, -2590150, 1265009, 4055324, 1247620, 2486353, 1595974,
+    -3767016, 1250494, 2635921, -3548272, -2994039, 1869119, 1903435, -1050970, -1333058, 1237275, -3318210,
+    -1430225, -451100, 1312455, 3306115, -1962642, -1279661, 1917081, -2546312, -1374803, 1500165, 777191,
+    2235880, 3406031, -542412, -2831860, -1671176, -1846953, -2584293, -3724270, 594136, -3776993, -2013608,
+    2432395, 2454455, -164721, 1957272, 3369112, 185531, -1207385, -3183426, 162844, 1616392, 3014001, 810149,
+    1652634, -3694233, -1799107, -3038916, 3523897, 3866901, 269760, 2213111, -975884, 1717735, 472078, -426683,
+    1723600, -1803090, 1910376, -1667432, -1104333, -260646, -3833893, -2939036, -2235985, -420899, -2286327,
+    183443, -976891, 1612842, -3545687, -554416, 3919660, -48306, -1362209, 3937738, 1400424, -846154,
+    1976782
+];
+exports.POLY_UNIFORM_NBLOCKS = Math.floor((768 + exports.STREAM128_BLOCKBYTES - 1) / exports.STREAM128_BLOCKBYTES);
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/hints.js":
+/*!***************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/hints.js ***!
+  \***************************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+// Hints
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.useHints = exports.makeHints = void 0;
+const constants_1 = __webpack_require__(/*! ./constants */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js");
+const poly_1 = __webpack_require__(/*! ./poly */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly.js");
+const poly_vec_1 = __webpack_require__(/*! ./poly-vec */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly-vec.js");
+function makeHints(gamma2, v0, v1) {
+    const hints = {
+        v: new poly_vec_1.PolynomiumVector(v0.size()),
+        cnt: 0,
+    };
+    for (let i = 0; i < v0.size(); i++) {
+        const hint = polyMakeHint(gamma2, v0.polynomiums[i], v1.polynomiums[i]);
+        hints.cnt += hint.cnt;
+        hints.v.polynomiums[i] = hint.v;
+    }
+    return hints;
+}
+exports.makeHints = makeHints;
+function polyMakeHint(gamma2, a, b) {
+    const hint = {
+        v: new poly_1.Polynomium(constants_1.N),
+        cnt: 0,
+    };
+    for (let i = 0; i < constants_1.N; i++) {
+        hint.v.coef[i] = makeHint(gamma2, a.coef[i], b.coef[i]);
+        hint.cnt += hint.v.coef[i];
+    }
+    return hint;
+}
+function makeHint(gamma2, a0, a1) {
+    if (a0 <= gamma2 || a0 > constants_1.Q - gamma2 || (a0 === constants_1.Q - gamma2 && a1 === 0)) {
+        return 0;
+    }
+    return 1;
+}
+function useHints(gamma2, u, h) {
+    const res = new poly_vec_1.PolynomiumVector(u.size());
+    for (let i = 0; i < res.size(); i++) {
+        res.polynomiums[i] = polyUseHint(gamma2, u.polynomiums[i], h.polynomiums[i]);
+    }
+    return res;
+}
+exports.useHints = useHints;
+function polyUseHint(gamma2, u, h) {
+    const res = new poly_1.Polynomium(constants_1.N);
+    for (let i = 0; i < constants_1.N; i++) {
+        res.coef[i] = useHint(gamma2, u.coef[i], h.coef[i]);
+    }
+    return res;
+}
+function useHint(gamma2, a, hint) {
+    let a0;
+    let a1;
+    a1 = (a + 127) >> 7;
+    if (gamma2 === (constants_1.Q - 1) / 32) {
+        a1 = (a1 * 1025 + (1 << 21)) >> 22;
+        a1 &= 15;
+    }
+    else if (gamma2 === (constants_1.Q - 1) / 88) {
+        a1 = (a1 * 11275 + (1 << 23)) >> 24;
+        a1 ^= ((43 - a1) >> 31) & a1;
+    }
+    else {
+        throw new Error("Invalid gamma2: " + gamma2);
+    }
+    a0 = a - a1 * 2 * gamma2;
+    a0 -= (((constants_1.Q - 1) / 2 - a0) >> 31) & constants_1.Q;
+    if (hint === 0) {
+        return a1;
+    }
+    if (gamma2 === (constants_1.Q - 1) / 32) {
+        if (a0 > 0)
+            return (a1 + 1) & 15;
+        else
+            return (a1 - 1) & 15;
+    }
+    else if (gamma2 === (constants_1.Q - 1) / 88) {
+        if (a0 > 0)
+            return (a1 === 43) ? 0 : a1 + 1;
+        else
+            return (a1 === 0) ? 43 : a1 - 1;
+    }
+    else {
+        throw new Error("Invalid gamma2: " + gamma2);
+    }
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/index.js":
+/*!***************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/index.js ***!
+  \***************************************************************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+// Library Entry point
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+__exportStar(__webpack_require__(/*! ./param */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/param.js"), exports);
+__exportStar(__webpack_require__(/*! ./key */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/key.js"), exports);
+__exportStar(__webpack_require__(/*! ./signature */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/signature.js"), exports);
+__exportStar(__webpack_require__(/*! ./poly */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly.js"), exports);
+__exportStar(__webpack_require__(/*! ./poly-vec */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly-vec.js"), exports);
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/key.js":
+/*!*************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/key.js ***!
+  \*************************************************************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+/* provided dependency */ var Buffer = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js")["Buffer"];
+// Dilithium key-pair
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DilithiumKeyPair = exports.DilithiumPublicKey = exports.DilithiumPrivateKey = void 0;
+const constants_1 = __webpack_require__(/*! ./constants */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js");
+const randombytes_1 = __importDefault(__webpack_require__(/*! randombytes */ "./node_modules/.pnpm/randombytes@2.1.0/node_modules/randombytes/browser.js"));
+const poly_1 = __webpack_require__(/*! ./poly */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly.js");
+const poly_vec_1 = __webpack_require__(/*! ./poly-vec */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly-vec.js");
+const util_1 = __webpack_require__(/*! ./util */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/util.js");
+const signature_1 = __webpack_require__(/*! ./signature */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/signature.js");
+/**
+ * Private key
+ */
+class DilithiumPrivateKey {
+    /**
+     * Parses a private key from a byte array
+     * @param bytes The byte array
+     * @param level The security level
+     * @returns The private key
+     */
+    static fromBytes(bytes, level) {
+        if (level.spec.privateKeyLength !== bytes.length) {
+            throw new Error(`Invalid private key size. Expected ${level.spec.publicKeyLength} bytes, but found ${bytes.length} bytes`);
+        }
+        const parameterSpec = level.spec.rawParams;
+        const POLYETA_PACKEDBYTES = (0, util_1.getPolyEtaPackedBytes)(parameterSpec.eta);
+        let off = 0;
+        const rho = new Uint8Array(constants_1.SEEDBYTES);
+        for (let i = 0; i < constants_1.SEEDBYTES; i++) {
+            rho[i] = bytes[i];
+        }
+        off += constants_1.SEEDBYTES;
+        const key = new Uint8Array(constants_1.SEEDBYTES);
+        for (let i = 0; i < constants_1.SEEDBYTES; i++) {
+            key[i] = bytes[off + i];
+        }
+        off += constants_1.SEEDBYTES;
+        const tr = new Uint8Array(constants_1.CRHBYTES);
+        for (let i = 0; i < constants_1.CRHBYTES; i++) {
+            tr[i] = bytes[off + i];
+        }
+        off += constants_1.CRHBYTES;
+        const s1 = new poly_vec_1.PolynomiumVector(parameterSpec.l);
+        for (let i = 0; i < parameterSpec.l; i++) {
+            s1.polynomiums[i] = poly_1.Polynomium.etaunpack(parameterSpec.eta, bytes, off);
+            off += POLYETA_PACKEDBYTES;
+        }
+        const s2 = new poly_vec_1.PolynomiumVector(parameterSpec.k);
+        for (let i = 0; i < parameterSpec.k; i++) {
+            s2.polynomiums[i] = poly_1.Polynomium.etaunpack(parameterSpec.eta, bytes, off);
+            off += POLYETA_PACKEDBYTES;
+        }
+        const t0 = new poly_vec_1.PolynomiumVector(parameterSpec.k);
+        for (let i = 0; i < parameterSpec.k; i++) {
+            t0.polynomiums[i] = poly_1.Polynomium.t0unpack(bytes, off);
+            off += constants_1.POLYT0_PACKEDBYTES;
+        }
+        // Precompute A, s0, s1 & t0hat
+        const A = poly_vec_1.PolynomiumVector.expandA(rho, parameterSpec.k, parameterSpec.l);
+        const s1Hat = s1.ntt();
+        const s2Hat = s2.ntt();
+        const t0Hat = t0.ntt();
+        return new DilithiumPrivateKey(parameterSpec, bytes, {
+            rho,
+            K: key,
+            tr,
+            s1,
+            s2,
+            t0,
+            A,
+            s1Hat,
+            s2Hat,
+            t0Hat,
+        });
+    }
+    /**
+     * Parses private key from hex string
+     * @param hex The string
+     * @param level The security level
+     * @returns The private key
+     */
+    static fromHex(hex, level) {
+        return DilithiumPrivateKey.fromBytes(new Uint8Array(Buffer.from(hex, "hex")), level);
+    }
+    /**
+     * Parses private key from base 64 string
+     * @param base64 The string
+     * @param level The security level
+     * @returns The private key
+     */
+    static fromBase64(base64, level) {
+        return DilithiumPrivateKey.fromBytes(new Uint8Array(Buffer.from(base64, "base64")), level);
+    }
+    constructor(spec, bytes, params) {
+        this.spec = spec;
+        this.bytes = bytes;
+        this.rho = params.rho;
+        this.tr = params.tr;
+        this.K = params.K;
+        this.s1 = params.s1;
+        this.s2 = params.s2;
+        this.t0 = params.t0;
+        this.s1Hat = params.s1Hat;
+        this.s2Hat = params.s2Hat;
+        this.t0Hat = params.t0Hat;
+        this.A = params.A;
+    }
+    /**
+     * Derives the public key from this private key
+     * @returns The public key
+     */
+    derivePublicKey() {
+        const s1hat = this.s1.ntt();
+        let t1 = s1hat.mulMatrixPointwiseMontgomery(this.A);
+        t1.reduce();
+        t1.invnttTomont();
+        t1 = t1.add(this.s2);
+        t1.caddq();
+        const res = t1.powerRound();
+        const pubbytes = (0, util_1.packPubKey)(this.rho, res[1]);
+        return new DilithiumPublicKey(this.spec, pubbytes, this.rho, res[1], this.A);
+    }
+    /**
+     * Creates a key pair from this key
+     * @returns The key pair
+     */
+    toKeyPair() {
+        return new DilithiumKeyPair(this);
+    }
+    /**
+     * @returns The private key as a byte array
+     */
+    getBytes() {
+        return this.bytes;
+    }
+    /**
+     * @returns The private key as a hex string
+     */
+    toHex() {
+        return Buffer.from(this.bytes).toString("hex");
+    }
+    /**
+     * @returns The private key as a base 64 string
+     */
+    toBase64() {
+        return Buffer.from(this.bytes).toString("base64");
+    }
+    /**
+     * Signs a message
+     * @param message The message
+     * @returns The signature
+     */
+    sign(message) {
+        return signature_1.DilithiumSignature.generate(message, this);
+    }
+}
+exports.DilithiumPrivateKey = DilithiumPrivateKey;
+/**
+ * Public key
+ */
+class DilithiumPublicKey {
+    /**
+     * Parses a public key from a byte array
+     * @param bytes The byte array
+     * @param level The level specification
+     * @returns The public key
+     */
+    static fromBytes(bytes, level) {
+        if (level.spec.publicKeyLength !== bytes.length) {
+            throw new Error(`Invalid public key size. Expected ${level.spec.publicKeyLength} bytes, but found ${bytes.length} bytes`);
+        }
+        const parameterSpec = level.spec.rawParams;
+        let off = 0;
+        const rho = new Uint8Array(constants_1.SEEDBYTES);
+        for (let i = 0; i < constants_1.SEEDBYTES; i++) {
+            rho[i] = bytes[i];
+        }
+        off += constants_1.SEEDBYTES;
+        const p = new poly_vec_1.PolynomiumVector(parameterSpec.k);
+        for (let i = 0; i < parameterSpec.k; i++) {
+            p.polynomiums[i] = poly_1.Polynomium.t1unpack(bytes, off);
+            off += constants_1.POLYT1_PACKEDBYTES;
+        }
+        // Precompute A
+        const A = poly_vec_1.PolynomiumVector.expandA(rho, parameterSpec.k, parameterSpec.l);
+        return new DilithiumPublicKey(parameterSpec, bytes, rho, p, A);
+    }
+    /**
+     * Parses public key from hex string
+     * @param hex The string
+     * @param level The security level
+     * @returns The public key
+     */
+    static fromHex(hex, level) {
+        return DilithiumPublicKey.fromBytes(new Uint8Array(Buffer.from(hex, "hex")), level);
+    }
+    /**
+     * Parses public key from base 64 string
+     * @param base64 The string
+     * @param level The security level
+     * @returns The public key
+     */
+    static fromBase64(base64, level) {
+        return DilithiumPublicKey.fromBytes(new Uint8Array(Buffer.from(base64, "base64")), level);
+    }
+    constructor(spec, bytes, rho, t1, A) {
+        this.spec = spec;
+        this.bytes = bytes;
+        this.rho = rho;
+        this.t1 = t1;
+        this.A = A;
+    }
+    /**
+     * @returns The public key as a byte array
+     */
+    getBytes() {
+        return this.bytes;
+    }
+    /**
+     * @returns The public key as a hex string
+     */
+    toHex() {
+        return Buffer.from(this.bytes).toString("hex");
+    }
+    /**
+     * @returns The public key as a base 64 string
+     */
+    toBase64() {
+        return Buffer.from(this.bytes).toString("base64");
+    }
+    /**
+     * Verifies a signature
+     * @param message The message
+     * @param sig The signature
+     * @returns True only if the signature is valid
+     */
+    verifySignature(message, sig) {
+        return sig.verify(message, this);
+    }
+}
+exports.DilithiumPublicKey = DilithiumPublicKey;
+/**
+ * Key pair (private + public)
+ */
+class DilithiumKeyPair {
+    /**
+     * Creates a key pair from a private key
+     * @param secret Private key
+     * @returns The key pair
+     */
+    static fromPrivateKey(secret) {
+        return new DilithiumKeyPair(secret);
+    }
+    /**
+     * Packs keys into a key pair
+     * @param secret The private key
+     * @param pub The public key
+     * @returns
+     */
+    static fromKeys(secret, pub) {
+        return new DilithiumKeyPair(secret, pub);
+    }
+    /**
+     * Generates a random keypair
+     * @param level The security level
+     * @param seed The seed for the generation of the key pair (if not prodiced, a random seed is generated)
+     */
+    static generate(level, seed) {
+        const spec = level.spec.rawParams;
+        let zeta;
+        if (seed) {
+            zeta = seed;
+        }
+        else {
+            zeta = new Uint8Array((0, randombytes_1.default)(32));
+        }
+        const o = (0, util_1.getSHAKE256Digest)(3 * 32, zeta);
+        const rho = o.slice(0, 32);
+        const sigma = o.slice(32, 64);
+        const K = o.slice(64, 96);
+        const s1 = poly_vec_1.PolynomiumVector.randomVec(sigma, spec.eta, spec.l, 0);
+        const s2 = poly_vec_1.PolynomiumVector.randomVec(sigma, spec.eta, spec.k, spec.l);
+        const A = poly_vec_1.PolynomiumVector.expandA(rho, spec.k, spec.l);
+        const s1Hat = s1.ntt();
+        let t1 = s1Hat.mulMatrixPointwiseMontgomery(A);
+        t1.reduce();
+        t1.invnttTomont();
+        t1 = t1.add(s2);
+        t1.caddq();
+        const res = t1.powerRound();
+        const pubbytes = (0, util_1.packPubKey)(rho, res[1]);
+        const tr = (0, util_1.crh)(pubbytes);
+        const prvbytes = (0, util_1.packPrvKey)(spec.eta, rho, tr, K, res[0], s1, s2);
+        const s2Hat = s2.ntt();
+        const t0Hat = res[0].ntt();
+        const privateKey = new DilithiumPrivateKey(spec, prvbytes, {
+            rho,
+            K,
+            tr,
+            s1,
+            s2,
+            t0: res[0],
+            A,
+            s1Hat,
+            s2Hat,
+            t0Hat,
+        });
+        const publicKey = new DilithiumPublicKey(spec, pubbytes, rho, res[1], A);
+        return new DilithiumKeyPair(privateKey, publicKey);
+    }
+    constructor(secret, pub) {
+        this.secret = secret;
+        this.pub = pub || secret.derivePublicKey();
+    }
+    /**
+     * @returns The private key
+     */
+    getPrivateKey() {
+        return this.secret;
+    }
+    /**
+     * @returns The public key
+     */
+    getPublicKey() {
+        return this.pub;
+    }
+    /**
+     * Signs a message
+     * @param message The message
+     * @returns The signature
+     */
+    sign(message) {
+        return this.secret.sign(message);
+    }
+    /**
+     * Verifies a signature
+     * @param message The message
+     * @param sig The signature
+     * @returns True only if the signature is valid
+     */
+    verifySignature(message, sig) {
+        return this.pub.verifySignature(message, sig);
+    }
+}
+exports.DilithiumKeyPair = DilithiumKeyPair;
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/param.js":
+/*!***************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/param.js ***!
+  \***************************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+// Parameter specs
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DILITHIUM_LEVEL5_P = exports.DILITHIUM_LEVEL3_P = exports.DILITHIUM_LEVEL2_P = exports.DilithiumLevel = void 0;
+const constants_1 = __webpack_require__(/*! ./constants */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js");
+const util_1 = __webpack_require__(/*! ./util */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/util.js");
+/**
+ * Dilithium security level
+ */
+class DilithiumLevel {
+    /**
+     * Get the definition for a security level of Dilithium
+     * Level can be:
+     *  - LEVEL 2
+     *  - LEVEL 3
+     *  - LEVEL 5
+     * @param level The security level
+     * @returns The specification and parameters for that level
+     */
+    static get(level) {
+        let p;
+        switch (level) {
+            case 2:
+                p = exports.DILITHIUM_LEVEL2_P;
+                break;
+            case 3:
+                p = exports.DILITHIUM_LEVEL3_P;
+                break;
+            case 5:
+                p = exports.DILITHIUM_LEVEL5_P;
+                break;
+            default:
+                throw new Error("Invalid security level: " + level);
+        }
+        return new DilithiumLevel({
+            level: level,
+            rawParams: p,
+            publicKeyLength: (0, util_1.getPublicKeyByteLength)(p),
+            privateKeyLength: (0, util_1.getPrivateKeyByteLength)(p),
+            signatureLength: (0, util_1.getSignatureByteLength)(p),
+        });
+    }
+    constructor(spec) {
+        this.spec = spec;
+    }
+}
+exports.DilithiumLevel = DilithiumLevel;
+exports.DILITHIUM_LEVEL2_P = {
+    k: 4,
+    l: 4,
+    gamma1: 1 << 17,
+    gamma2: Math.floor((constants_1.Q - 1) / 88),
+    tau: 39,
+    d: 13,
+    chalentropy: 192,
+    eta: 2,
+    beta: 78,
+    omega: 80,
+};
+exports.DILITHIUM_LEVEL3_P = {
+    k: 6,
+    l: 5,
+    gamma1: 1 << 19,
+    gamma2: Math.floor((constants_1.Q - 1) / 32),
+    tau: 49,
+    d: 13,
+    chalentropy: 225,
+    eta: 4,
+    beta: 196,
+    omega: 55,
+};
+exports.DILITHIUM_LEVEL5_P = {
+    k: 8,
+    l: 7,
+    gamma1: 1 << 19,
+    gamma2: Math.floor((constants_1.Q - 1) / 32),
+    tau: 60,
+    d: 13,
+    chalentropy: 257,
+    eta: 2,
+    beta: 120,
+    omega: 75,
+};
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly-vec.js":
+/*!******************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly-vec.js ***!
+  \******************************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+// Vector of Polynomiums
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PolynomiumVector = void 0;
+const constants_1 = __webpack_require__(/*! ./constants */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js");
+const poly_1 = __webpack_require__(/*! ./poly */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly.js");
+class PolynomiumVector {
+    static randomVec(rho, eta, length, nonce) {
+        const pv = new PolynomiumVector(length);
+        for (let i = 0; i < length; i++) {
+            pv.polynomiums[i] = poly_1.Polynomium.genRandom(rho, eta, nonce++);
+        }
+        return pv;
+    }
+    static randomVecGamma1(seed, length, gamma1, nonce) {
+        const pv = new PolynomiumVector(length);
+        for (let i = 0; i < length; i++) {
+            pv.polynomiums[i] = poly_1.Polynomium.genRandomGamma1(seed, length * nonce + i, constants_1.N, gamma1);
+        }
+        return pv;
+    }
+    static expandA(rho, k, l) {
+        const A = [];
+        for (let i = 0; i < k; i++) {
+            const pv = new PolynomiumVector(l);
+            for (let j = 0; j < l; j++) {
+                pv.polynomiums[j] = poly_1.Polynomium.genUniformRandom(rho, (i << 8) + j);
+            }
+            A.push(pv);
+        }
+        return A;
+    }
+    constructor(size) {
+        this.polynomiums = [];
+        for (let i = 0; i < size; i++) {
+            this.polynomiums.push(null);
+        }
+    }
+    ntt() {
+        const length = this.polynomiums.length;
+        const pv = new PolynomiumVector(length);
+        for (let i = 0; i < length; i++) {
+            pv.polynomiums[i] = this.polynomiums[i].ntt();
+        }
+        return pv;
+    }
+    reduce() {
+        const length = this.polynomiums.length;
+        for (let i = 0; i < length; i++) {
+            this.polynomiums[i].reduce();
+        }
+    }
+    decompose(gamma2) {
+        const length = this.polynomiums.length;
+        const res = [
+            new PolynomiumVector(length),
+            new PolynomiumVector(length),
+        ];
+        for (let i = 0; i < length; i++) {
+            const r = this.polynomiums[i].decompose(gamma2);
+            res[0].polynomiums[i] = r[0];
+            res[1].polynomiums[i] = r[1];
+        }
+        return res;
+    }
+    invnttTomont() {
+        const length = this.polynomiums.length;
+        for (let i = 0; i < length; i++) {
+            this.polynomiums[i].invnttTomont();
+        }
+    }
+    add(other) {
+        const length = this.polynomiums.length;
+        const pv = new PolynomiumVector(length);
+        for (let i = 0; i < length; i++) {
+            if (!other.polynomiums[i]) {
+                continue;
+            }
+            pv.polynomiums[i] = this.polynomiums[i].add(other.polynomiums[i]);
+        }
+        return pv;
+    }
+    sub(other) {
+        const length = this.polynomiums.length;
+        const pv = new PolynomiumVector(length);
+        for (let i = 0; i < length; i++) {
+            if (!other.polynomiums[i]) {
+                continue;
+            }
+            pv.polynomiums[i] = this.polynomiums[i].sub(other.polynomiums[i]);
+        }
+        return pv;
+    }
+    caddq() {
+        const length = this.polynomiums.length;
+        for (let i = 0; i < length; i++) {
+            this.polynomiums[i].caddq();
+        }
+    }
+    shift() {
+        const length = this.polynomiums.length;
+        const pv = new PolynomiumVector(length);
+        for (let i = 0; i < length; i++) {
+            pv.polynomiums[i] = this.polynomiums[i].shiftl();
+        }
+        return pv;
+    }
+    powerRound() {
+        const length = this.polynomiums.length;
+        const res = [
+            new PolynomiumVector(length),
+            new PolynomiumVector(length),
+        ];
+        for (let i = 0; i < length; i++) {
+            const r = this.polynomiums[i].powerRound();
+            res[0].polynomiums[i] = r[0];
+            res[1].polynomiums[i] = r[1];
+        }
+        return res;
+    }
+    pointwiseMontgomery(u) {
+        const length = this.polynomiums.length;
+        const pv = new PolynomiumVector(length);
+        for (let i = 0; i < length; i++) {
+            pv.polynomiums[i] = u.pointwiseMontgomery(this.polynomiums[i]);
+        }
+        return pv;
+    }
+    static pointwiseAccMontgomery(u, v) {
+        let w = u.polynomiums[0].pointwiseMontgomery(v.polynomiums[0]);
+        const length = v.size();
+        for (let i = 1; i < length; i++) {
+            const t = u.polynomiums[i].pointwiseMontgomery(v.polynomiums[i]);
+            w = w.add(t);
+        }
+        return w;
+    }
+    mulMatrixPointwiseMontgomery(M) {
+        const pv = new PolynomiumVector(M.length);
+        for (let i = 0; i < M.length; i++) {
+            pv.polynomiums[i] = PolynomiumVector.pointwiseAccMontgomery(M[i], this);
+        }
+        return pv;
+    }
+    size() {
+        return this.polynomiums.length;
+    }
+    chknorm(bound) {
+        for (const poly of this.polynomiums) {
+            if (poly.chknorm(bound)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    toString() {
+        return "{" + this.polynomiums.map(a => a.toString()).join(", ") + "}";
+    }
+}
+exports.PolynomiumVector = PolynomiumVector;
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly.js":
+/*!**************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly.js ***!
+  \**************************************************************************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+/* provided dependency */ var Buffer = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js")["Buffer"];
+// Polynomium
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Polynomium = void 0;
+const sha3_1 = __webpack_require__(/*! sha3 */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/index.js");
+const long_1 = __importDefault(__webpack_require__(/*! long */ "./node_modules/.pnpm/long@5.2.1/node_modules/long/umd/index.js"));
+const constants_1 = __webpack_require__(/*! ./constants */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js");
+class Polynomium {
+    static genRandom(rho, eta, nonce) {
+        let POLY_UNIFORM_ETA_NBLOCKS;
+        switch (eta) {
+            case 2:
+                POLY_UNIFORM_ETA_NBLOCKS = Math.floor((136 + constants_1.STREAM128_BLOCKBYTES - 1) / constants_1.STREAM128_BLOCKBYTES);
+                break;
+            case 4:
+                POLY_UNIFORM_ETA_NBLOCKS = Math.floor((227 + constants_1.STREAM128_BLOCKBYTES - 1) / constants_1.STREAM128_BLOCKBYTES);
+                break;
+            default:
+                throw new Error("Illegal eta: " + eta);
+        }
+        let ctr;
+        const s = new sha3_1.SHAKE(128);
+        s.update(Buffer.from(rho));
+        const non = new Uint8Array(2);
+        non[0] = nonce & 0xFF;
+        non[1] = ((nonce >> 8) & 0xFF);
+        s.update(Buffer.from(non));
+        const bb = Buffer.alloc(POLY_UNIFORM_ETA_NBLOCKS * constants_1.STREAM128_BLOCKBYTES);
+        s.digest({ buffer: bb, format: "binary" });
+        const pre = new Polynomium(constants_1.N);
+        ctr = Polynomium.rej_eta(eta, pre.coef, 0, constants_1.N, bb, bb.length);
+        const bb2 = Buffer.alloc(constants_1.STREAM128_BLOCKBYTES);
+        while (ctr < constants_1.N) {
+            s.digest({ buffer: bb2, format: "binary" });
+            ctr += Polynomium.rej_eta(eta, pre.coef, ctr, constants_1.N - ctr, bb2, bb2.length);
+        }
+        return pre;
+    }
+    static genUniformRandom(rho, nonce) {
+        let buflen = constants_1.POLY_UNIFORM_NBLOCKS * constants_1.STREAM128_BLOCKBYTES;
+        const bufShake = Buffer.alloc(buflen);
+        const s = new sha3_1.SHAKE(128);
+        s.update(Buffer.from(rho));
+        const non = new Uint8Array(2);
+        non[0] = nonce & 0xFF;
+        non[1] = ((nonce >> 8) & 0xFF);
+        s.update(Buffer.from(non));
+        s.digest({ buffer: bufShake, format: "binary" });
+        const buf = Buffer.concat([bufShake, Buffer.alloc(2)]);
+        const pre = new Polynomium(constants_1.N);
+        let ctr = Polynomium.rej_uniform(pre.coef, 0, constants_1.N, buf, buflen);
+        while (ctr < constants_1.N) {
+            const off = buflen % 3;
+            for (let i = 0; i < off; i++) {
+                buf[i] = buf[buflen - off + i];
+            }
+            const bb2 = Buffer.alloc(constants_1.STREAM128_BLOCKBYTES);
+            s.digest({ buffer: bb2, format: "binary" });
+            for (let i = 0; i < bb2.length; i++) {
+                buf[off + i] = bb2[i];
+            }
+            buflen = constants_1.STREAM128_BLOCKBYTES + off;
+            ctr += Polynomium.rej_uniform(pre.coef, ctr, constants_1.N - ctr, buf, buflen);
+        }
+        return pre;
+    }
+    static genRandomGamma1(seed, nonce, n, gamma1) {
+        const pre = new Polynomium(n);
+        const buf = Buffer.alloc(constants_1.POLY_UNIFORM_GAMMA1_NBLOCKS * constants_1.STREAM256_BLOCKBYTES);
+        const s = new sha3_1.SHAKE(256);
+        s.update(Buffer.from(seed));
+        const non = new Uint8Array(2);
+        non[0] = nonce & 0xFF;
+        non[1] = ((nonce >> 8) & 0xFF);
+        s.update(Buffer.from(non));
+        s.digest({ buffer: buf, format: "binary" });
+        if (gamma1 === (1 << 17)) {
+            for (let i = 0; i < constants_1.N / 4; i++) {
+                pre.coef[4 * i + 0] = (buf[9 * i + 0] & 0xFF);
+                pre.coef[4 * i + 0] |= (buf[9 * i + 1] & 0xFF) << 8;
+                pre.coef[4 * i + 0] |= (buf[9 * i + 2] & 0xFF) << 16;
+                pre.coef[4 * i + 0] &= 0x3FFFF;
+                pre.coef[4 * i + 1] = (buf[9 * i + 2] & 0xFF) >> 2;
+                pre.coef[4 * i + 1] |= (buf[9 * i + 3] & 0xFF) << 6;
+                pre.coef[4 * i + 1] |= (buf[9 * i + 4] & 0xFF) << 14;
+                pre.coef[4 * i + 1] &= 0x3FFFF;
+                pre.coef[4 * i + 2] = (buf[9 * i + 4] & 0xFF) >> 4;
+                pre.coef[4 * i + 2] |= (buf[9 * i + 5] & 0xFF) << 4;
+                pre.coef[4 * i + 2] |= (buf[9 * i + 6] & 0xFF) << 12;
+                pre.coef[4 * i + 2] &= 0x3FFFF;
+                pre.coef[4 * i + 3] = (buf[9 * i + 6] & 0xFF) >> 6;
+                pre.coef[4 * i + 3] |= (buf[9 * i + 7] & 0xFF) << 2;
+                pre.coef[4 * i + 3] |= (buf[9 * i + 8] & 0xFF) << 10;
+                pre.coef[4 * i + 3] &= 0x3FFFF;
+                pre.coef[4 * i + 0] = gamma1 - pre.coef[4 * i + 0];
+                pre.coef[4 * i + 1] = gamma1 - pre.coef[4 * i + 1];
+                pre.coef[4 * i + 2] = gamma1 - pre.coef[4 * i + 2];
+                pre.coef[4 * i + 3] = gamma1 - pre.coef[4 * i + 3];
+            }
+        }
+        else if (gamma1 === (1 << 19)) {
+            for (let i = 0; i < constants_1.N / 2; i++) {
+                pre.coef[2 * i + 0] = buf[5 * i + 0] & 0xFF;
+                pre.coef[2 * i + 0] |= (buf[5 * i + 1] & 0xFF) << 8;
+                pre.coef[2 * i + 0] |= (buf[5 * i + 2] & 0xFF) << 16;
+                pre.coef[2 * i + 0] &= 0xFFFFF;
+                pre.coef[2 * i + 1] = (buf[5 * i + 2] & 0xFF) >> 4;
+                pre.coef[2 * i + 1] |= (buf[5 * i + 3] & 0xFF) << 4;
+                pre.coef[2 * i + 1] |= (buf[5 * i + 4] & 0xFF) << 12;
+                pre.coef[2 * i + 0] &= 0xFFFFF;
+                pre.coef[2 * i + 0] = gamma1 - pre.coef[2 * i + 0];
+                pre.coef[2 * i + 1] = gamma1 - pre.coef[2 * i + 1];
+            }
+        }
+        else {
+            throw new Error("Invalid gamma1: " + gamma1);
+        }
+        return pre;
+    }
+    static generateChallenge(tau, seed) {
+        const pre = new Polynomium(constants_1.N);
+        const s = new sha3_1.SHAKE(256);
+        s.update(Buffer.from(seed.slice(0, constants_1.SEEDBYTES)));
+        const buf = Buffer.alloc(constants_1.SHAKE256_RATE);
+        s.digest({ buffer: buf, format: "binary" });
+        let signs = BigInt(0);
+        for (let i = 0; i < 8; i++) {
+            signs |= BigInt(buf[i] & 0xFF) << BigInt(8 * i);
+        }
+        let pos = 8;
+        let b;
+        for (let i = constants_1.N - tau; i < constants_1.N; ++i) {
+            if (pos >= constants_1.SHAKE256_RATE) {
+                s.digest({ buffer: buf, format: "binary" });
+                pos = 0;
+            }
+            b = (buf[pos++] & 0xFF);
+            while (b > i) {
+                if (pos >= constants_1.SHAKE256_RATE) {
+                    s.digest({ buffer: buf, format: "binary" });
+                    pos = 0;
+                }
+                b = (buf[pos++] & 0xFF);
+            }
+            pre.coef[i] = pre.coef[b];
+            pre.coef[b] = (1 - 2 * Number(signs & BigInt(1)));
+            signs = signs >> BigInt(1);
+        }
+        return pre;
+    }
+    static etaunpack(eta, bytes, off) {
+        const p = new Polynomium(constants_1.N);
+        if (eta === 2) {
+            for (let i = 0; i < constants_1.N / 8; i++) {
+                p.coef[8 * i + 0] = ((bytes[off + 3 * i + 0] & 0xFF) >> 0) & 7;
+                p.coef[8 * i + 1] = ((bytes[off + 3 * i + 0] & 0xFF) >> 3) & 7;
+                p.coef[8 * i + 2] = (((bytes[off + 3 * i + 0] & 0xFF) >> 6) | ((bytes[off + 3 * i + 1] & 0xFF) << 2)) & 7;
+                p.coef[8 * i + 3] = ((bytes[off + 3 * i + 1] & 0xFF) >> 1) & 7;
+                p.coef[8 * i + 4] = ((bytes[off + 3 * i + 1] & 0xFF) >> 4) & 7;
+                p.coef[8 * i + 5] = (((bytes[off + 3 * i + 1] & 0xFF) >> 7) | ((bytes[off + 3 * i + 2] & 0xFF) << 1)) & 7;
+                p.coef[8 * i + 6] = ((bytes[off + 3 * i + 2] & 0xFF) >> 2) & 7;
+                p.coef[8 * i + 7] = ((bytes[off + 3 * i + 2] & 0xFF) >> 5) & 7;
+                p.coef[8 * i + 0] = eta - p.coef[8 * i + 0];
+                p.coef[8 * i + 1] = eta - p.coef[8 * i + 1];
+                p.coef[8 * i + 2] = eta - p.coef[8 * i + 2];
+                p.coef[8 * i + 3] = eta - p.coef[8 * i + 3];
+                p.coef[8 * i + 4] = eta - p.coef[8 * i + 4];
+                p.coef[8 * i + 5] = eta - p.coef[8 * i + 5];
+                p.coef[8 * i + 6] = eta - p.coef[8 * i + 6];
+                p.coef[8 * i + 7] = eta - p.coef[8 * i + 7];
+            }
+        }
+        else if (eta === 4) {
+            for (let i = 0; i < constants_1.N / 2; i++) {
+                p.coef[2 * i + 0] = (bytes[off + i] & 0xFF) & 0x0F;
+                p.coef[2 * i + 1] = (bytes[off + i] & 0xFF) >> 4;
+                p.coef[2 * i + 0] = eta - p.coef[2 * i + 0];
+                p.coef[2 * i + 1] = eta - p.coef[2 * i + 1];
+            }
+        }
+        else {
+            throw new Error("Unknown eta: " + eta);
+        }
+        return p;
+    }
+    static t0unpack(bytes, off) {
+        const p = new Polynomium(constants_1.N);
+        for (let i = 0; i < constants_1.N / 8; i++) {
+            p.coef[8 * i + 0] = (bytes[off + 13 * i + 0] & 0xFF);
+            p.coef[8 * i + 0] |= (bytes[off + 13 * i + 1] & 0xFF) << 8;
+            p.coef[8 * i + 0] &= 0x1FFF;
+            p.coef[8 * i + 1] = (bytes[off + 13 * i + 1] & 0xFF) >> 5;
+            p.coef[8 * i + 1] |= (bytes[off + 13 * i + 2] & 0xFF) << 3;
+            p.coef[8 * i + 1] |= (bytes[off + 13 * i + 3] & 0xFF) << 11;
+            p.coef[8 * i + 1] &= 0x1FFF;
+            p.coef[8 * i + 2] = (bytes[off + 13 * i + 3] & 0xFF) >> 2;
+            p.coef[8 * i + 2] |= (bytes[off + 13 * i + 4] & 0xFF) << 6;
+            p.coef[8 * i + 2] &= 0x1FFF;
+            p.coef[8 * i + 3] = (bytes[off + 13 * i + 4] & 0xFF) >> 7;
+            p.coef[8 * i + 3] |= (bytes[off + 13 * i + 5] & 0xFF) << 1;
+            p.coef[8 * i + 3] |= (bytes[off + 13 * i + 6] & 0xFF) << 9;
+            p.coef[8 * i + 3] &= 0x1FFF;
+            p.coef[8 * i + 4] = (bytes[off + 13 * i + 6] & 0xFF) >> 4;
+            p.coef[8 * i + 4] |= (bytes[off + 13 * i + 7] & 0xFF) << 4;
+            p.coef[8 * i + 4] |= (bytes[off + 13 * i + 8] & 0xFF) << 12;
+            p.coef[8 * i + 4] &= 0x1FFF;
+            p.coef[8 * i + 5] = (bytes[off + 13 * i + 8] & 0xFF) >> 1;
+            p.coef[8 * i + 5] |= (bytes[off + 13 * i + 9] & 0xFF) << 7;
+            p.coef[8 * i + 5] &= 0x1FFF;
+            p.coef[8 * i + 6] = (bytes[off + 13 * i + 9] & 0xFF) >> 6;
+            p.coef[8 * i + 6] |= (bytes[off + 13 * i + 10] & 0xFF) << 2;
+            p.coef[8 * i + 6] |= (bytes[off + 13 * i + 11] & 0xFF) << 10;
+            p.coef[8 * i + 6] &= 0x1FFF;
+            p.coef[8 * i + 7] = (bytes[off + 13 * i + 11] & 0xFF) >> 3;
+            p.coef[8 * i + 7] |= (bytes[off + 13 * i + 12] & 0xFF) << 5;
+            p.coef[8 * i + 7] &= 0x1FFF;
+            p.coef[8 * i + 0] = (1 << (constants_1.D - 1)) - p.coef[8 * i + 0];
+            p.coef[8 * i + 1] = (1 << (constants_1.D - 1)) - p.coef[8 * i + 1];
+            p.coef[8 * i + 2] = (1 << (constants_1.D - 1)) - p.coef[8 * i + 2];
+            p.coef[8 * i + 3] = (1 << (constants_1.D - 1)) - p.coef[8 * i + 3];
+            p.coef[8 * i + 4] = (1 << (constants_1.D - 1)) - p.coef[8 * i + 4];
+            p.coef[8 * i + 5] = (1 << (constants_1.D - 1)) - p.coef[8 * i + 5];
+            p.coef[8 * i + 6] = (1 << (constants_1.D - 1)) - p.coef[8 * i + 6];
+            p.coef[8 * i + 7] = (1 << (constants_1.D - 1)) - p.coef[8 * i + 7];
+        }
+        return p;
+    }
+    static t1unpack(bytes, off) {
+        const p = new Polynomium(constants_1.N);
+        for (let i = 0; i < constants_1.N / 4; i++) {
+            p.coef[4 * i + 0] = (((bytes[off + 5 * i + 0] & 0xFF) >> 0) | ((bytes[off + 5 * i + 1] & 0xFF) << 8)) & 0x3FF;
+            p.coef[4 * i + 1] = (((bytes[off + 5 * i + 1] & 0xFF) >> 2) | ((bytes[off + 5 * i + 2] & 0xFF) << 6)) & 0x3FF;
+            p.coef[4 * i + 2] = (((bytes[off + 5 * i + 2] & 0xFF) >> 4) | ((bytes[off + 5 * i + 3] & 0xFF) << 4)) & 0x3FF;
+            p.coef[4 * i + 3] = (((bytes[off + 5 * i + 3] & 0xFF) >> 6) | ((bytes[off + 5 * i + 4] & 0xFF) << 2)) & 0x3FF;
+        }
+        return p;
+    }
+    static zunpack(gamma1, sig, off) {
+        const pre = new Polynomium(constants_1.N);
+        if (gamma1 === (1 << 17)) {
+            for (let i = 0; i < constants_1.N / 4; i++) {
+                pre.coef[4 * i + 0] = sig[off + 9 * i + 0] & 0xFF;
+                pre.coef[4 * i + 0] |= (sig[off + 9 * i + 1] & 0xFF) << 8;
+                pre.coef[4 * i + 0] |= (sig[off + 9 * i + 2] & 0xFF) << 16;
+                pre.coef[4 * i + 0] &= 0x3FFFF;
+                pre.coef[4 * i + 1] = (sig[off + 9 * i + 2] & 0xFF) >> 2;
+                pre.coef[4 * i + 1] |= (sig[off + 9 * i + 3] & 0xFF) << 6;
+                pre.coef[4 * i + 1] |= (sig[off + 9 * i + 4] & 0xFF) << 14;
+                pre.coef[4 * i + 1] &= 0x3FFFF;
+                pre.coef[4 * i + 2] = (sig[off + 9 * i + 4] & 0xFF) >> 4;
+                pre.coef[4 * i + 2] |= (sig[off + 9 * i + 5] & 0xFF) << 4;
+                pre.coef[4 * i + 2] |= (sig[off + 9 * i + 6] & 0xFF) << 12;
+                pre.coef[4 * i + 2] &= 0x3FFFF;
+                pre.coef[4 * i + 3] = (sig[off + 9 * i + 6] & 0xFF) >> 6;
+                pre.coef[4 * i + 3] |= (sig[off + 9 * i + 7] & 0xFF) << 2;
+                pre.coef[4 * i + 3] |= (sig[off + 9 * i + 8] & 0xFF) << 10;
+                pre.coef[4 * i + 3] &= 0x3FFFF;
+                pre.coef[4 * i + 0] = gamma1 - pre.coef[4 * i + 0];
+                pre.coef[4 * i + 1] = gamma1 - pre.coef[4 * i + 1];
+                pre.coef[4 * i + 2] = gamma1 - pre.coef[4 * i + 2];
+                pre.coef[4 * i + 3] = gamma1 - pre.coef[4 * i + 3];
+            }
+        }
+        else if (gamma1 === (1 << 19)) {
+            for (let i = 0; i < constants_1.N / 2; ++i) {
+                pre.coef[2 * i + 0] = (sig[off + 5 * i + 0] & 0xFF);
+                pre.coef[2 * i + 0] |= (sig[off + 5 * i + 1] & 0xFF) << 8;
+                pre.coef[2 * i + 0] |= (sig[off + 5 * i + 2] & 0xFF) << 16;
+                pre.coef[2 * i + 0] &= 0xFFFFF;
+                pre.coef[2 * i + 1] = (sig[off + 5 * i + 2] & 0xFF) >> 4;
+                pre.coef[2 * i + 1] |= (sig[off + 5 * i + 3] & 0xFF) << 4;
+                pre.coef[2 * i + 1] |= (sig[off + 5 * i + 4] & 0xFF) << 12;
+                pre.coef[2 * i + 0] &= 0xFFFFF;
+                pre.coef[2 * i + 0] = gamma1 - pre.coef[2 * i + 0];
+                pre.coef[2 * i + 1] = gamma1 - pre.coef[2 * i + 1];
+            }
+        }
+        return pre;
+    }
+    static rej_eta(eta, coef, off, len, buf, buflen) {
+        let ctr = 0;
+        let pos = 0;
+        let t0;
+        let t1;
+        if (eta === 2) {
+            while (ctr < len && pos < buflen) {
+                t0 = buf[pos] & 0x0F;
+                t1 = (buf[pos++] >> 4) & 0x0F;
+                if (t0 < 15) {
+                    t0 = t0 - ((205 * t0) >>> 10) * 5;
+                    coef[off + ctr++] = 2 - t0;
+                }
+                if (t1 < 15 && ctr < len) {
+                    t1 = t1 - ((205 * t1) >>> 10) * 5;
+                    coef[off + ctr++] = 2 - t1;
+                }
+            }
+        }
+        else {
+            while (ctr < len && pos < buflen) {
+                t0 = buf[pos] & 0x0F;
+                t1 = (buf[pos++] >> 4) & 0x0F;
+                if (t0 < 9) {
+                    coef[off + ctr++] = 4 - t0;
+                }
+                if (t1 < 9 && ctr < len) {
+                    coef[off + ctr++] = 4 - t1;
+                }
+            }
+        }
+        return ctr;
+    }
+    static rej_uniform(coef, off, len, buf, buflen) {
+        let ctr = 0;
+        let pos = 0;
+        while (ctr < len && pos + 3 <= buflen) {
+            let t = (buf[pos++] & 0xFF);
+            t |= (buf[pos++] & 0xFF) << 8;
+            t |= (buf[pos++] & 0xFF) << 16;
+            t &= 0x7FFFFF;
+            if (t < constants_1.Q) {
+                coef[off + ctr++] = t;
+            }
+        }
+        return ctr;
+    }
+    static montgomery_reduce(a) {
+        let t;
+        t = a.mul(constants_1.QINV).toInt();
+        t = a.sub((long_1.default.fromNumber(t)).mul(constants_1.Q)).shiftRight(32).and(0xFFFFFFFF).toInt();
+        return t;
+    }
+    constructor(length) {
+        const coef = [];
+        for (let i = 0; i < length; i++) {
+            coef.push(0);
+        }
+        this.coef = coef;
+    }
+    add(other) {
+        const res = new Polynomium(this.coef.length);
+        for (let i = 0; i < this.coef.length; i++) {
+            res.coef[i] = (this.coef[i] + other.coef[i]) % constants_1.Q;
+        }
+        return res;
+    }
+    sub(other) {
+        const res = new Polynomium(this.coef.length);
+        for (let i = 0; i < this.coef.length; i++) {
+            res.coef[i] = (this.coef[i] - other.coef[i]) % constants_1.Q;
+        }
+        return res;
+    }
+    toString() {
+        return "[" + this.coef.join(", ") + "]";
+    }
+    ntt() {
+        const ret = new Polynomium(this.coef.length);
+        for (let i = 0; i < this.coef.length; i++) {
+            ret.coef[i] = this.coef[i];
+        }
+        let k = 0;
+        let j;
+        for (let len = 128; len > 0; len = (len >> 1)) {
+            for (let start = 0; start < constants_1.N; start = j + len) {
+                const zeta = constants_1.zetas[++k];
+                for (j = start; j < start + len; ++j) {
+                    const t = Polynomium.montgomery_reduce((long_1.default.fromNumber(zeta)).mul(ret.coef[j + len]));
+                    ret.coef[j + len] = (ret.coef[j] - t) | 0;
+                    ret.coef[j] = (ret.coef[j] + t) | 0;
+                }
+            }
+        }
+        return ret;
+    }
+    pointwiseMontgomery(other) {
+        const c = new Polynomium(this.coef.length);
+        for (let i = 0; i < this.coef.length; i++) {
+            c.coef[i] = Polynomium.montgomery_reduce((long_1.default.fromNumber(this.coef[i])).mul(other.coef[i]));
+        }
+        return c;
+    }
+    reduce() {
+        for (let i = 0; i < this.coef.length; i++) {
+            this.coef[i] = Polynomium.reduce32(this.coef[i]);
+        }
+    }
+    static reduce32(a) {
+        let t = (a + (1 << 22)) >> 23;
+        t = a - ((t * constants_1.Q) | 0);
+        return t | 0;
+    }
+    invnttTomont() {
+        const f = 41978;
+        let k = 256;
+        let j = 0;
+        for (let len = 1; len < constants_1.N; len = (len << 1)) {
+            for (let start = 0; start < constants_1.N; start = j + len) {
+                const zeta = (-1) * constants_1.zetas[--k];
+                for (j = start; j < start + len; ++j) {
+                    const t = this.coef[j];
+                    this.coef[j] = (t + this.coef[j + len]) | 0;
+                    this.coef[j + len] = (t - this.coef[j + len]) | 0;
+                    this.coef[j + len] = Polynomium.montgomery_reduce((long_1.default.fromNumber(zeta)).mul(this.coef[j + len]));
+                }
+            }
+        }
+        for (j = 0; j < constants_1.N; ++j) {
+            this.coef[j] = Polynomium.montgomery_reduce((long_1.default.fromNumber(f)).mul(this.coef[j]));
+        }
+    }
+    caddq() {
+        for (let i = 0; i < this.coef.length; i++) {
+            this.coef[i] = (this.coef[i] + ((this.coef[i] >> 31) & constants_1.Q)) | 0;
+        }
+    }
+    powerRound() {
+        const pr = [
+            new Polynomium(constants_1.N),
+            new Polynomium(constants_1.N),
+        ];
+        for (let i = 0; i < this.coef.length; i++) {
+            const a = this.coef[i];
+            pr[1].coef[i] = ((a + (1 << (constants_1.D - 1)) - 1) >> constants_1.D) | 0;
+            pr[0].coef[i] = (a - (pr[1].coef[i] << constants_1.D)) | 0;
+        }
+        return pr;
+    }
+    t1pack(r, off) {
+        for (let i = 0; i < constants_1.N / 4; i++) {
+            r[5 * i + 0 + off] = ((this.coef[4 * i + 0] >>> 0)) & 0xFF;
+            r[5 * i + 1 + off] = ((this.coef[4 * i + 0] >>> 8) | (this.coef[4 * i + 1] << 2)) & 0xFF;
+            r[5 * i + 2 + off] = ((this.coef[4 * i + 1] >>> 6) | (this.coef[4 * i + 2] << 4)) & 0xFF;
+            r[5 * i + 3 + off] = ((this.coef[4 * i + 2] >>> 4) | (this.coef[4 * i + 3] << 6)) & 0xFF;
+            r[5 * i + 4 + off] = ((this.coef[4 * i + 3] >>> 2)) & 0xFF;
+        }
+    }
+    etapack(eta, buf, off) {
+        const t = new Uint8Array(8);
+        if (eta === 2) {
+            for (let i = 0; i < constants_1.N / 8; i++) {
+                t[0] = (eta - this.coef[8 * i + 0]) & 0xFF;
+                t[1] = (eta - this.coef[8 * i + 1]) & 0xFF;
+                t[2] = (eta - this.coef[8 * i + 2]) & 0xFF;
+                t[3] = (eta - this.coef[8 * i + 3]) & 0xFF;
+                t[4] = (eta - this.coef[8 * i + 4]) & 0xFF;
+                t[5] = (eta - this.coef[8 * i + 5]) & 0xFF;
+                t[6] = (eta - this.coef[8 * i + 6]) & 0xFF;
+                t[7] = (eta - this.coef[8 * i + 7]) & 0xFF;
+                buf[off + 3 * i + 0] = ((t[0] >> 0) | (t[1] << 3) | (t[2] << 6)) & 0xFF;
+                buf[off + 3 * i + 1] = ((t[2] >> 2) | (t[3] << 1) | (t[4] << 4) | (t[5] << 7)) & 0xFF;
+                buf[off + 3 * i + 2] = ((t[5] >> 1) | (t[6] << 2) | (t[7] << 5)) & 0xFF;
+            }
+        }
+        else if (eta === 4) {
+            for (let i = 0; i < constants_1.N / 2; i++) {
+                t[0] = (eta - this.coef[2 * i + 0]) & 0xFF;
+                t[1] = (eta - this.coef[2 * i + 1]) & 0xFF;
+                buf[off + i] = (t[0] | (t[1] << 4)) & 0xFF;
+            }
+        }
+        else {
+            throw new Error("Illegal eta: " + eta);
+        }
+    }
+    t0pack(buf, off) {
+        const t = [0, 0, 0, 0, 0, 0, 0, 0];
+        for (let i = 0; i < constants_1.N / 8; i++) {
+            t[0] = (1 << (constants_1.D - 1)) - this.coef[8 * i + 0];
+            t[1] = (1 << (constants_1.D - 1)) - this.coef[8 * i + 1];
+            t[2] = (1 << (constants_1.D - 1)) - this.coef[8 * i + 2];
+            t[3] = (1 << (constants_1.D - 1)) - this.coef[8 * i + 3];
+            t[4] = (1 << (constants_1.D - 1)) - this.coef[8 * i + 4];
+            t[5] = (1 << (constants_1.D - 1)) - this.coef[8 * i + 5];
+            t[6] = (1 << (constants_1.D - 1)) - this.coef[8 * i + 6];
+            t[7] = (1 << (constants_1.D - 1)) - this.coef[8 * i + 7];
+            buf[off + 13 * i + 0] = (t[0]) & 0xFF;
+            buf[off + 13 * i + 1] = (t[0] >> 8) & 0xFF;
+            buf[off + 13 * i + 1] |= (t[1] << 5) & 0xFF;
+            buf[off + 13 * i + 2] = (t[1] >> 3) & 0xFF;
+            buf[off + 13 * i + 3] = (t[1] >> 11) & 0xFF;
+            buf[off + 13 * i + 3] |= (t[2] << 2) & 0xFF;
+            buf[off + 13 * i + 4] = (t[2] >> 6) & 0xFF;
+            buf[off + 13 * i + 4] |= (t[3] << 7) & 0xFF;
+            buf[off + 13 * i + 5] = (t[3] >> 1) & 0xFF;
+            buf[off + 13 * i + 6] = (t[3] >> 9) & 0xFF;
+            buf[off + 13 * i + 6] |= (t[4] << 4) & 0xFF;
+            buf[off + 13 * i + 7] = (t[4] >> 4) & 0xFF;
+            buf[off + 13 * i + 8] = (t[4] >> 12) & 0xFF;
+            buf[off + 13 * i + 8] |= (t[5] << 1) & 0xFF;
+            buf[off + 13 * i + 9] = (t[5] >> 7) & 0xFF;
+            buf[off + 13 * i + 9] |= (t[6] << 6) & 0xFF;
+            buf[off + 13 * i + 10] = (t[6] >> 2) & 0xFF;
+            buf[off + 13 * i + 11] = (t[6] >> 10) & 0xFF;
+            buf[off + 13 * i + 11] |= (t[7] << 3) & 0xFF;
+            buf[off + 13 * i + 12] = (t[7] >> 5) & 0xFF;
+        }
+    }
+    decompose(gamma2) {
+        const pr = [
+            new Polynomium(constants_1.N),
+            new Polynomium(constants_1.N),
+        ];
+        for (let i = 0; i < this.coef.length; i++) {
+            const a = this.coef[i];
+            let a1 = (a + 127) >> 7;
+            if (gamma2 === Math.floor((constants_1.Q - 1) / 32)) {
+                a1 = (a1 * 1025 + (1 << 21)) >> 22;
+                a1 &= 15;
+            }
+            else if (gamma2 === Math.floor((constants_1.Q - 1) / 88)) {
+                a1 = (a1 * 11275 + (1 << 23)) >> 24;
+                a1 ^= ((43 - a1) >> 31) & a1;
+            }
+            else {
+                throw new Error("Invalid gamma2: " + gamma2);
+            }
+            pr[0].coef[i] = (a - a1 * 2 * gamma2) | 0;
+            pr[0].coef[i] -= (((constants_1.Q - 1) / 2 - pr[0].coef[i]) >> 31) & constants_1.Q;
+            pr[1].coef[i] = a1 | 0;
+        }
+        return pr;
+    }
+    w1pack(gamma2, buf, off) {
+        if (gamma2 === (constants_1.Q - 1) / 88) {
+            for (let i = 0; i < constants_1.N / 4; i++) {
+                buf[off + 3 * i + 0] = this.coef[4 * i + 0] & 0xFF;
+                buf[off + 3 * i + 0] |= (this.coef[4 * i + 1] << 6) & 0xFF;
+                buf[off + 3 * i + 1] = (this.coef[4 * i + 1] >> 2) & 0xFF;
+                buf[off + 3 * i + 1] |= (this.coef[4 * i + 2] << 4) & 0xFF;
+                buf[off + 3 * i + 2] = (this.coef[4 * i + 2] >> 4) & 0xFF;
+                buf[off + 3 * i + 2] |= (this.coef[4 * i + 3] << 2) & 0xFF;
+            }
+        }
+        else if (gamma2 === (constants_1.Q - 1) / 32) {
+            for (let i = 0; i < constants_1.N / 2; i++)
+                buf[off + i] = (this.coef[2 * i + 0] | (this.coef[2 * i + 1] << 4)) & 0xFF;
+        }
+        else {
+            throw new Error("Invalid gamma2: " + gamma2);
+        }
+    }
+    chknorm(B) {
+        let t;
+        if (B > Math.floor((constants_1.Q - 1) / 8)) {
+            return true;
+        }
+        /*
+         * It is ok to leak which coefficient violates the bound since the probability
+         * for each coefficient is independent of secret data but we must not leak the
+         * sign of the centralized representative.
+         */
+        for (let i = 0; i < constants_1.N; i++) {
+            /* Absolute value */
+            t = this.coef[i] >> 31;
+            t = this.coef[i] - (t & 2 * this.coef[i]);
+            if (t >= B) {
+                return true;
+            }
+        }
+        return false;
+    }
+    zpack(gamma1, sign, off) {
+        const t = [BigInt(0), BigInt(0), BigInt(0), BigInt(0)];
+        if (gamma1 === (1 << 17)) {
+            for (let i = 0; i < constants_1.N / 4; i++) {
+                t[0] = ((BigInt(gamma1) - BigInt(this.coef[4 * i + 0]))) & BigInt(0xFFFFFFFF);
+                t[1] = ((BigInt(gamma1) - BigInt(this.coef[4 * i + 1]))) & BigInt(0xFFFFFFFF);
+                t[2] = (BigInt(gamma1) - BigInt(this.coef[4 * i + 2])) & BigInt(0xFFFFFFFF);
+                t[3] = (BigInt(gamma1) - BigInt(this.coef[4 * i + 3])) & BigInt(0xFFFFFFFF);
+                sign[off + 9 * i + 0] = Number(t[0] & BigInt(0xFF));
+                sign[off + 9 * i + 1] = Number((t[0] >> BigInt(8)) & BigInt(0xFF));
+                sign[off + 9 * i + 2] = Number((t[0] >> BigInt(16)) & BigInt(0xFF));
+                sign[off + 9 * i + 2] |= Number((t[1] << BigInt(2)) & BigInt(0xFF));
+                sign[off + 9 * i + 3] = Number((t[1] >> BigInt(6)) & BigInt(0xFF));
+                sign[off + 9 * i + 4] = Number((t[1] >> BigInt(14)) & BigInt(0xFF));
+                sign[off + 9 * i + 4] |= Number((t[2] << BigInt(4)) & BigInt(0xFF));
+                sign[off + 9 * i + 5] = Number((t[2] >> BigInt(4)) & BigInt(0xFF));
+                sign[off + 9 * i + 6] = Number((t[2] >> BigInt(12)) & BigInt(0xFF));
+                sign[off + 9 * i + 6] |= Number((t[3] << BigInt(6)) & BigInt(0xFF));
+                sign[off + 9 * i + 7] = Number((t[3] >> BigInt(2)) & BigInt(0xFF));
+                sign[off + 9 * i + 8] = Number((t[3] >> BigInt(10)) & BigInt(0xFF));
+            }
+        }
+        else if (gamma1 === (1 << 19)) {
+            for (let i = 0; i < constants_1.N / 2; i++) {
+                t[0] = BigInt(gamma1) - BigInt(this.coef[2 * i + 0]);
+                t[1] = BigInt(gamma1) - BigInt(this.coef[2 * i + 1]);
+                sign[off + 5 * i + 0] = Number((t[0]) & BigInt(0xFF));
+                sign[off + 5 * i + 1] = Number((t[0] >> BigInt(8)) & BigInt(0xFF));
+                sign[off + 5 * i + 2] = Number((t[0] >> BigInt(16)) & BigInt(0xFF));
+                sign[off + 5 * i + 2] |= Number((t[1] << BigInt(4)) & BigInt(0xFF));
+                sign[off + 5 * i + 3] = Number((t[1] >> BigInt(4)) & BigInt(0xFF));
+                sign[off + 5 * i + 4] = Number((t[1] >> BigInt(12)) & BigInt(0xFF));
+            }
+        }
+        else {
+            throw new Error("Invalid gamma1: " + gamma1);
+        }
+    }
+    shiftl() {
+        const pr = new Polynomium(constants_1.N);
+        for (let i = 0; i < constants_1.N; i++) {
+            pr.coef[i] = (this.coef[i] << constants_1.D);
+        }
+        return pr;
+    }
+}
+exports.Polynomium = Polynomium;
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/signature.js":
+/*!*******************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/signature.js ***!
+  \*******************************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+/* provided dependency */ var Buffer = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js")["Buffer"];
+// Signature algorithm
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DilithiumSignature = void 0;
+const sha3_1 = __webpack_require__(/*! sha3 */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/index.js");
+const constants_1 = __webpack_require__(/*! ./constants */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js");
+const hints_1 = __webpack_require__(/*! ./hints */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/hints.js");
+const poly_1 = __webpack_require__(/*! ./poly */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly.js");
+const poly_vec_1 = __webpack_require__(/*! ./poly-vec */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/poly-vec.js");
+const util_1 = __webpack_require__(/*! ./util */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/util.js");
+/**
+ * Signature
+ */
+class DilithiumSignature {
+    /**
+     * Generates a signature
+     * @param message The message to sign
+     * @param privateKey The private key to use for the signature
+     * @returns The signature
+     */
+    static generate(message, privateKey) {
+        const spec = privateKey.spec;
+        const signatureLength = (0, util_1.getSignatureByteLength)(spec);
+        const sig = new Uint8Array(signatureLength);
+        const A = privateKey.A;
+        let conc = (0, util_1.mergeArrays)([privateKey.tr, message]);
+        const mu = (0, util_1.crh)(conc);
+        conc = (0, util_1.mergeArrays)([privateKey.K, mu]);
+        const rhoprime = (0, util_1.crh)(conc);
+        const s1 = privateKey.s1Hat;
+        const s2 = privateKey.s2Hat;
+        const t0 = privateKey.t0Hat;
+        let kappa = 0;
+        let finish = false;
+        while (!finish) {
+            const y = poly_vec_1.PolynomiumVector.randomVecGamma1(rhoprime, spec.l, spec.gamma1, kappa++);
+            let z = y.ntt();
+            const w = z.mulMatrixPointwiseMontgomery(A);
+            w.reduce();
+            w.invnttTomont();
+            w.caddq();
+            const res = w.decompose(spec.gamma2);
+            (0, util_1.packw1)(spec.gamma2, res[1], sig);
+            const s = new sha3_1.SHAKE(256);
+            s.update(Buffer.from(mu));
+            s.update(Buffer.from(sig.slice(0, res[1].size() * (0, util_1.getPolyW1PackedBytes)(spec.gamma2))));
+            const bb = Buffer.alloc(constants_1.SEEDBYTES);
+            s.digest({ buffer: bb, format: "binary" });
+            sig.set(new Uint8Array(bb), 0);
+            let cp = poly_1.Polynomium.generateChallenge(spec.tau, sig);
+            cp = cp.ntt();
+            z = s1.pointwiseMontgomery(cp);
+            z.invnttTomont();
+            z = z.add(y);
+            z.reduce();
+            if (z.chknorm(spec.gamma1 - spec.beta)) {
+                continue;
+            }
+            let h = s2.pointwiseMontgomery(cp);
+            h.invnttTomont();
+            let w0 = res[0].sub(h);
+            w0.reduce();
+            if (w0.chknorm(spec.gamma2 - spec.beta)) {
+                continue;
+            }
+            h = t0.pointwiseMontgomery(cp);
+            h.invnttTomont();
+            h.reduce();
+            if (h.chknorm(spec.gamma2)) {
+                continue;
+            }
+            w0 = w0.add(h);
+            w0.caddq();
+            const hints = (0, hints_1.makeHints)(spec.gamma2, w0, res[1]);
+            if (hints.cnt > spec.omega) {
+                continue;
+            }
+            (0, util_1.packSig)(spec.gamma1, spec.omega, sig, sig, z, hints.v);
+            finish = true;
+        }
+        return new DilithiumSignature(spec, sig);
+    }
+    /**
+     * Parses signature from byte array
+     * @param bytes The byte array
+     * @param level The level specification
+     * @returns The signature
+     */
+    static fromBytes(bytes, level) {
+        if (level.spec.signatureLength !== bytes.length) {
+            throw new Error(`Invalid signature size. Expected ${level.spec.publicKeyLength} bytes, but found ${bytes.length} bytes`);
+        }
+        return new DilithiumSignature(level.spec.rawParams, bytes);
+    }
+    /**
+     * Parses signature from hex string
+     * @param hex The string
+     * @param level The level specification
+     * @returns The signature
+     */
+    static fromHex(hex, level) {
+        return DilithiumSignature.fromBytes(new Uint8Array(Buffer.from(hex, "hex")), level);
+    }
+    /**
+     * Parses signature from base 64 string
+     * @param base64 The string
+     * @param level The level specification
+     * @returns The signature
+     */
+    static fromBase64(base64, level) {
+        return DilithiumSignature.fromBytes(new Uint8Array(Buffer.from(base64, "base64")), level);
+    }
+    constructor(spec, bytes) {
+        this.spec = spec;
+        this.bytes = bytes;
+    }
+    /**
+     * @returns The private key as a byte array
+     */
+    getBytes() {
+        return this.bytes;
+    }
+    /**
+     * @returns The signature as a hex string
+     */
+    toHex() {
+        return Buffer.from(this.bytes).toString("hex");
+    }
+    /**
+     * @returns The signature as a base 64 string
+     */
+    toBase64() {
+        return Buffer.from(this.bytes).toString("base64");
+    }
+    /**
+     * Verifies the signature against a message + public key
+     * @param message The message
+     * @param publicKey The public key
+     * @returns True only if the signature is valid
+     */
+    verify(message, publicKey) {
+        const spec = publicKey.spec;
+        const signatureLength = (0, util_1.getSignatureByteLength)(spec);
+        const sig = this.bytes;
+        if (sig.length !== signatureLength) {
+            return false; // Bad signature
+        }
+        let t1 = publicKey.t1;
+        let off = 0;
+        const c = sig.slice(0, constants_1.SEEDBYTES);
+        off += constants_1.SEEDBYTES;
+        let z = new poly_vec_1.PolynomiumVector(spec.l);
+        for (let i = 0; i < spec.l; i++) {
+            z.polynomiums[i] = poly_1.Polynomium.zunpack(spec.gamma1, sig, off);
+            off += (0, util_1.getPolyZPackedBytes)(spec.gamma1);
+        }
+        const h = new poly_vec_1.PolynomiumVector(spec.k);
+        let k = 0;
+        for (let i = 0; i < h.size(); i++) {
+            h.polynomiums[i] = new poly_1.Polynomium(constants_1.N);
+            if ((sig[off + spec.omega + i] & 0xFF) < k || (sig[off + spec.omega + i] & 0xFF) > spec.omega) {
+                return false;
+            }
+            for (let j = k; j < (sig[off + spec.omega + i] & 0xFF); j++) {
+                /* Coefficients are ordered for strong unforgeability */
+                if (j > k && (sig[off + j] & 0xFF) <= (sig[off + j - 1] & 0xFF)) {
+                    return false;
+                }
+                h.polynomiums[i].coef[sig[off + j] & 0xFF] = 1;
+            }
+            k = (sig[off + spec.omega + i] & 0xFF);
+        }
+        for (let j = k; j < spec.omega; j++) {
+            if (sig[off + j] !== 0) {
+                return false;
+            }
+        }
+        if (z.chknorm(spec.gamma1 - spec.beta)) {
+            return false;
+        }
+        let mu = (0, util_1.crh)(publicKey.bytes);
+        mu = (0, util_1.getSHAKE256Digest)(constants_1.CRHBYTES, mu, message);
+        let cp = poly_1.Polynomium.generateChallenge(spec.tau, c);
+        const A = publicKey.A;
+        z = z.ntt();
+        let w = z.mulMatrixPointwiseMontgomery(A);
+        cp = cp.ntt();
+        t1 = t1.shift();
+        t1 = t1.ntt();
+        t1 = t1.pointwiseMontgomery(cp);
+        w = w.sub(t1);
+        w.reduce();
+        w.invnttTomont();
+        w.caddq();
+        w = (0, hints_1.useHints)(spec.gamma2, w, h);
+        const buf = new Uint8Array((0, util_1.getPolyW1PackedBytes)(spec.gamma2) * w.size());
+        (0, util_1.packw1)(spec.gamma2, w, buf);
+        const c2 = (0, util_1.getSHAKE256Digest)(constants_1.SEEDBYTES, mu, buf);
+        for (let i = 0; i < constants_1.SEEDBYTES; i++) {
+            if (c[i] !== c2[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+exports.DilithiumSignature = DilithiumSignature;
+
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/util.js":
+/*!**************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/util.js ***!
+  \**************************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+/* provided dependency */ var Buffer = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js")["Buffer"];
+// Utils
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.packw1 = exports.packSig = exports.packPrvKey = exports.packPubKey = exports.getPrivateKeyByteLength = exports.getPublicKeyByteLength = exports.getSignatureByteLength = exports.getPolyZPackedBytes = exports.getPolyW1PackedBytes = exports.getPolyEtaPackedBytes = exports.crh = exports.getSHAKE256Digest = exports.clearBuffer = exports.mergeArrays = void 0;
+const sha3_1 = __webpack_require__(/*! sha3 */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/index.js");
+const constants_1 = __webpack_require__(/*! ./constants */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/constants.js");
+function mergeArrays(arrays) {
+    let totalLength = 0;
+    for (let i = 0; i < arrays.length; i++) {
+        totalLength += arrays[i].length;
+    }
+    const merged = new Uint8Array(totalLength);
+    let cp = 0;
+    for (let i = 0; i < arrays.length; i++) {
+        merged.set(arrays[i], cp);
+        cp += arrays[i].length;
+    }
+    return merged;
+}
+exports.mergeArrays = mergeArrays;
+function clearBuffer(buf) {
+    for (let i = 0; i < buf.length; i++) {
+        buf[i] = 0x00;
+    }
+}
+exports.clearBuffer = clearBuffer;
+function getSHAKE256Digest(sz, ...arr) {
+    const data = mergeArrays(arr);
+    const s = new sha3_1.SHAKE(256);
+    s.update(Buffer.from(data));
+    const out = Buffer.alloc(sz);
+    s.digest({ buffer: out, format: "binary" });
+    return new Uint8Array(out);
+}
+exports.getSHAKE256Digest = getSHAKE256Digest;
+function crh(p) {
+    return getSHAKE256Digest(constants_1.CRHBYTES, p);
+}
+exports.crh = crh;
+function getPolyEtaPackedBytes(eta) {
+    if (eta === 2) {
+        return 96;
+    }
+    else if (eta === 4) {
+        return 128;
+    }
+    else {
+        throw new Error("Invalid etA: " + eta);
+    }
+}
+exports.getPolyEtaPackedBytes = getPolyEtaPackedBytes;
+function getPolyW1PackedBytes(gamma2) {
+    let b;
+    if (gamma2 === Math.floor((constants_1.Q - 1) / 88)) {
+        b = 192;
+    }
+    else if (gamma2 === Math.floor((constants_1.Q - 1) / 32)) {
+        b = 128;
+    }
+    else {
+        throw new Error("Error invalid gamma2: " + gamma2);
+    }
+    return b;
+}
+exports.getPolyW1PackedBytes = getPolyW1PackedBytes;
+function getPolyZPackedBytes(gamma1) {
+    if (gamma1 === (1 << 17)) {
+        return 576;
+    }
+    else if (gamma1 === (1 << 19)) {
+        return 640;
+    }
+    else {
+        throw new Error("Invalid gamma1: " + gamma1);
+    }
+}
+exports.getPolyZPackedBytes = getPolyZPackedBytes;
+function getSignatureByteLength(spec) {
+    return (constants_1.SEEDBYTES +
+        (spec.l * getPolyZPackedBytes(spec.gamma1)) +
+        spec.omega +
+        spec.k);
+}
+exports.getSignatureByteLength = getSignatureByteLength;
+function getPublicKeyByteLength(spec) {
+    return (constants_1.SEEDBYTES +
+        (spec.k * constants_1.POLYT1_PACKEDBYTES));
+}
+exports.getPublicKeyByteLength = getPublicKeyByteLength;
+function getPrivateKeyByteLength(spec) {
+    let pkbytes;
+    switch (spec.eta) {
+        case 2:
+            pkbytes = 96;
+            break;
+        case 4:
+            pkbytes = 128;
+            break;
+        default:
+            throw new Error("Illegal eta: " + spec.eta);
+    }
+    return ((2 * constants_1.SEEDBYTES) +
+        constants_1.CRHBYTES +
+        (spec.l * pkbytes) +
+        (spec.k * pkbytes) +
+        (spec.k * constants_1.POLYT0_PACKEDBYTES));
+}
+exports.getPrivateKeyByteLength = getPrivateKeyByteLength;
+function packPubKey(rho, t) {
+    const size = constants_1.SEEDBYTES + (t.size() * constants_1.POLYT1_PACKEDBYTES);
+    const pk = new Uint8Array(size);
+    for (let i = 0; i < constants_1.SEEDBYTES; i++) {
+        pk[i] = rho[i];
+    }
+    const tl = t.size();
+    for (let i = 0; i < tl; i++) {
+        t.polynomiums[i].t1pack(pk, constants_1.SEEDBYTES + (i * constants_1.POLYT1_PACKEDBYTES));
+    }
+    return pk;
+}
+exports.packPubKey = packPubKey;
+function packPrvKey(eta, rho, tr, K, t0, s1, s2) {
+    let pkbytes;
+    switch (eta) {
+        case 2:
+            pkbytes = 96;
+            break;
+        case 4:
+            pkbytes = 128;
+            break;
+        default:
+            throw new Error("Illegal eta: " + eta);
+    }
+    const keySize = ((2 * constants_1.SEEDBYTES) +
+        constants_1.CRHBYTES +
+        (s1.size() * pkbytes) +
+        (s2.size() * pkbytes) +
+        (s2.size() * constants_1.POLYT0_PACKEDBYTES));
+    const buf = new Uint8Array(keySize);
+    let off = 0;
+    for (let i = 0; i < constants_1.SEEDBYTES; i++) {
+        buf[off + i] = rho[i];
+    }
+    off += constants_1.SEEDBYTES;
+    for (let i = 0; i < constants_1.SEEDBYTES; i++) {
+        buf[off + i] = K[i];
+    }
+    off += constants_1.SEEDBYTES;
+    for (let i = 0; i < constants_1.CRHBYTES; i++) {
+        buf[off + i] = tr[i];
+    }
+    off += constants_1.CRHBYTES;
+    for (let i = 0; i < s1.size(); i++) {
+        s1.polynomiums[i].etapack(eta, buf, off);
+        off += pkbytes;
+    }
+    for (let i = 0; i < s2.size(); i++) {
+        s2.polynomiums[i].etapack(eta, buf, off);
+        off += pkbytes;
+    }
+    for (let i = 0; i < t0.size(); i++) {
+        t0.polynomiums[i].t0pack(buf, off);
+        off += constants_1.POLYT0_PACKEDBYTES;
+    }
+    return buf;
+}
+exports.packPrvKey = packPrvKey;
+function packSig(gamma1, omega, sig, c, z, h) {
+    const pkBytes = getPolyZPackedBytes(gamma1);
+    let off = 0;
+    for (let i = 0; i < constants_1.SEEDBYTES; i++) {
+        sig[i] = c[i];
+    }
+    off += constants_1.SEEDBYTES;
+    const zlength = z.size();
+    for (let i = 0; i < zlength; i++) {
+        z.polynomiums[i].zpack(gamma1, sig, off);
+        off += pkBytes;
+    }
+    /* Encode h */
+    const hlength = h.size();
+    for (let i = 0; i < omega + hlength; i++) {
+        sig[off + i] = 0;
+    }
+    let k = 0;
+    for (let i = 0; i < hlength; i++) {
+        for (let j = 0; j < constants_1.N; j++) {
+            if (h.polynomiums[i].coef[j] !== 0) {
+                sig[off + k++] = j & 0xFF;
+            }
+        }
+        sig[off + omega + i] = k & 0xFF;
+    }
+}
+exports.packSig = packSig;
+function packw1(gamma2, w, sig) {
+    const pkBytes = getPolyW1PackedBytes(gamma2);
+    let off = 0;
+    const length = w.size();
+    for (let i = 0; i < length; i++) {
+        w.polynomiums[i].w1pack(gamma2, sig, off);
+        off += pkBytes;
+    }
+}
+exports.packw1 = packw1;
 
 
 /***/ }),
@@ -56781,6 +59100,1449 @@ module.exports = chunk;
 
 /***/ }),
 
+/***/ "./node_modules/.pnpm/long@5.2.1/node_modules/long/umd/index.js":
+/*!**********************************************************************!*\
+  !*** ./node_modules/.pnpm/long@5.2.1/node_modules/long/umd/index.js ***!
+  \**********************************************************************/
+/***/ ((module, exports) => {
+
+var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;// GENERATED FILE. DO NOT EDIT.
+var Long = (function(exports) {
+  "use strict";
+  
+  Object.defineProperty(exports, "__esModule", {
+    value: true
+  });
+  exports.default = void 0;
+  
+  /**
+   * @license
+   * Copyright 2009 The Closure Library Authors
+   * Copyright 2020 Daniel Wirtz / The long.js Authors.
+   *
+   * Licensed under the Apache License, Version 2.0 (the "License");
+   * you may not use this file except in compliance with the License.
+   * You may obtain a copy of the License at
+   *
+   *     http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   *
+   * SPDX-License-Identifier: Apache-2.0
+   */
+  // WebAssembly optimizations to do native i64 multiplication and divide
+  var wasm = null;
+  
+  try {
+    wasm = new WebAssembly.Instance(new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 13, 2, 96, 0, 1, 127, 96, 4, 127, 127, 127, 127, 1, 127, 3, 7, 6, 0, 1, 1, 1, 1, 1, 6, 6, 1, 127, 1, 65, 0, 11, 7, 50, 6, 3, 109, 117, 108, 0, 1, 5, 100, 105, 118, 95, 115, 0, 2, 5, 100, 105, 118, 95, 117, 0, 3, 5, 114, 101, 109, 95, 115, 0, 4, 5, 114, 101, 109, 95, 117, 0, 5, 8, 103, 101, 116, 95, 104, 105, 103, 104, 0, 0, 10, 191, 1, 6, 4, 0, 35, 0, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 126, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 127, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 128, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 129, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11, 36, 1, 1, 126, 32, 0, 173, 32, 1, 173, 66, 32, 134, 132, 32, 2, 173, 32, 3, 173, 66, 32, 134, 132, 130, 34, 4, 66, 32, 135, 167, 36, 0, 32, 4, 167, 11])), {}).exports;
+  } catch (e) {// no wasm support :(
+  }
+  /**
+   * Constructs a 64 bit two's-complement integer, given its low and high 32 bit values as *signed* integers.
+   *  See the from* functions below for more convenient ways of constructing Longs.
+   * @exports Long
+   * @class A Long class for representing a 64 bit two's-complement integer value.
+   * @param {number} low The low (signed) 32 bits of the long
+   * @param {number} high The high (signed) 32 bits of the long
+   * @param {boolean=} unsigned Whether unsigned or not, defaults to signed
+   * @constructor
+   */
+  
+  
+  function Long(low, high, unsigned) {
+    /**
+     * The low 32 bits as a signed value.
+     * @type {number}
+     */
+    this.low = low | 0;
+    /**
+     * The high 32 bits as a signed value.
+     * @type {number}
+     */
+  
+    this.high = high | 0;
+    /**
+     * Whether unsigned or not.
+     * @type {boolean}
+     */
+  
+    this.unsigned = !!unsigned;
+  } // The internal representation of a long is the two given signed, 32-bit values.
+  // We use 32-bit pieces because these are the size of integers on which
+  // Javascript performs bit-operations.  For operations like addition and
+  // multiplication, we split each number into 16 bit pieces, which can easily be
+  // multiplied within Javascript's floating-point representation without overflow
+  // or change in sign.
+  //
+  // In the algorithms below, we frequently reduce the negative case to the
+  // positive case by negating the input(s) and then post-processing the result.
+  // Note that we must ALWAYS check specially whether those values are MIN_VALUE
+  // (-2^63) because -MIN_VALUE == MIN_VALUE (since 2^63 cannot be represented as
+  // a positive number, it overflows back into a negative).  Not handling this
+  // case would often result in infinite recursion.
+  //
+  // Common constant values ZERO, ONE, NEG_ONE, etc. are defined below the from*
+  // methods on which they depend.
+  
+  /**
+   * An indicator used to reliably determine if an object is a Long or not.
+   * @type {boolean}
+   * @const
+   * @private
+   */
+  
+  
+  Long.prototype.__isLong__;
+  Object.defineProperty(Long.prototype, "__isLong__", {
+    value: true
+  });
+  /**
+   * @function
+   * @param {*} obj Object
+   * @returns {boolean}
+   * @inner
+   */
+  
+  function isLong(obj) {
+    return (obj && obj["__isLong__"]) === true;
+  }
+  /**
+   * @function
+   * @param {*} value number
+   * @returns {number}
+   * @inner
+   */
+  
+  
+  function ctz32(value) {
+    var c = Math.clz32(value & -value);
+    return value ? 31 - c : c;
+  }
+  /**
+   * Tests if the specified object is a Long.
+   * @function
+   * @param {*} obj Object
+   * @returns {boolean}
+   */
+  
+  
+  Long.isLong = isLong;
+  /**
+   * A cache of the Long representations of small integer values.
+   * @type {!Object}
+   * @inner
+   */
+  
+  var INT_CACHE = {};
+  /**
+   * A cache of the Long representations of small unsigned integer values.
+   * @type {!Object}
+   * @inner
+   */
+  
+  var UINT_CACHE = {};
+  /**
+   * @param {number} value
+   * @param {boolean=} unsigned
+   * @returns {!Long}
+   * @inner
+   */
+  
+  function fromInt(value, unsigned) {
+    var obj, cachedObj, cache;
+  
+    if (unsigned) {
+      value >>>= 0;
+  
+      if (cache = 0 <= value && value < 256) {
+        cachedObj = UINT_CACHE[value];
+        if (cachedObj) return cachedObj;
+      }
+  
+      obj = fromBits(value, 0, true);
+      if (cache) UINT_CACHE[value] = obj;
+      return obj;
+    } else {
+      value |= 0;
+  
+      if (cache = -128 <= value && value < 128) {
+        cachedObj = INT_CACHE[value];
+        if (cachedObj) return cachedObj;
+      }
+  
+      obj = fromBits(value, value < 0 ? -1 : 0, false);
+      if (cache) INT_CACHE[value] = obj;
+      return obj;
+    }
+  }
+  /**
+   * Returns a Long representing the given 32 bit integer value.
+   * @function
+   * @param {number} value The 32 bit integer in question
+   * @param {boolean=} unsigned Whether unsigned or not, defaults to signed
+   * @returns {!Long} The corresponding Long value
+   */
+  
+  
+  Long.fromInt = fromInt;
+  /**
+   * @param {number} value
+   * @param {boolean=} unsigned
+   * @returns {!Long}
+   * @inner
+   */
+  
+  function fromNumber(value, unsigned) {
+    if (isNaN(value)) return unsigned ? UZERO : ZERO;
+  
+    if (unsigned) {
+      if (value < 0) return UZERO;
+      if (value >= TWO_PWR_64_DBL) return MAX_UNSIGNED_VALUE;
+    } else {
+      if (value <= -TWO_PWR_63_DBL) return MIN_VALUE;
+      if (value + 1 >= TWO_PWR_63_DBL) return MAX_VALUE;
+    }
+  
+    if (value < 0) return fromNumber(-value, unsigned).neg();
+    return fromBits(value % TWO_PWR_32_DBL | 0, value / TWO_PWR_32_DBL | 0, unsigned);
+  }
+  /**
+   * Returns a Long representing the given value, provided that it is a finite number. Otherwise, zero is returned.
+   * @function
+   * @param {number} value The number in question
+   * @param {boolean=} unsigned Whether unsigned or not, defaults to signed
+   * @returns {!Long} The corresponding Long value
+   */
+  
+  
+  Long.fromNumber = fromNumber;
+  /**
+   * @param {number} lowBits
+   * @param {number} highBits
+   * @param {boolean=} unsigned
+   * @returns {!Long}
+   * @inner
+   */
+  
+  function fromBits(lowBits, highBits, unsigned) {
+    return new Long(lowBits, highBits, unsigned);
+  }
+  /**
+   * Returns a Long representing the 64 bit integer that comes by concatenating the given low and high bits. Each is
+   *  assumed to use 32 bits.
+   * @function
+   * @param {number} lowBits The low 32 bits
+   * @param {number} highBits The high 32 bits
+   * @param {boolean=} unsigned Whether unsigned or not, defaults to signed
+   * @returns {!Long} The corresponding Long value
+   */
+  
+  
+  Long.fromBits = fromBits;
+  /**
+   * @function
+   * @param {number} base
+   * @param {number} exponent
+   * @returns {number}
+   * @inner
+   */
+  
+  var pow_dbl = Math.pow; // Used 4 times (4*8 to 15+4)
+  
+  /**
+   * @param {string} str
+   * @param {(boolean|number)=} unsigned
+   * @param {number=} radix
+   * @returns {!Long}
+   * @inner
+   */
+  
+  function fromString(str, unsigned, radix) {
+    if (str.length === 0) throw Error('empty string');
+  
+    if (typeof unsigned === 'number') {
+      // For goog.math.long compatibility
+      radix = unsigned;
+      unsigned = false;
+    } else {
+      unsigned = !!unsigned;
+    }
+  
+    if (str === "NaN" || str === "Infinity" || str === "+Infinity" || str === "-Infinity") return unsigned ? UZERO : ZERO;
+    radix = radix || 10;
+    if (radix < 2 || 36 < radix) throw RangeError('radix');
+    var p;
+    if ((p = str.indexOf('-')) > 0) throw Error('interior hyphen');else if (p === 0) {
+      return fromString(str.substring(1), unsigned, radix).neg();
+    } // Do several (8) digits each time through the loop, so as to
+    // minimize the calls to the very expensive emulated div.
+  
+    var radixToPower = fromNumber(pow_dbl(radix, 8));
+    var result = ZERO;
+  
+    for (var i = 0; i < str.length; i += 8) {
+      var size = Math.min(8, str.length - i),
+          value = parseInt(str.substring(i, i + size), radix);
+  
+      if (size < 8) {
+        var power = fromNumber(pow_dbl(radix, size));
+        result = result.mul(power).add(fromNumber(value));
+      } else {
+        result = result.mul(radixToPower);
+        result = result.add(fromNumber(value));
+      }
+    }
+  
+    result.unsigned = unsigned;
+    return result;
+  }
+  /**
+   * Returns a Long representation of the given string, written using the specified radix.
+   * @function
+   * @param {string} str The textual representation of the Long
+   * @param {(boolean|number)=} unsigned Whether unsigned or not, defaults to signed
+   * @param {number=} radix The radix in which the text is written (2-36), defaults to 10
+   * @returns {!Long} The corresponding Long value
+   */
+  
+  
+  Long.fromString = fromString;
+  /**
+   * @function
+   * @param {!Long|number|string|!{low: number, high: number, unsigned: boolean}} val
+   * @param {boolean=} unsigned
+   * @returns {!Long}
+   * @inner
+   */
+  
+  function fromValue(val, unsigned) {
+    if (typeof val === 'number') return fromNumber(val, unsigned);
+    if (typeof val === 'string') return fromString(val, unsigned); // Throws for non-objects, converts non-instanceof Long:
+  
+    return fromBits(val.low, val.high, typeof unsigned === 'boolean' ? unsigned : val.unsigned);
+  }
+  /**
+   * Converts the specified value to a Long using the appropriate from* function for its type.
+   * @function
+   * @param {!Long|number|string|!{low: number, high: number, unsigned: boolean}} val Value
+   * @param {boolean=} unsigned Whether unsigned or not, defaults to signed
+   * @returns {!Long}
+   */
+  
+  
+  Long.fromValue = fromValue; // NOTE: the compiler should inline these constant values below and then remove these variables, so there should be
+  // no runtime penalty for these.
+  
+  /**
+   * @type {number}
+   * @const
+   * @inner
+   */
+  
+  var TWO_PWR_16_DBL = 1 << 16;
+  /**
+   * @type {number}
+   * @const
+   * @inner
+   */
+  
+  var TWO_PWR_24_DBL = 1 << 24;
+  /**
+   * @type {number}
+   * @const
+   * @inner
+   */
+  
+  var TWO_PWR_32_DBL = TWO_PWR_16_DBL * TWO_PWR_16_DBL;
+  /**
+   * @type {number}
+   * @const
+   * @inner
+   */
+  
+  var TWO_PWR_64_DBL = TWO_PWR_32_DBL * TWO_PWR_32_DBL;
+  /**
+   * @type {number}
+   * @const
+   * @inner
+   */
+  
+  var TWO_PWR_63_DBL = TWO_PWR_64_DBL / 2;
+  /**
+   * @type {!Long}
+   * @const
+   * @inner
+   */
+  
+  var TWO_PWR_24 = fromInt(TWO_PWR_24_DBL);
+  /**
+   * @type {!Long}
+   * @inner
+   */
+  
+  var ZERO = fromInt(0);
+  /**
+   * Signed zero.
+   * @type {!Long}
+   */
+  
+  Long.ZERO = ZERO;
+  /**
+   * @type {!Long}
+   * @inner
+   */
+  
+  var UZERO = fromInt(0, true);
+  /**
+   * Unsigned zero.
+   * @type {!Long}
+   */
+  
+  Long.UZERO = UZERO;
+  /**
+   * @type {!Long}
+   * @inner
+   */
+  
+  var ONE = fromInt(1);
+  /**
+   * Signed one.
+   * @type {!Long}
+   */
+  
+  Long.ONE = ONE;
+  /**
+   * @type {!Long}
+   * @inner
+   */
+  
+  var UONE = fromInt(1, true);
+  /**
+   * Unsigned one.
+   * @type {!Long}
+   */
+  
+  Long.UONE = UONE;
+  /**
+   * @type {!Long}
+   * @inner
+   */
+  
+  var NEG_ONE = fromInt(-1);
+  /**
+   * Signed negative one.
+   * @type {!Long}
+   */
+  
+  Long.NEG_ONE = NEG_ONE;
+  /**
+   * @type {!Long}
+   * @inner
+   */
+  
+  var MAX_VALUE = fromBits(0xFFFFFFFF | 0, 0x7FFFFFFF | 0, false);
+  /**
+   * Maximum signed value.
+   * @type {!Long}
+   */
+  
+  Long.MAX_VALUE = MAX_VALUE;
+  /**
+   * @type {!Long}
+   * @inner
+   */
+  
+  var MAX_UNSIGNED_VALUE = fromBits(0xFFFFFFFF | 0, 0xFFFFFFFF | 0, true);
+  /**
+   * Maximum unsigned value.
+   * @type {!Long}
+   */
+  
+  Long.MAX_UNSIGNED_VALUE = MAX_UNSIGNED_VALUE;
+  /**
+   * @type {!Long}
+   * @inner
+   */
+  
+  var MIN_VALUE = fromBits(0, 0x80000000 | 0, false);
+  /**
+   * Minimum signed value.
+   * @type {!Long}
+   */
+  
+  Long.MIN_VALUE = MIN_VALUE;
+  /**
+   * @alias Long.prototype
+   * @inner
+   */
+  
+  var LongPrototype = Long.prototype;
+  /**
+   * Converts the Long to a 32 bit integer, assuming it is a 32 bit integer.
+   * @this {!Long}
+   * @returns {number}
+   */
+  
+  LongPrototype.toInt = function toInt() {
+    return this.unsigned ? this.low >>> 0 : this.low;
+  };
+  /**
+   * Converts the Long to a the nearest floating-point representation of this value (double, 53 bit mantissa).
+   * @this {!Long}
+   * @returns {number}
+   */
+  
+  
+  LongPrototype.toNumber = function toNumber() {
+    if (this.unsigned) return (this.high >>> 0) * TWO_PWR_32_DBL + (this.low >>> 0);
+    return this.high * TWO_PWR_32_DBL + (this.low >>> 0);
+  };
+  /**
+   * Converts the Long to a string written in the specified radix.
+   * @this {!Long}
+   * @param {number=} radix Radix (2-36), defaults to 10
+   * @returns {string}
+   * @override
+   * @throws {RangeError} If `radix` is out of range
+   */
+  
+  
+  LongPrototype.toString = function toString(radix) {
+    radix = radix || 10;
+    if (radix < 2 || 36 < radix) throw RangeError('radix');
+    if (this.isZero()) return '0';
+  
+    if (this.isNegative()) {
+      // Unsigned Longs are never negative
+      if (this.eq(MIN_VALUE)) {
+        // We need to change the Long value before it can be negated, so we remove
+        // the bottom-most digit in this base and then recurse to do the rest.
+        var radixLong = fromNumber(radix),
+            div = this.div(radixLong),
+            rem1 = div.mul(radixLong).sub(this);
+        return div.toString(radix) + rem1.toInt().toString(radix);
+      } else return '-' + this.neg().toString(radix);
+    } // Do several (6) digits each time through the loop, so as to
+    // minimize the calls to the very expensive emulated div.
+  
+  
+    var radixToPower = fromNumber(pow_dbl(radix, 6), this.unsigned),
+        rem = this;
+    var result = '';
+  
+    while (true) {
+      var remDiv = rem.div(radixToPower),
+          intval = rem.sub(remDiv.mul(radixToPower)).toInt() >>> 0,
+          digits = intval.toString(radix);
+      rem = remDiv;
+      if (rem.isZero()) return digits + result;else {
+        while (digits.length < 6) digits = '0' + digits;
+  
+        result = '' + digits + result;
+      }
+    }
+  };
+  /**
+   * Gets the high 32 bits as a signed integer.
+   * @this {!Long}
+   * @returns {number} Signed high bits
+   */
+  
+  
+  LongPrototype.getHighBits = function getHighBits() {
+    return this.high;
+  };
+  /**
+   * Gets the high 32 bits as an unsigned integer.
+   * @this {!Long}
+   * @returns {number} Unsigned high bits
+   */
+  
+  
+  LongPrototype.getHighBitsUnsigned = function getHighBitsUnsigned() {
+    return this.high >>> 0;
+  };
+  /**
+   * Gets the low 32 bits as a signed integer.
+   * @this {!Long}
+   * @returns {number} Signed low bits
+   */
+  
+  
+  LongPrototype.getLowBits = function getLowBits() {
+    return this.low;
+  };
+  /**
+   * Gets the low 32 bits as an unsigned integer.
+   * @this {!Long}
+   * @returns {number} Unsigned low bits
+   */
+  
+  
+  LongPrototype.getLowBitsUnsigned = function getLowBitsUnsigned() {
+    return this.low >>> 0;
+  };
+  /**
+   * Gets the number of bits needed to represent the absolute value of this Long.
+   * @this {!Long}
+   * @returns {number}
+   */
+  
+  
+  LongPrototype.getNumBitsAbs = function getNumBitsAbs() {
+    if (this.isNegative()) // Unsigned Longs are never negative
+      return this.eq(MIN_VALUE) ? 64 : this.neg().getNumBitsAbs();
+    var val = this.high != 0 ? this.high : this.low;
+  
+    for (var bit = 31; bit > 0; bit--) if ((val & 1 << bit) != 0) break;
+  
+    return this.high != 0 ? bit + 33 : bit + 1;
+  };
+  /**
+   * Tests if this Long's value equals zero.
+   * @this {!Long}
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.isZero = function isZero() {
+    return this.high === 0 && this.low === 0;
+  };
+  /**
+   * Tests if this Long's value equals zero. This is an alias of {@link Long#isZero}.
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.eqz = LongPrototype.isZero;
+  /**
+   * Tests if this Long's value is negative.
+   * @this {!Long}
+   * @returns {boolean}
+   */
+  
+  LongPrototype.isNegative = function isNegative() {
+    return !this.unsigned && this.high < 0;
+  };
+  /**
+   * Tests if this Long's value is positive or zero.
+   * @this {!Long}
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.isPositive = function isPositive() {
+    return this.unsigned || this.high >= 0;
+  };
+  /**
+   * Tests if this Long's value is odd.
+   * @this {!Long}
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.isOdd = function isOdd() {
+    return (this.low & 1) === 1;
+  };
+  /**
+   * Tests if this Long's value is even.
+   * @this {!Long}
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.isEven = function isEven() {
+    return (this.low & 1) === 0;
+  };
+  /**
+   * Tests if this Long's value equals the specified's.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.equals = function equals(other) {
+    if (!isLong(other)) other = fromValue(other);
+    if (this.unsigned !== other.unsigned && this.high >>> 31 === 1 && other.high >>> 31 === 1) return false;
+    return this.high === other.high && this.low === other.low;
+  };
+  /**
+   * Tests if this Long's value equals the specified's. This is an alias of {@link Long#equals}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.eq = LongPrototype.equals;
+  /**
+   * Tests if this Long's value differs from the specified's.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  LongPrototype.notEquals = function notEquals(other) {
+    return !this.eq(
+    /* validates */
+    other);
+  };
+  /**
+   * Tests if this Long's value differs from the specified's. This is an alias of {@link Long#notEquals}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.neq = LongPrototype.notEquals;
+  /**
+   * Tests if this Long's value differs from the specified's. This is an alias of {@link Long#notEquals}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  LongPrototype.ne = LongPrototype.notEquals;
+  /**
+   * Tests if this Long's value is less than the specified's.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  LongPrototype.lessThan = function lessThan(other) {
+    return this.comp(
+    /* validates */
+    other) < 0;
+  };
+  /**
+   * Tests if this Long's value is less than the specified's. This is an alias of {@link Long#lessThan}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.lt = LongPrototype.lessThan;
+  /**
+   * Tests if this Long's value is less than or equal the specified's.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  LongPrototype.lessThanOrEqual = function lessThanOrEqual(other) {
+    return this.comp(
+    /* validates */
+    other) <= 0;
+  };
+  /**
+   * Tests if this Long's value is less than or equal the specified's. This is an alias of {@link Long#lessThanOrEqual}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.lte = LongPrototype.lessThanOrEqual;
+  /**
+   * Tests if this Long's value is less than or equal the specified's. This is an alias of {@link Long#lessThanOrEqual}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  LongPrototype.le = LongPrototype.lessThanOrEqual;
+  /**
+   * Tests if this Long's value is greater than the specified's.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  LongPrototype.greaterThan = function greaterThan(other) {
+    return this.comp(
+    /* validates */
+    other) > 0;
+  };
+  /**
+   * Tests if this Long's value is greater than the specified's. This is an alias of {@link Long#greaterThan}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.gt = LongPrototype.greaterThan;
+  /**
+   * Tests if this Long's value is greater than or equal the specified's.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  LongPrototype.greaterThanOrEqual = function greaterThanOrEqual(other) {
+    return this.comp(
+    /* validates */
+    other) >= 0;
+  };
+  /**
+   * Tests if this Long's value is greater than or equal the specified's. This is an alias of {@link Long#greaterThanOrEqual}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  
+  LongPrototype.gte = LongPrototype.greaterThanOrEqual;
+  /**
+   * Tests if this Long's value is greater than or equal the specified's. This is an alias of {@link Long#greaterThanOrEqual}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {boolean}
+   */
+  
+  LongPrototype.ge = LongPrototype.greaterThanOrEqual;
+  /**
+   * Compares this Long's value with the specified's.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other value
+   * @returns {number} 0 if they are the same, 1 if the this is greater and -1
+   *  if the given one is greater
+   */
+  
+  LongPrototype.compare = function compare(other) {
+    if (!isLong(other)) other = fromValue(other);
+    if (this.eq(other)) return 0;
+    var thisNeg = this.isNegative(),
+        otherNeg = other.isNegative();
+    if (thisNeg && !otherNeg) return -1;
+    if (!thisNeg && otherNeg) return 1; // At this point the sign bits are the same
+  
+    if (!this.unsigned) return this.sub(other).isNegative() ? -1 : 1; // Both are positive if at least one is unsigned
+  
+    return other.high >>> 0 > this.high >>> 0 || other.high === this.high && other.low >>> 0 > this.low >>> 0 ? -1 : 1;
+  };
+  /**
+   * Compares this Long's value with the specified's. This is an alias of {@link Long#compare}.
+   * @function
+   * @param {!Long|number|string} other Other value
+   * @returns {number} 0 if they are the same, 1 if the this is greater and -1
+   *  if the given one is greater
+   */
+  
+  
+  LongPrototype.comp = LongPrototype.compare;
+  /**
+   * Negates this Long's value.
+   * @this {!Long}
+   * @returns {!Long} Negated Long
+   */
+  
+  LongPrototype.negate = function negate() {
+    if (!this.unsigned && this.eq(MIN_VALUE)) return MIN_VALUE;
+    return this.not().add(ONE);
+  };
+  /**
+   * Negates this Long's value. This is an alias of {@link Long#negate}.
+   * @function
+   * @returns {!Long} Negated Long
+   */
+  
+  
+  LongPrototype.neg = LongPrototype.negate;
+  /**
+   * Returns the sum of this and the specified Long.
+   * @this {!Long}
+   * @param {!Long|number|string} addend Addend
+   * @returns {!Long} Sum
+   */
+  
+  LongPrototype.add = function add(addend) {
+    if (!isLong(addend)) addend = fromValue(addend); // Divide each number into 4 chunks of 16 bits, and then sum the chunks.
+  
+    var a48 = this.high >>> 16;
+    var a32 = this.high & 0xFFFF;
+    var a16 = this.low >>> 16;
+    var a00 = this.low & 0xFFFF;
+    var b48 = addend.high >>> 16;
+    var b32 = addend.high & 0xFFFF;
+    var b16 = addend.low >>> 16;
+    var b00 = addend.low & 0xFFFF;
+    var c48 = 0,
+        c32 = 0,
+        c16 = 0,
+        c00 = 0;
+    c00 += a00 + b00;
+    c16 += c00 >>> 16;
+    c00 &= 0xFFFF;
+    c16 += a16 + b16;
+    c32 += c16 >>> 16;
+    c16 &= 0xFFFF;
+    c32 += a32 + b32;
+    c48 += c32 >>> 16;
+    c32 &= 0xFFFF;
+    c48 += a48 + b48;
+    c48 &= 0xFFFF;
+    return fromBits(c16 << 16 | c00, c48 << 16 | c32, this.unsigned);
+  };
+  /**
+   * Returns the difference of this and the specified Long.
+   * @this {!Long}
+   * @param {!Long|number|string} subtrahend Subtrahend
+   * @returns {!Long} Difference
+   */
+  
+  
+  LongPrototype.subtract = function subtract(subtrahend) {
+    if (!isLong(subtrahend)) subtrahend = fromValue(subtrahend);
+    return this.add(subtrahend.neg());
+  };
+  /**
+   * Returns the difference of this and the specified Long. This is an alias of {@link Long#subtract}.
+   * @function
+   * @param {!Long|number|string} subtrahend Subtrahend
+   * @returns {!Long} Difference
+   */
+  
+  
+  LongPrototype.sub = LongPrototype.subtract;
+  /**
+   * Returns the product of this and the specified Long.
+   * @this {!Long}
+   * @param {!Long|number|string} multiplier Multiplier
+   * @returns {!Long} Product
+   */
+  
+  LongPrototype.multiply = function multiply(multiplier) {
+    if (this.isZero()) return this;
+    if (!isLong(multiplier)) multiplier = fromValue(multiplier); // use wasm support if present
+  
+    if (wasm) {
+      var low = wasm["mul"](this.low, this.high, multiplier.low, multiplier.high);
+      return fromBits(low, wasm["get_high"](), this.unsigned);
+    }
+  
+    if (multiplier.isZero()) return this.unsigned ? UZERO : ZERO;
+    if (this.eq(MIN_VALUE)) return multiplier.isOdd() ? MIN_VALUE : ZERO;
+    if (multiplier.eq(MIN_VALUE)) return this.isOdd() ? MIN_VALUE : ZERO;
+  
+    if (this.isNegative()) {
+      if (multiplier.isNegative()) return this.neg().mul(multiplier.neg());else return this.neg().mul(multiplier).neg();
+    } else if (multiplier.isNegative()) return this.mul(multiplier.neg()).neg(); // If both longs are small, use float multiplication
+  
+  
+    if (this.lt(TWO_PWR_24) && multiplier.lt(TWO_PWR_24)) return fromNumber(this.toNumber() * multiplier.toNumber(), this.unsigned); // Divide each long into 4 chunks of 16 bits, and then add up 4x4 products.
+    // We can skip products that would overflow.
+  
+    var a48 = this.high >>> 16;
+    var a32 = this.high & 0xFFFF;
+    var a16 = this.low >>> 16;
+    var a00 = this.low & 0xFFFF;
+    var b48 = multiplier.high >>> 16;
+    var b32 = multiplier.high & 0xFFFF;
+    var b16 = multiplier.low >>> 16;
+    var b00 = multiplier.low & 0xFFFF;
+    var c48 = 0,
+        c32 = 0,
+        c16 = 0,
+        c00 = 0;
+    c00 += a00 * b00;
+    c16 += c00 >>> 16;
+    c00 &= 0xFFFF;
+    c16 += a16 * b00;
+    c32 += c16 >>> 16;
+    c16 &= 0xFFFF;
+    c16 += a00 * b16;
+    c32 += c16 >>> 16;
+    c16 &= 0xFFFF;
+    c32 += a32 * b00;
+    c48 += c32 >>> 16;
+    c32 &= 0xFFFF;
+    c32 += a16 * b16;
+    c48 += c32 >>> 16;
+    c32 &= 0xFFFF;
+    c32 += a00 * b32;
+    c48 += c32 >>> 16;
+    c32 &= 0xFFFF;
+    c48 += a48 * b00 + a32 * b16 + a16 * b32 + a00 * b48;
+    c48 &= 0xFFFF;
+    return fromBits(c16 << 16 | c00, c48 << 16 | c32, this.unsigned);
+  };
+  /**
+   * Returns the product of this and the specified Long. This is an alias of {@link Long#multiply}.
+   * @function
+   * @param {!Long|number|string} multiplier Multiplier
+   * @returns {!Long} Product
+   */
+  
+  
+  LongPrototype.mul = LongPrototype.multiply;
+  /**
+   * Returns this Long divided by the specified. The result is signed if this Long is signed or
+   *  unsigned if this Long is unsigned.
+   * @this {!Long}
+   * @param {!Long|number|string} divisor Divisor
+   * @returns {!Long} Quotient
+   */
+  
+  LongPrototype.divide = function divide(divisor) {
+    if (!isLong(divisor)) divisor = fromValue(divisor);
+    if (divisor.isZero()) throw Error('division by zero'); // use wasm support if present
+  
+    if (wasm) {
+      // guard against signed division overflow: the largest
+      // negative number / -1 would be 1 larger than the largest
+      // positive number, due to two's complement.
+      if (!this.unsigned && this.high === -0x80000000 && divisor.low === -1 && divisor.high === -1) {
+        // be consistent with non-wasm code path
+        return this;
+      }
+  
+      var low = (this.unsigned ? wasm["div_u"] : wasm["div_s"])(this.low, this.high, divisor.low, divisor.high);
+      return fromBits(low, wasm["get_high"](), this.unsigned);
+    }
+  
+    if (this.isZero()) return this.unsigned ? UZERO : ZERO;
+    var approx, rem, res;
+  
+    if (!this.unsigned) {
+      // This section is only relevant for signed longs and is derived from the
+      // closure library as a whole.
+      if (this.eq(MIN_VALUE)) {
+        if (divisor.eq(ONE) || divisor.eq(NEG_ONE)) return MIN_VALUE; // recall that -MIN_VALUE == MIN_VALUE
+        else if (divisor.eq(MIN_VALUE)) return ONE;else {
+          // At this point, we have |other| >= 2, so |this/other| < |MIN_VALUE|.
+          var halfThis = this.shr(1);
+          approx = halfThis.div(divisor).shl(1);
+  
+          if (approx.eq(ZERO)) {
+            return divisor.isNegative() ? ONE : NEG_ONE;
+          } else {
+            rem = this.sub(divisor.mul(approx));
+            res = approx.add(rem.div(divisor));
+            return res;
+          }
+        }
+      } else if (divisor.eq(MIN_VALUE)) return this.unsigned ? UZERO : ZERO;
+  
+      if (this.isNegative()) {
+        if (divisor.isNegative()) return this.neg().div(divisor.neg());
+        return this.neg().div(divisor).neg();
+      } else if (divisor.isNegative()) return this.div(divisor.neg()).neg();
+  
+      res = ZERO;
+    } else {
+      // The algorithm below has not been made for unsigned longs. It's therefore
+      // required to take special care of the MSB prior to running it.
+      if (!divisor.unsigned) divisor = divisor.toUnsigned();
+      if (divisor.gt(this)) return UZERO;
+      if (divisor.gt(this.shru(1))) // 15 >>> 1 = 7 ; with divisor = 8 ; true
+        return UONE;
+      res = UZERO;
+    } // Repeat the following until the remainder is less than other:  find a
+    // floating-point that approximates remainder / other *from below*, add this
+    // into the result, and subtract it from the remainder.  It is critical that
+    // the approximate value is less than or equal to the real value so that the
+    // remainder never becomes negative.
+  
+  
+    rem = this;
+  
+    while (rem.gte(divisor)) {
+      // Approximate the result of division. This may be a little greater or
+      // smaller than the actual value.
+      approx = Math.max(1, Math.floor(rem.toNumber() / divisor.toNumber())); // We will tweak the approximate result by changing it in the 48-th digit or
+      // the smallest non-fractional digit, whichever is larger.
+  
+      var log2 = Math.ceil(Math.log(approx) / Math.LN2),
+          delta = log2 <= 48 ? 1 : pow_dbl(2, log2 - 48),
+          // Decrease the approximation until it is smaller than the remainder.  Note
+      // that if it is too large, the product overflows and is negative.
+      approxRes = fromNumber(approx),
+          approxRem = approxRes.mul(divisor);
+  
+      while (approxRem.isNegative() || approxRem.gt(rem)) {
+        approx -= delta;
+        approxRes = fromNumber(approx, this.unsigned);
+        approxRem = approxRes.mul(divisor);
+      } // We know the answer can't be zero... and actually, zero would cause
+      // infinite recursion since we would make no progress.
+  
+  
+      if (approxRes.isZero()) approxRes = ONE;
+      res = res.add(approxRes);
+      rem = rem.sub(approxRem);
+    }
+  
+    return res;
+  };
+  /**
+   * Returns this Long divided by the specified. This is an alias of {@link Long#divide}.
+   * @function
+   * @param {!Long|number|string} divisor Divisor
+   * @returns {!Long} Quotient
+   */
+  
+  
+  LongPrototype.div = LongPrototype.divide;
+  /**
+   * Returns this Long modulo the specified.
+   * @this {!Long}
+   * @param {!Long|number|string} divisor Divisor
+   * @returns {!Long} Remainder
+   */
+  
+  LongPrototype.modulo = function modulo(divisor) {
+    if (!isLong(divisor)) divisor = fromValue(divisor); // use wasm support if present
+  
+    if (wasm) {
+      var low = (this.unsigned ? wasm["rem_u"] : wasm["rem_s"])(this.low, this.high, divisor.low, divisor.high);
+      return fromBits(low, wasm["get_high"](), this.unsigned);
+    }
+  
+    return this.sub(this.div(divisor).mul(divisor));
+  };
+  /**
+   * Returns this Long modulo the specified. This is an alias of {@link Long#modulo}.
+   * @function
+   * @param {!Long|number|string} divisor Divisor
+   * @returns {!Long} Remainder
+   */
+  
+  
+  LongPrototype.mod = LongPrototype.modulo;
+  /**
+   * Returns this Long modulo the specified. This is an alias of {@link Long#modulo}.
+   * @function
+   * @param {!Long|number|string} divisor Divisor
+   * @returns {!Long} Remainder
+   */
+  
+  LongPrototype.rem = LongPrototype.modulo;
+  /**
+   * Returns the bitwise NOT of this Long.
+   * @this {!Long}
+   * @returns {!Long}
+   */
+  
+  LongPrototype.not = function not() {
+    return fromBits(~this.low, ~this.high, this.unsigned);
+  };
+  /**
+   * Returns count leading zeros of this Long.
+   * @this {!Long}
+   * @returns {!number}
+   */
+  
+  
+  LongPrototype.countLeadingZeros = function countLeadingZeros() {
+    return this.high ? Math.clz32(this.high) : Math.clz32(this.low) + 32;
+  };
+  /**
+   * Returns count leading zeros. This is an alias of {@link Long#countLeadingZeros}.
+   * @function
+   * @param {!Long}
+   * @returns {!number}
+   */
+  
+  
+  LongPrototype.clz = LongPrototype.countLeadingZeros;
+  /**
+   * Returns count trailing zeros of this Long.
+   * @this {!Long}
+   * @returns {!number}
+   */
+  
+  LongPrototype.countTrailingZeros = function countTrailingZeros() {
+    return this.low ? ctz32(this.low) : ctz32(this.high) + 32;
+  };
+  /**
+   * Returns count trailing zeros. This is an alias of {@link Long#countTrailingZeros}.
+   * @function
+   * @param {!Long}
+   * @returns {!number}
+   */
+  
+  
+  LongPrototype.ctz = LongPrototype.countTrailingZeros;
+  /**
+   * Returns the bitwise AND of this Long and the specified.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other Long
+   * @returns {!Long}
+   */
+  
+  LongPrototype.and = function and(other) {
+    if (!isLong(other)) other = fromValue(other);
+    return fromBits(this.low & other.low, this.high & other.high, this.unsigned);
+  };
+  /**
+   * Returns the bitwise OR of this Long and the specified.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other Long
+   * @returns {!Long}
+   */
+  
+  
+  LongPrototype.or = function or(other) {
+    if (!isLong(other)) other = fromValue(other);
+    return fromBits(this.low | other.low, this.high | other.high, this.unsigned);
+  };
+  /**
+   * Returns the bitwise XOR of this Long and the given one.
+   * @this {!Long}
+   * @param {!Long|number|string} other Other Long
+   * @returns {!Long}
+   */
+  
+  
+  LongPrototype.xor = function xor(other) {
+    if (!isLong(other)) other = fromValue(other);
+    return fromBits(this.low ^ other.low, this.high ^ other.high, this.unsigned);
+  };
+  /**
+   * Returns this Long with bits shifted to the left by the given amount.
+   * @this {!Long}
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Shifted Long
+   */
+  
+  
+  LongPrototype.shiftLeft = function shiftLeft(numBits) {
+    if (isLong(numBits)) numBits = numBits.toInt();
+    if ((numBits &= 63) === 0) return this;else if (numBits < 32) return fromBits(this.low << numBits, this.high << numBits | this.low >>> 32 - numBits, this.unsigned);else return fromBits(0, this.low << numBits - 32, this.unsigned);
+  };
+  /**
+   * Returns this Long with bits shifted to the left by the given amount. This is an alias of {@link Long#shiftLeft}.
+   * @function
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Shifted Long
+   */
+  
+  
+  LongPrototype.shl = LongPrototype.shiftLeft;
+  /**
+   * Returns this Long with bits arithmetically shifted to the right by the given amount.
+   * @this {!Long}
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Shifted Long
+   */
+  
+  LongPrototype.shiftRight = function shiftRight(numBits) {
+    if (isLong(numBits)) numBits = numBits.toInt();
+    if ((numBits &= 63) === 0) return this;else if (numBits < 32) return fromBits(this.low >>> numBits | this.high << 32 - numBits, this.high >> numBits, this.unsigned);else return fromBits(this.high >> numBits - 32, this.high >= 0 ? 0 : -1, this.unsigned);
+  };
+  /**
+   * Returns this Long with bits arithmetically shifted to the right by the given amount. This is an alias of {@link Long#shiftRight}.
+   * @function
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Shifted Long
+   */
+  
+  
+  LongPrototype.shr = LongPrototype.shiftRight;
+  /**
+   * Returns this Long with bits logically shifted to the right by the given amount.
+   * @this {!Long}
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Shifted Long
+   */
+  
+  LongPrototype.shiftRightUnsigned = function shiftRightUnsigned(numBits) {
+    if (isLong(numBits)) numBits = numBits.toInt();
+    if ((numBits &= 63) === 0) return this;
+    if (numBits < 32) return fromBits(this.low >>> numBits | this.high << 32 - numBits, this.high >>> numBits, this.unsigned);
+    if (numBits === 32) return fromBits(this.high, 0, this.unsigned);
+    return fromBits(this.high >>> numBits - 32, 0, this.unsigned);
+  };
+  /**
+   * Returns this Long with bits logically shifted to the right by the given amount. This is an alias of {@link Long#shiftRightUnsigned}.
+   * @function
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Shifted Long
+   */
+  
+  
+  LongPrototype.shru = LongPrototype.shiftRightUnsigned;
+  /**
+   * Returns this Long with bits logically shifted to the right by the given amount. This is an alias of {@link Long#shiftRightUnsigned}.
+   * @function
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Shifted Long
+   */
+  
+  LongPrototype.shr_u = LongPrototype.shiftRightUnsigned;
+  /**
+   * Returns this Long with bits rotated to the left by the given amount.
+   * @this {!Long}
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Rotated Long
+   */
+  
+  LongPrototype.rotateLeft = function rotateLeft(numBits) {
+    var b;
+    if (isLong(numBits)) numBits = numBits.toInt();
+    if ((numBits &= 63) === 0) return this;
+    if (numBits === 32) return fromBits(this.high, this.low, this.unsigned);
+  
+    if (numBits < 32) {
+      b = 32 - numBits;
+      return fromBits(this.low << numBits | this.high >>> b, this.high << numBits | this.low >>> b, this.unsigned);
+    }
+  
+    numBits -= 32;
+    b = 32 - numBits;
+    return fromBits(this.high << numBits | this.low >>> b, this.low << numBits | this.high >>> b, this.unsigned);
+  };
+  /**
+   * Returns this Long with bits rotated to the left by the given amount. This is an alias of {@link Long#rotateLeft}.
+   * @function
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Rotated Long
+   */
+  
+  
+  LongPrototype.rotl = LongPrototype.rotateLeft;
+  /**
+   * Returns this Long with bits rotated to the right by the given amount.
+   * @this {!Long}
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Rotated Long
+   */
+  
+  LongPrototype.rotateRight = function rotateRight(numBits) {
+    var b;
+    if (isLong(numBits)) numBits = numBits.toInt();
+    if ((numBits &= 63) === 0) return this;
+    if (numBits === 32) return fromBits(this.high, this.low, this.unsigned);
+  
+    if (numBits < 32) {
+      b = 32 - numBits;
+      return fromBits(this.high << b | this.low >>> numBits, this.low << b | this.high >>> numBits, this.unsigned);
+    }
+  
+    numBits -= 32;
+    b = 32 - numBits;
+    return fromBits(this.low << b | this.high >>> numBits, this.high << b | this.low >>> numBits, this.unsigned);
+  };
+  /**
+   * Returns this Long with bits rotated to the right by the given amount. This is an alias of {@link Long#rotateRight}.
+   * @function
+   * @param {number|!Long} numBits Number of bits
+   * @returns {!Long} Rotated Long
+   */
+  
+  
+  LongPrototype.rotr = LongPrototype.rotateRight;
+  /**
+   * Converts this Long to signed.
+   * @this {!Long}
+   * @returns {!Long} Signed long
+   */
+  
+  LongPrototype.toSigned = function toSigned() {
+    if (!this.unsigned) return this;
+    return fromBits(this.low, this.high, false);
+  };
+  /**
+   * Converts this Long to unsigned.
+   * @this {!Long}
+   * @returns {!Long} Unsigned long
+   */
+  
+  
+  LongPrototype.toUnsigned = function toUnsigned() {
+    if (this.unsigned) return this;
+    return fromBits(this.low, this.high, true);
+  };
+  /**
+   * Converts this Long to its byte representation.
+   * @param {boolean=} le Whether little or big endian, defaults to big endian
+   * @this {!Long}
+   * @returns {!Array.<number>} Byte representation
+   */
+  
+  
+  LongPrototype.toBytes = function toBytes(le) {
+    return le ? this.toBytesLE() : this.toBytesBE();
+  };
+  /**
+   * Converts this Long to its little endian byte representation.
+   * @this {!Long}
+   * @returns {!Array.<number>} Little endian byte representation
+   */
+  
+  
+  LongPrototype.toBytesLE = function toBytesLE() {
+    var hi = this.high,
+        lo = this.low;
+    return [lo & 0xff, lo >>> 8 & 0xff, lo >>> 16 & 0xff, lo >>> 24, hi & 0xff, hi >>> 8 & 0xff, hi >>> 16 & 0xff, hi >>> 24];
+  };
+  /**
+   * Converts this Long to its big endian byte representation.
+   * @this {!Long}
+   * @returns {!Array.<number>} Big endian byte representation
+   */
+  
+  
+  LongPrototype.toBytesBE = function toBytesBE() {
+    var hi = this.high,
+        lo = this.low;
+    return [hi >>> 24, hi >>> 16 & 0xff, hi >>> 8 & 0xff, hi & 0xff, lo >>> 24, lo >>> 16 & 0xff, lo >>> 8 & 0xff, lo & 0xff];
+  };
+  /**
+   * Creates a Long from its byte representation.
+   * @param {!Array.<number>} bytes Byte representation
+   * @param {boolean=} unsigned Whether unsigned or not, defaults to signed
+   * @param {boolean=} le Whether little or big endian, defaults to big endian
+   * @returns {Long} The corresponding Long value
+   */
+  
+  
+  Long.fromBytes = function fromBytes(bytes, unsigned, le) {
+    return le ? Long.fromBytesLE(bytes, unsigned) : Long.fromBytesBE(bytes, unsigned);
+  };
+  /**
+   * Creates a Long from its little endian byte representation.
+   * @param {!Array.<number>} bytes Little endian byte representation
+   * @param {boolean=} unsigned Whether unsigned or not, defaults to signed
+   * @returns {Long} The corresponding Long value
+   */
+  
+  
+  Long.fromBytesLE = function fromBytesLE(bytes, unsigned) {
+    return new Long(bytes[0] | bytes[1] << 8 | bytes[2] << 16 | bytes[3] << 24, bytes[4] | bytes[5] << 8 | bytes[6] << 16 | bytes[7] << 24, unsigned);
+  };
+  /**
+   * Creates a Long from its big endian byte representation.
+   * @param {!Array.<number>} bytes Big endian byte representation
+   * @param {boolean=} unsigned Whether unsigned or not, defaults to signed
+   * @returns {Long} The corresponding Long value
+   */
+  
+  
+  Long.fromBytesBE = function fromBytesBE(bytes, unsigned) {
+    return new Long(bytes[4] << 24 | bytes[5] << 16 | bytes[6] << 8 | bytes[7], bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3], unsigned);
+  };
+  
+  var _default = Long;
+  exports.default = _default;
+  return "default" in exports ? exports.default : exports;
+})({});
+if (true) !(__WEBPACK_AMD_DEFINE_ARRAY__ = [], __WEBPACK_AMD_DEFINE_RESULT__ = (function() { return Long; }).apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__),
+		__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+else {}
+
+
+/***/ }),
+
 /***/ "./node_modules/.pnpm/math-intrinsics@1.1.0/node_modules/math-intrinsics/abs.js":
 /*!**************************************************************************************!*\
   !*** ./node_modules/.pnpm/math-intrinsics@1.1.0/node_modules/math-intrinsics/abs.js ***!
@@ -66824,6 +70586,127 @@ module.exports = Sha512
 
 /***/ }),
 
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/index.js":
+/*!******************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/index.js ***!
+  \******************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=exports.SHAKE=exports.SHA3Hash=exports.SHA3=exports.Keccak=void 0;var _buffer=__webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");var _sponge=_interopRequireDefault(__webpack_require__(/*! ./sponge */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/index.js"));function _interopRequireDefault(obj){return obj&&obj.__esModule?obj:{"default":obj}}var createHash=function createHash(_ref){var allowedSizes=_ref.allowedSizes,defaultSize=_ref.defaultSize,padding=_ref.padding;return function Hash(){var _this=this;var size=arguments.length>0&&arguments[0]!==undefined?arguments[0]:defaultSize;if(!this||this.constructor!==Hash){return new Hash(size)}if(allowedSizes&&!allowedSizes.includes(size)){throw new Error("Unsupported hash length")}var sponge=new _sponge["default"]({capacity:size});this.update=function(input){var encoding=arguments.length>1&&arguments[1]!==undefined?arguments[1]:"utf8";if(_buffer.Buffer.isBuffer(input)){sponge.absorb(input);return _this}if(typeof input==="string"){return _this.update(_buffer.Buffer.from(input,encoding))}throw new TypeError("Not a string or buffer")};this.digest=function(){var formatOrOptions=arguments.length>0&&arguments[0]!==undefined?arguments[0]:"binary";var options=typeof formatOrOptions==="string"?{format:formatOrOptions}:formatOrOptions;var buffer=sponge.squeeze({buffer:options.buffer,padding:options.padding||padding});if(options.format&&options.format!=="binary"){return buffer.toString(options.format)}return buffer};this.reset=function(){sponge.reset();return _this};return this}};var Keccak=createHash({allowedSizes:[224,256,384,512],defaultSize:512,padding:1});exports.Keccak=Keccak;var SHA3=createHash({allowedSizes:[224,256,384,512],defaultSize:512,padding:6});exports.SHA3=SHA3;var SHAKE=createHash({allowedSizes:[128,256],defaultSize:256,padding:31});exports.SHAKE=SHAKE;var SHA3Hash=Keccak;exports.SHA3Hash=SHA3Hash;SHA3.SHA3Hash=SHA3Hash;var _default=SHA3;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/index.js":
+/*!*************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/index.js ***!
+  \*************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var _buffer=__webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");var _permute=_interopRequireDefault(__webpack_require__(/*! ./permute */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/index.js"));function _interopRequireDefault(obj){return obj&&obj.__esModule?obj:{"default":obj}}var xorWords=function xorWords(I,O){for(var i=0;i<I.length;i+=8){var o=i/4;O[o]^=I[i+7]<<24|I[i+6]<<16|I[i+5]<<8|I[i+4];O[o+1]^=I[i+3]<<24|I[i+2]<<16|I[i+1]<<8|I[i]}return O};var readWords=function readWords(I,O){for(var o=0;o<O.length;o+=8){var i=o/4;O[o]=I[i+1];O[o+1]=I[i+1]>>>8;O[o+2]=I[i+1]>>>16;O[o+3]=I[i+1]>>>24;O[o+4]=I[i];O[o+5]=I[i]>>>8;O[o+6]=I[i]>>>16;O[o+7]=I[i]>>>24}return O};var Sponge=function Sponge(_ref){var _this=this;var capacity=_ref.capacity,padding=_ref.padding;var keccak=(0,_permute["default"])();var stateSize=200;var blockSize=capacity/8;var queueSize=stateSize-capacity/4;var queueOffset=0;var state=new Uint32Array(stateSize/4);var queue=_buffer.Buffer.allocUnsafe(queueSize);this.absorb=function(buffer){for(var i=0;i<buffer.length;i++){queue[queueOffset]=buffer[i];queueOffset+=1;if(queueOffset>=queueSize){xorWords(queue,state);keccak(state);queueOffset=0}}return _this};this.squeeze=function(){var options=arguments.length>0&&arguments[0]!==undefined?arguments[0]:{};var output={buffer:options.buffer||_buffer.Buffer.allocUnsafe(blockSize),padding:options.padding||padding,queue:_buffer.Buffer.allocUnsafe(queue.length),state:new Uint32Array(state.length)};queue.copy(output.queue);for(var i=0;i<state.length;i++){output.state[i]=state[i]}output.queue.fill(0,queueOffset);output.queue[queueOffset]|=output.padding;output.queue[queueSize-1]|=128;xorWords(output.queue,output.state);for(var offset=0;offset<output.buffer.length;offset+=queueSize){keccak(output.state);readWords(output.state,output.buffer.slice(offset,offset+queueSize))}return output.buffer};this.reset=function(){queue.fill(0);state.fill(0);queueOffset=0;return _this};return this};var _default=Sponge;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/chi/index.js":
+/*!*************************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/chi/index.js ***!
+  \*************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var _copy=_interopRequireDefault(__webpack_require__(/*! ../copy */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/copy/index.js"));function _interopRequireDefault(obj){return obj&&obj.__esModule?obj:{"default":obj}}var chi=function chi(_ref){var A=_ref.A,C=_ref.C;for(var y=0;y<25;y+=5){for(var x=0;x<5;x++){(0,_copy["default"])(A,y+x)(C,x)}for(var _x=0;_x<5;_x++){var xy=(y+_x)*2;var x1=(_x+1)%5*2;var x2=(_x+2)%5*2;A[xy]^=~C[x1]&C[x2];A[xy+1]^=~C[x1+1]&C[x2+1]}}};var _default=chi;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/copy/index.js":
+/*!**************************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/copy/index.js ***!
+  \**************************************************************************************/
+/***/ ((module) => {
+
+"use strict";
+var copy=function copy(I,i){return function(O,o){var oi=o*2;var ii=i*2;O[oi]=I[ii];O[oi+1]=I[ii+1]}};module.exports=copy;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/index.js":
+/*!*********************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/index.js ***!
+  \*********************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var _chi=_interopRequireDefault(__webpack_require__(/*! ./chi */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/chi/index.js"));var _iota=_interopRequireDefault(__webpack_require__(/*! ./iota */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/iota/index.js"));var _rhoPi=_interopRequireDefault(__webpack_require__(/*! ./rho-pi */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/index.js"));var _theta=_interopRequireDefault(__webpack_require__(/*! ./theta */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/theta/index.js"));function _interopRequireDefault(obj){return obj&&obj.__esModule?obj:{"default":obj}}var permute=function permute(){var C=new Uint32Array(10);var D=new Uint32Array(10);var W=new Uint32Array(2);return function(A){for(var roundIndex=0;roundIndex<24;roundIndex++){(0,_theta["default"])({A:A,C:C,D:D,W:W});(0,_rhoPi["default"])({A:A,C:C,W:W});(0,_chi["default"])({A:A,C:C});(0,_iota["default"])({A:A,roundIndex:roundIndex})}C.fill(0);D.fill(0);W.fill(0)}};var _default=permute;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/iota/index.js":
+/*!**************************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/iota/index.js ***!
+  \**************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var _roundConstants=_interopRequireDefault(__webpack_require__(/*! ./round-constants */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/iota/round-constants/index.js"));function _interopRequireDefault(obj){return obj&&obj.__esModule?obj:{"default":obj}}var iota=function iota(_ref){var A=_ref.A,roundIndex=_ref.roundIndex;var i=roundIndex*2;A[0]^=_roundConstants["default"][i];A[1]^=_roundConstants["default"][i+1]};var _default=iota;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/iota/round-constants/index.js":
+/*!******************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/iota/round-constants/index.js ***!
+  \******************************************************************************************************/
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var ROUND_CONSTANTS=new Uint32Array([0,1,0,32898,2147483648,32906,2147483648,2147516416,0,32907,0,2147483649,2147483648,2147516545,2147483648,32777,0,138,0,136,0,2147516425,0,2147483658,0,2147516555,2147483648,139,2147483648,32905,2147483648,32771,2147483648,32770,2147483648,128,0,32778,2147483648,2147483658,2147483648,2147516545,2147483648,32896,0,2147483649,2147483648,2147516424]);var _default=ROUND_CONSTANTS;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/index.js":
+/*!****************************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/index.js ***!
+  \****************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var _piShuffles=_interopRequireDefault(__webpack_require__(/*! ./pi-shuffles */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/pi-shuffles/index.js"));var _rhoOffsets=_interopRequireDefault(__webpack_require__(/*! ./rho-offsets */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/rho-offsets/index.js"));var _copy=_interopRequireDefault(__webpack_require__(/*! ../copy */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/copy/index.js"));function _interopRequireDefault(obj){return obj&&obj.__esModule?obj:{"default":obj}}var rhoPi=function rhoPi(_ref){var A=_ref.A,C=_ref.C,W=_ref.W;(0,_copy["default"])(A,1)(W,0);var H=0;var L=0;var Wi=0;var ri=32;for(var i=0;i<24;i++){var j=_piShuffles["default"][i];var r=_rhoOffsets["default"][i];(0,_copy["default"])(A,j)(C,0);H=W[0];L=W[1];ri=32-r;Wi=r<32?0:1;W[Wi]=H<<r|L>>>ri;W[(Wi+1)%2]=L<<r|H>>>ri;(0,_copy["default"])(W,0)(A,j);(0,_copy["default"])(C,0)(W,0)}};var _default=rhoPi;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/pi-shuffles/index.js":
+/*!****************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/pi-shuffles/index.js ***!
+  \****************************************************************************************************/
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var PI_SHUFFLES=[10,7,11,17,18,3,5,16,8,21,24,4,15,23,19,13,12,2,20,14,22,9,6,1];var _default=PI_SHUFFLES;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/rho-offsets/index.js":
+/*!****************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/rho-pi/rho-offsets/index.js ***!
+  \****************************************************************************************************/
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var RHO_OFFSETS=[1,3,6,10,15,21,28,36,45,55,2,14,27,41,56,8,25,43,62,18,39,61,20,44];var _default=RHO_OFFSETS;exports["default"]=_default;
+
+/***/ }),
+
+/***/ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/theta/index.js":
+/*!***************************************************************************************!*\
+  !*** ./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/theta/index.js ***!
+  \***************************************************************************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+Object.defineProperty(exports, "__esModule", ({value:true}));exports["default"]=void 0;var _copy=_interopRequireDefault(__webpack_require__(/*! ../copy */ "./node_modules/.pnpm/sha3@2.1.4/node_modules/sha3/sponge/permute/copy/index.js"));function _interopRequireDefault(obj){return obj&&obj.__esModule?obj:{"default":obj}}var theta=function theta(_ref){var A=_ref.A,C=_ref.C,D=_ref.D,W=_ref.W;var H=0;var L=0;for(var x=0;x<5;x++){var x20=x*2;var x21=(x+5)*2;var x22=(x+10)*2;var x23=(x+15)*2;var x24=(x+20)*2;C[x20]=A[x20]^A[x21]^A[x22]^A[x23]^A[x24];C[x20+1]=A[x20+1]^A[x21+1]^A[x22+1]^A[x23+1]^A[x24+1]}for(var _x=0;_x<5;_x++){(0,_copy["default"])(C,(_x+1)%5)(W,0);H=W[0];L=W[1];W[0]=H<<1|L>>>31;W[1]=L<<1|H>>>31;D[_x*2]=C[(_x+4)%5*2]^W[0];D[_x*2+1]=C[(_x+4)%5*2+1]^W[1];for(var y=0;y<25;y+=5){A[(y+_x)*2]^=D[_x*2];A[(y+_x)*2+1]^=D[_x*2+1]}}};var _default=theta;exports["default"]=_default;
+
+/***/ }),
+
 /***/ "./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js":
 /*!********************************************************************************************!*\
   !*** ./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js ***!
@@ -73344,6 +77227,397 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ "./src/Fido2Manager.ts":
+/*!*****************************!*\
+  !*** ./src/Fido2Manager.ts ***!
+  \*****************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const webauthn_1 = __webpack_require__(/*! ./platform/webauthn */ "./src/platform/webauthn.ts");
+const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./src/KeyManager.ts"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./src/pqCrypto.ts");
+const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
+const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
+const lookup = {
+    usb: 1,
+    nfc: 2,
+    ble: 4,
+    internal: 8,
+    hybrid: 16,
+    "smart-card": 32,
+};
+const encodeBinary = (data) => {
+    if (data.length <= 65535) {
+        // bin16: binary data whose length is upto (2^16)-1 bytes
+        return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+    }
+    else {
+        // bin32: binary data whose length is upto (2^32)-1 bytes
+        return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+    }
+};
+const serializeID_v0 = (km) => {
+    const version = buffer_1.Buffer.from([0x83, 0xa1, 0x76, km.version]);
+    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
+    const ckey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x63]), encodeBinary(km.ckey)]);
+    return buffer_1.Buffer.concat([version, ckey, cypher]);
+};
+const getTransports = (num) => Object.keys(lookup).filter((i) => num && lookup[i]);
+const fromTransports = (transports) => transports.reduceRight((memo, i) => memo + (lookup[i] ? lookup[i] : 0), 0);
+const getAuthTypeFromCkey = (ckey) => {
+    const type = cbor_1.default.decode(ckey).get(1);
+    if (type === 1) {
+        return "Ed25519VerificationKey2020";
+    }
+    else if (type === 2) {
+        return "P256VerificationKey2020";
+    }
+    else
+        return "Unknown";
+};
+const getSignerFromCkey = (ckey) => {
+    const k = cbor_1.default.decode(ckey);
+    let publicKey = buffer_1.Buffer.from([]);
+    if (k.get(3) == -7)
+        publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
+    else if (k.get(3) == -8)
+        publicKey = k.get(-2);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
+        publicKey = k.get(-101);
+    return { publicKey };
+};
+class Fido2Manager extends KeyManager_1.default {
+    constructor() {
+        super();
+        this._transports = 0;
+        this.level = 1; // ROOT, no Proof Management
+        this.encType = "X25519KeyAgreementKey2019";
+        this.webAuthn = (0, webauthn_1.getWebAuthnProvider)();
+    }
+    get transports() {
+        return getTransports(this._transports);
+    }
+    static async createFromAttestation(attestation) {
+        const f2m = new Fido2Manager();
+        f2m.ckey = SoftCredentials_1.default.getCOSEPublicKey(attestation);
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.fid = buffer_1.Buffer.from(attestation.id, "base64");
+        // fix for firefox, getTransports not available ! https://developer.mozilla.org/en-US/docs/Web/API/AuthenticatorAttestationResponse/getTransports
+        const response = attestation.response;
+        const transports = response.getTransports ? response.getTransports() : ["usb"];
+        f2m._transports = fromTransports(transports);
+        // signing
+        f2m.signer = getSignerFromCkey(f2m.ckey);
+        //encrypting
+        const entropy = (0, crypto_1.randomBytes)(32);
+        const seed = sha512(entropy);
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed.slice(0, 32));
+        f2m.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        f2m.entropy = entropy;
+        return f2m;
+    }
+    get id() {
+        if (this.version == 0)
+            return serializeID_v0(this);
+        else
+            return buffer_1.Buffer.from((0, msgpack_1.encode)({
+                v: this.version,
+                c: this.ckey,
+                e: this.cypher.publicKey,
+            }));
+    }
+    get id_v0() {
+        return serializeID_v0(this);
+    }
+    getSecret() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            f: this.fid,
+            t: this._transports,
+            c: this.ckey,
+            e: this.cypher.secretKey,
+        }));
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const f2m = new Fido2Manager();
+        f2m.version = data.v ?? 0;
+        f2m.capability = "private";
+        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
+        f2m._transports = data.t ? data.t : 15;
+        f2m.ckey = data.c;
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.signer = getSignerFromCkey(data.c);
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
+        f2m.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return f2m;
+    }
+    static instantiate(obj) {
+        const f2m = new Fido2Manager();
+        f2m.version = obj.version ?? 0;
+        f2m.level = obj.level;
+        f2m.fid = typeof obj.fid === "string" ? buffer_1.Buffer.from(obj.fid, "base64") : obj.fid;
+        f2m._transports = obj.t ? obj.t : 15;
+        f2m.ckey = obj.ckey.data ? buffer_1.Buffer.from(obj.ckey.data) : buffer_1.Buffer.from(obj.ckey);
+        f2m.signer = getSignerFromCkey(f2m.ckey);
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.cypher = {
+            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
+        };
+        return f2m;
+    }
+    static fromId(id) {
+        const data = (0, msgpack_1.decode)(id);
+        const f2m = new Fido2Manager();
+        f2m.version = data.v ?? 0;
+        f2m.capability = "public";
+        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
+        f2m.ckey = data.c;
+        f2m.signer = getSignerFromCkey(data.c);
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.cypher = {
+            publicKey: data.e,
+        };
+        return f2m;
+    }
+    async getSigner() {
+        return {
+            sign: async (data) => {
+                if (!navigator.credentials)
+                    return null;
+                // ugly request userinteraction (needed for Safari and iOS)
+                try {
+                    await window?.CredentialUserInteractionRequest();
+                }
+                catch (error) { }
+                const challenge = (0, crypto_1.hash)("sha256", data);
+                const publicKey = {
+                    challenge,
+                    userVerification: "preferred",
+                    allowCredentials: [
+                        {
+                            type: "public-key",
+                            id: this.fid,
+                            transports: getTransports(this._transports),
+                        },
+                    ],
+                };
+                const { response } = (await this.webAuthn.get(publicKey));
+                const publicKeyResponse = response;
+                const output = {
+                    s: buffer_1.Buffer.from(publicKeyResponse.signature),
+                    c: buffer_1.Buffer.from(publicKeyResponse.clientDataJSON),
+                    a: buffer_1.Buffer.from(publicKeyResponse.authenticatorData),
+                };
+                return buffer_1.Buffer.from((0, msgpack_1.encode)(output));
+            },
+        };
+    }
+    verify(data, signature, userVerification = false) {
+        const signatureBuffer = buffer_1.Buffer.from(signature);
+        const decoded = (0, msgpack_1.decode)(signatureBuffer);
+        const response = {
+            signature: decoded.s,
+            clientDataJSON: decoded.c,
+            authenticatorData: decoded.a,
+            userHandle: buffer_1.Buffer.from([]).buffer,
+        };
+        const challenge = (0, crypto_1.hash)("sha256", data).toString("base64");
+        const extractedChallenge = SoftCredentials_1.default.extractChallenge(response.clientDataJSON);
+        if (challenge !== extractedChallenge) {
+            return false;
+        }
+        return SoftCredentials_1.default.simpleVerify(this.ckey, response, userVerification);
+    }
+    verifyCredentials(credentials, userVerification = false) {
+        if (credentials.id !== this.fid.toString("base64")) {
+            return false;
+        }
+        const response = credentials.response;
+        const rpIdHash = buffer_1.Buffer.from(response.authenticatorData.slice(0, 32)).toString("hex");
+        const myIdHash = sha256(buffer_1.Buffer.from(credentials.id, "base64")).toString("hex");
+        if (rpIdHash !== myIdHash) {
+            return false;
+        }
+        return SoftCredentials_1.default.simpleVerify(this.ckey, response, userVerification);
+    }
+    async createRevocationCertificate() {
+        // TODO use an external id
+        return null;
+    }
+}
+exports["default"] = Fido2Manager;
+
+
+/***/ }),
+
+/***/ "./src/Fido2PRFManager.ts":
+/*!********************************!*\
+  !*** ./src/Fido2PRFManager.ts ***!
+  \********************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./src/Fido2Manager.ts"));
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./src/pqCrypto.ts");
+const lookup = {
+    usb: 1,
+    nfc: 2,
+    ble: 4,
+    internal: 8,
+    hybrid: 16,
+    "smart-card": 32,
+};
+const getTransports = (num) => Object.keys(lookup).filter((i) => num && lookup[i]);
+const fromTransports = (transports) => transports.reduceRight((memo, i) => memo + (lookup[i] ? lookup[i] : 0), 0);
+const getAuthTypeFromCkey = (ckey) => {
+    const decoded = cbor_1.default.decode(ckey, { extendedResults: true });
+    const type = decoded.value.get(1);
+    if (type === 1) {
+        return "Ed25519VerificationKey2020";
+    }
+    else if (type === 2) {
+        return "P256VerificationKey2020";
+    }
+    else
+        return "Unknown";
+};
+const getSignerFromCkey = (ckey) => {
+    const k = cbor_1.default.decode(ckey, { extendedResults: true }).value;
+    //console.log("getSignerFromCkey", k);
+    let publicKey = buffer_1.Buffer.from([]);
+    if (k.get(3) == -7)
+        publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
+    else if (k.get(3) == -8)
+        publicKey = k.get(-2);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
+        publicKey = k.get(-101);
+    return { publicKey };
+};
+class Fido2PRFManager extends Fido2Manager_1.default {
+    constructor() {
+        super();
+        this.prfsalt = buffer_1.Buffer.from("VaultysID salt");
+    }
+    static async createFromAttestation(attestation) {
+        const f2m = new Fido2PRFManager();
+        f2m.ckey = SoftCredentials_1.default.getCOSEPublicKey(attestation);
+        //console.log(attestation, f2m.ckey);
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.fid = buffer_1.Buffer.from(attestation.id, "base64");
+        // fix for firefox, getTransports not available ! https://developer.mozilla.org/en-US/docs/Web/API/AuthenticatorAttestationResponse/getTransports
+        const response = attestation.response;
+        const transports = response.getTransports ? response.getTransports() : ["usb"];
+        f2m._transports = fromTransports(transports);
+        // signing
+        f2m.signer = getSignerFromCkey(f2m.ckey);
+        await f2m.getCypher();
+        delete f2m.cypher.secretKey;
+        return f2m;
+    }
+    getSecret() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            f: this.fid,
+            t: this._transports,
+            c: this.ckey,
+            e: this.cypher.publicKey,
+        }));
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const f2m = new Fido2PRFManager();
+        f2m.version = data.v ?? 0;
+        f2m.capability = "private";
+        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
+        f2m._transports = data.t ? data.t : 15;
+        f2m.ckey = data.c;
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.signer = getSignerFromCkey(data.c);
+        f2m.cypher = { publicKey: data.e };
+        return f2m;
+    }
+    cleanSecureData() {
+        if (this.cypher?.secretKey) {
+            (0, crypto_1.secureErase)(this.cypher.secretKey);
+            delete this.cypher.secretKey;
+        }
+    }
+    async getCypher() {
+        if (!this.cypher?.secretKey) {
+            const publicKey = {
+                challenge: buffer_1.Buffer.from([]),
+                userVerification: "preferred",
+                allowCredentials: [
+                    {
+                        type: "public-key",
+                        id: this.fid,
+                        transports: getTransports(this._transports),
+                    },
+                ],
+                extensions: {
+                    prf: {
+                        eval: {
+                            // Input the contextual information
+                            first: this.prfsalt,
+                            // There is a "second" optional field too
+                            // Though it is intended for key rotation.
+                        },
+                    },
+                },
+            };
+            const result = await this.webAuthn.get(publicKey);
+            const { prf } = result.getClientExtensionResults();
+            const first = prf?.results?.first;
+            if (!first)
+                throw new Error("PRF failed");
+            const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(new Uint8Array(first));
+            this.cypher = {
+                publicKey: buffer_1.Buffer.from(cypher.publicKey),
+                secretKey: buffer_1.Buffer.from(cypher.secretKey),
+            };
+        }
+        return super.getCypher();
+    }
+    async createRevocationCertificate() {
+        // impossible
+        return null;
+    }
+}
+exports["default"] = Fido2PRFManager;
+
+
+/***/ }),
+
 /***/ "./src/KeyManager.ts":
 /*!***************************!*\
   !*** ./src/KeyManager.ts ***!
@@ -73404,10 +77678,20 @@ const LEVEL_DERIVED = 2;
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
 const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
 const serializeID_v0 = (km) => {
+    const encodeBinary = (data) => {
+        if (data.length <= 65535) {
+            // bin16: binary data whose length is upto (2^16)-1 bytes
+            return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+        }
+        else {
+            // bin32: binary data whose length is upto (2^32)-1 bytes
+            return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+        }
+    };
     const version = buffer_1.Buffer.from([0x84, 0xa1, 0x76, 0]);
-    const proof = buffer_1.Buffer.from([0xa1, 0x70, 0xc5, 0x00, km.proof.length, ...km.proof]);
-    const sign = buffer_1.Buffer.from([0xa1, 0x78, 0xc5, 0x00, km.signer.publicKey.length, ...km.signer.publicKey]);
-    const cypher = buffer_1.Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length, ...km.cypher.publicKey]);
+    const proof = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x70]), encodeBinary(km.proof)]);
+    const sign = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x78]), encodeBinary(km.signer.publicKey)]);
+    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
     return buffer_1.Buffer.concat([version, proof, sign, cypher]);
 };
 const publicDerivePath = (node, path) => {
@@ -74315,6 +78599,599 @@ const storagify = (object, save, destroy) => {
 
 /***/ }),
 
+/***/ "./src/PQManager.ts":
+/*!**************************!*\
+  !*** ./src/PQManager.ts ***!
+  \**************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const saltpack_1 = __webpack_require__(/*! @samuelthomas2774/saltpack */ "./node_modules/.pnpm/@samuelthomas2774+saltpack@0.3.2/node_modules/@samuelthomas2774/saltpack/dist/index.js");
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.1/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const crypto_2 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./src/pqCrypto.ts");
+const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./src/KeyManager.ts"));
+const dilithium_1 = __webpack_require__(/*! @asanrom/dilithium */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/index.js");
+const LEVEL_ROOT = 1;
+const LEVEL_DERIVED = 2;
+const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
+const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
+class PQManager extends KeyManager_1.default {
+    constructor() {
+        super();
+        this.authType = "DilithiumVerificationKey2025";
+    }
+    static async create_PQ_fromEntropy(entropy, swapIndex = 0) {
+        const km = new PQManager();
+        km.entropy = entropy;
+        km.level = LEVEL_ROOT;
+        km.capability = "private";
+        const seed = sha512(entropy);
+        km.swapIndex = swapIndex;
+        km.proof = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from([]));
+        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(seed.slice(0, 32));
+        const seed2 = sha256(seed.slice(32, 64));
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static generate_PQ() {
+        return PQManager.create_PQ_fromEntropy((0, crypto_1.randomBytes)(32));
+    }
+    async getCypher() {
+        // todo fetch secretKey here
+        const cypher = this.cypher;
+        return {
+            hmac: (message) => cypher.secretKey
+                ? buffer_1.Buffer.from((0, crypto_2.createHmac)("sha256", buffer_1.Buffer.from(cypher.secretKey).toString("hex"))
+                    .update("VaultysID/" + message + "/end")
+                    .digest())
+                : undefined,
+            signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
+            decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
+            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
+        };
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const km = new PQManager();
+        km.version = data.v ?? 0;
+        km.level = LEVEL_DERIVED;
+        km.capability = "private";
+        km.proof = data.p;
+        km.signer = {
+            secretKey: data.x,
+            publicKey: buffer_1.Buffer.from(dilithium_1.DilithiumPrivateKey.fromBytes(data.x, dilithium_1.DilithiumLevel.get(2)).derivePublicKey().getBytes()),
+        };
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static instantiate(obj) {
+        const km = new PQManager();
+        km.version = obj.version ?? 0;
+        km.level = obj.level;
+        km.proof = obj.proof.data ? buffer_1.Buffer.from(obj.proof.data) : buffer_1.Buffer.from(obj.proof);
+        km.signer = {
+            publicKey: obj.signer.publicKey.data ? buffer_1.Buffer.from(obj.signer.publicKey.data) : buffer_1.Buffer.from(obj.signer.publicKey),
+        };
+        km.cypher = {
+            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
+        };
+        return km;
+    }
+    static fromId(id) {
+        const data = (0, msgpack_1.decode)(id);
+        const km = new PQManager();
+        km.version = data.v ?? 0;
+        km.level = LEVEL_DERIVED;
+        km.capability = "public";
+        km.proof = data.p;
+        km.signer = {
+            publicKey: data.x,
+        };
+        km.cypher = {
+            publicKey: data.e,
+        };
+        // console.log(km)
+        return km;
+    }
+    async sign(data) {
+        if (this.capability == "public")
+            return null;
+        return (0, pqCrypto_1.signDilithium)(data, this.signer.secretKey);
+    }
+    verify(data, signature, userVerificationIgnored) {
+        return (0, pqCrypto_1.verifyDilithium)(data, signature, this.signer.publicKey);
+    }
+}
+exports["default"] = PQManager;
+
+
+/***/ }),
+
+/***/ "./src/VaultysId.ts":
+/*!**************************!*\
+  !*** ./src/VaultysId.ts ***!
+  \**************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./src/Fido2Manager.ts"));
+const Fido2PRFManager_1 = __importDefault(__webpack_require__(/*! ./Fido2PRFManager */ "./src/Fido2PRFManager.ts"));
+const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./src/KeyManager.ts"));
+const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+const webauthn_1 = __webpack_require__(/*! ./platform/webauthn */ "./src/platform/webauthn.ts");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const PQManager_1 = __importDefault(__webpack_require__(/*! ./PQManager */ "./src/PQManager.ts"));
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./src/pqCrypto.ts");
+const TYPE_MACHINE = 0;
+const TYPE_PERSON = 1;
+const TYPE_ORGANIZATION = 2;
+const TYPE_FIDO2 = 3;
+const TYPE_FIDO2PRF = 4;
+class VaultysId {
+    constructor(keyManager, certificate, type = TYPE_MACHINE) {
+        this.encrypt = VaultysId.encrypt;
+        this.type = type;
+        this.keyManager = keyManager;
+        this.certificate = certificate;
+    }
+    // // Set the index of the proof in case of previous key for this protocol/service have been compromised
+    // setProofIndex(protocol, service, index) {
+    //   this.proofIndices[`${protocol}-${service}`] = index;
+    // }
+    // createSwapingCertificate(protocol, service) {
+    //   let proofIndex = this.proofIndices[`${protocol}-${service}`]
+    //     ? this.proofIndices[`${protocol}-${service}`]
+    //     : 0;
+    //   const pk = this.getKey({
+    //     protocol,
+    //     service,
+    //     proofIndex,
+    //   });
+    //   const newPk = this.getKey({
+    //     protocol,
+    //     service,
+    //     proofIndex: proofIndex + 1,
+    //   });
+    //   const xPub = this.device.getProofXPub({
+    //     protocol,
+    //     service,
+    //     index,
+    //   });
+    //   const derivation = PDM.getProofDerivation(protocol, service, index);
+    //   const revocationCertificate = `vaultys://p2p/revocation?pk=${pk}&npk=${newPk}&xpub=${xpub}&index=${derivation}`;
+    // }
+    static fromId(id, certificate, encoding = "hex") {
+        let cleanId = id;
+        if (id.data) {
+            // Buffer thing
+            cleanId = buffer_1.Buffer.from(id.data);
+        }
+        if (id instanceof Uint8Array) {
+            // Buffer thing
+            cleanId = buffer_1.Buffer.from(id);
+        }
+        if (typeof id === "string") {
+            cleanId = buffer_1.Buffer.from(id, encoding);
+        }
+        const type = cleanId[0];
+        if (type === TYPE_FIDO2) {
+            const f2m = Fido2Manager_1.default.fromId(cleanId.slice(1));
+            return new VaultysId(f2m, certificate, type);
+        }
+        else if (type === TYPE_FIDO2PRF) {
+            const f2m = Fido2PRFManager_1.default.fromId(cleanId.slice(1));
+            return new VaultysId(f2m, certificate, type);
+        }
+        else {
+            if (cleanId.length > 1312) {
+                const pqm = PQManager_1.default.fromId(cleanId.slice(1));
+                return new VaultysId(pqm, certificate, type);
+            }
+            else {
+                const km = KeyManager_1.default.fromId(cleanId.slice(1));
+                return new VaultysId(km, certificate, type);
+            }
+        }
+    }
+    static async fromEntropy(entropy, type, pqc = false) {
+        const cleanedEntropy = entropy;
+        if (pqc) {
+            const km = await PQManager_1.default.create_PQ_fromEntropy(cleanedEntropy);
+            return new VaultysId(km, undefined, type);
+        }
+        else {
+            const km = await KeyManager_1.default.create_Id25519_fromEntropy(cleanedEntropy);
+            return new VaultysId(km, undefined, type);
+        }
+    }
+    static async createWebauthn(passkey = true, onPRFEnabled) {
+        const options = VaultysId.createPublicKeyCredentialCreationOptions(passkey);
+        const webAuthn = (0, webauthn_1.getWebAuthnProvider)();
+        const attestation = await webAuthn.create(options);
+        if (!attestation)
+            return null;
+        else
+            return VaultysId.fido2FromAttestation(attestation, onPRFEnabled);
+    }
+    static async createPQC() {
+        const options = VaultysId.createPublicKeyCredentialOptionsPQC();
+        const webAuthn = (0, webauthn_1.getWebAuthnProvider)();
+        const attestation = await webAuthn.create(options);
+        //console.log(attestation);
+        if (!attestation)
+            return null;
+        else
+            return VaultysId.fido2FromAttestation(attestation);
+    }
+    static async fido2FromAttestation(attestation, onPRFEnabled) {
+        // should be somehow valid.
+        SoftCredentials_1.default.verifyPackedAttestation(attestation.response, true);
+        //console.log(SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true));
+        if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
+            const f2m = await Fido2PRFManager_1.default.createFromAttestation(attestation);
+            return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
+        }
+        else {
+            const f2m = await Fido2Manager_1.default.createFromAttestation(attestation);
+            return new VaultysId(f2m, undefined, TYPE_FIDO2);
+        }
+    }
+    static async machineFromEntropy(entropy) {
+        return VaultysId.fromEntropy(entropy, TYPE_MACHINE);
+    }
+    static async organizationFromEntropy(entropy) {
+        return VaultysId.fromEntropy(entropy, TYPE_ORGANIZATION);
+    }
+    static async personFromEntropy(entropy) {
+        return VaultysId.fromEntropy(entropy, TYPE_PERSON);
+    }
+    static fromSecret(secret, encoding = "hex") {
+        const secretBuffer = buffer_1.Buffer.from(secret, encoding);
+        const type = secretBuffer[0];
+        if (type == TYPE_FIDO2) {
+            const f2m = Fido2Manager_1.default.fromSecret(secretBuffer.slice(1));
+            return new VaultysId(f2m, undefined, type);
+        }
+        else if (type == TYPE_FIDO2PRF) {
+            const f2m = Fido2PRFManager_1.default.fromSecret(secretBuffer.slice(1));
+            return new VaultysId(f2m, undefined, type);
+        }
+        else {
+            if (secretBuffer.length > 1312) {
+                const pqm = PQManager_1.default.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(pqm, undefined, type);
+            }
+            else {
+                const km = KeyManager_1.default.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(km, undefined, type);
+            }
+        }
+    }
+    static async generatePerson(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
+    }
+    static async generateOrganization(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
+    }
+    static async generateMachine(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
+    }
+    get relationshipCertificate() {
+        return this.certificate;
+    }
+    getSecret(encoding = "hex") {
+        return buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), this.keyManager.getSecret()]).toString(encoding);
+    }
+    get fingerprint() {
+        const t = buffer_1.Buffer.from([this.type]).toString("hex");
+        const fp = t + (0, crypto_1.hash)("SHA224", this.keyManager.id).toString("hex");
+        return fp
+            .slice(0, 40)
+            .toUpperCase()
+            .match(/.{1,4}/g)
+            .join(" ");
+    }
+    get did() {
+        const t = buffer_1.Buffer.from([this.type]).toString("hex");
+        const fp = t + (0, crypto_1.hash)("SHA224", this.keyManager.id).toString("hex");
+        return `did:vaultys:${fp.slice(0, 40)}`;
+    }
+    get didDocument() {
+        return {
+            "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
+            id: this.did,
+            authentication: [
+                {
+                    id: `${this.did}#keys-1`,
+                    type: this.keyManager.authType,
+                    controller: this.did,
+                    publicKeyMultibase: "m" + buffer_1.Buffer.from(this.keyManager.signer.publicKey).toString("base64"),
+                },
+            ],
+            keyAgreement: [
+                {
+                    id: `${this.did}#keys-2`,
+                    type: this.keyManager.encType,
+                    controller: this.did,
+                    publicKeyMultibase: "m" + buffer_1.Buffer.from(this.keyManager.cypher.publicKey).toString("base64"),
+                },
+            ],
+        };
+    }
+    get id() {
+        return buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), this.keyManager.id]);
+    }
+    toVersion(v) {
+        this.keyManager.version = v;
+        return this;
+    }
+    get version() {
+        return this.keyManager.version;
+    }
+    isHardware() {
+        return this.type === TYPE_FIDO2 || this.type === TYPE_FIDO2PRF;
+    }
+    isMachine() {
+        return this.type === TYPE_MACHINE;
+    }
+    isPerson() {
+        return this.type === TYPE_PERSON;
+    }
+    getOTPHmac(timelock = 1 * 3600000) {
+        const otp = Math.floor(new Date().getTime() / timelock);
+        return this.keyManager.getSecretHash(buffer_1.Buffer.from(`OTP-${otp}`)).toString("hex");
+    }
+    // Need to think about insecure use of this function
+    getOTP(prefix = "password", timelock = 24 * 3600000) {
+        if (this.certificate) {
+            const otp = Math.floor(new Date().getTime() / timelock);
+            const toHash = buffer_1.Buffer.concat([buffer_1.Buffer.from(prefix, "utf-8"), buffer_1.Buffer.from(this.certificate), buffer_1.Buffer.from([otp])]);
+            return (0, crypto_1.hash)("SHA256", toHash).toString("hex");
+        }
+        throw new Error("no certificate, cannot derive OTP");
+    }
+    async performDiffieHellman(otherVaultysId) {
+        return this.keyManager.performDiffieHellman(otherVaultysId.keyManager);
+    }
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two VaultysId instances
+     * @param vaultysId1 First VaultysId instance
+     * @param vaultysId2 Second VaultysId instance
+     * @returns A shared secret that both parties can derive
+     */
+    static async diffieHellman(vaultysId1, vaultysId2) {
+        return vaultysId1.performDiffieHellman(vaultysId2);
+    }
+    /**
+     * Encrypt a message using DHIES for a recipient
+     * @param message Message to encrypt
+     * @param recipientId Recipient's VaultysId ID
+     * @returns Encrypted message or null if encryption fails
+     */
+    async dhiesEncrypt(message, recipientId) {
+        let cleanId;
+        if (typeof recipientId === "string") {
+            cleanId = buffer_1.Buffer.from(recipientId.slice(2), "hex");
+        }
+        else {
+            cleanId = recipientId.slice(1);
+        }
+        return this.keyManager.dhiesEncrypt(message, cleanId);
+    }
+    /**
+     * Decrypt a message encrypted with DHIES
+     * @param encryptedMessage Encrypted message from dhiesEncrypt
+     * @returns Decrypted message as Buffer or null if decryption fails
+     */
+    async dhiesDecrypt(encryptedMessage, senderId) {
+        let cleanId;
+        if (typeof senderId === "string") {
+            cleanId = buffer_1.Buffer.from(senderId.slice(2), "hex");
+        }
+        else {
+            cleanId = senderId.slice(1);
+        }
+        return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
+    }
+    async signChallenge(challenge) {
+        if (typeof challenge == "string") {
+            challenge = buffer_1.Buffer.from(challenge, "hex");
+        }
+        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([this.id, challenge]));
+        return this.keyManager.sign(result);
+    }
+    verifyChallenge(challenge, signature, userVerification) {
+        if (typeof challenge == "string") {
+            challenge = buffer_1.Buffer.from(challenge, "hex");
+        }
+        if (typeof signature == "string") {
+            signature = buffer_1.Buffer.from(signature, "hex");
+        }
+        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([this.id, challenge]));
+        return this.keyManager.verify(result, signature, userVerification);
+    }
+    async signcrypt(plaintext, recipientIds) {
+        return this.keyManager.signcrypt(plaintext, recipientIds.map((id) => {
+            if (typeof id === "string")
+                return buffer_1.Buffer.from(id.slice(2), "hex");
+            else
+                return id.slice(1);
+        }));
+    }
+    static async encrypt(plaintext, recipientIds) {
+        return KeyManager_1.default.encrypt(plaintext, recipientIds.map((id) => {
+            if (typeof id === "string")
+                return buffer_1.Buffer.from(id.slice(2), "hex");
+            else
+                return id.slice(1);
+        }));
+    }
+    async decrypt(encryptedMessage, senderId) {
+        let cleanId;
+        if (senderId) {
+            if (typeof senderId === "string")
+                cleanId = buffer_1.Buffer.from(senderId.slice(2));
+            // @ts-ignore
+            else
+                cleanId = senderId.subarray(1);
+        }
+        return this.keyManager.decrypt(encryptedMessage, cleanId);
+    }
+    async hmac(message) {
+        const cypher = await this.keyManager.getCypher();
+        return cypher.hmac(message);
+    }
+}
+VaultysId.createPublicKeyCredentialOptionsPQC = () => {
+    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
+    const hint = "security-key";
+    const options = {
+        challenge: (0, crypto_1.randomBytes)(32),
+        rp: {
+            name: "Vaultys ID",
+        },
+        user: {
+            id: (0, crypto_1.randomBytes)(16),
+            name: "Vaultys ID",
+            displayName: "Vaultys Wallet ID",
+        },
+        attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
+        authenticatorSelection: {
+            authenticatorAttachment: "cross-platform",
+            residentKey: "discouraged",
+            userVerification: "preferred",
+        },
+        // @ts-ignore not yet in dom types
+        hints: [hint],
+        extensions: {
+            prf: {
+                eval: {
+                    first: buffer_1.Buffer.from("VaultysID salt", "utf-8"),
+                },
+            },
+        },
+        pubKeyCredParams: [{ type: "public-key", alg: pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 }],
+    };
+    return options;
+};
+VaultysId.createPublicKeyCredentialCreationOptions = (passkey) => {
+    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
+    const hint = passkey ? "client-device" : "security-key";
+    const options = {
+        challenge: (0, crypto_1.randomBytes)(32),
+        rp: {
+            name: "Vaultys ID",
+        },
+        user: {
+            id: (0, crypto_1.randomBytes)(16),
+            name: "Vaultys ID",
+            displayName: "Vaultys Wallet ID",
+        },
+        attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
+        authenticatorSelection: {
+            authenticatorAttachment: passkey ? "platform" : "cross-platform",
+            residentKey: passkey ? "required" : "discouraged",
+            userVerification: "preferred",
+        },
+        // @ts-ignore not yet in dom types
+        hints: [hint],
+        extensions: {
+            prf: {
+                eval: {
+                    first: buffer_1.Buffer.from("VaultysID salt", "utf-8"),
+                },
+            },
+        },
+        pubKeyCredParams: [
+            {
+                type: "public-key",
+                alg: -7, // SECP256/ECDSA, Ed25519/EdDSA (-8) not supported natively on mobile or yubikey (crying)
+            },
+            {
+                type: "public-key",
+                alg: -8, // Ed25519/EdDSA prefered
+            },
+            {
+                type: "public-key",
+                alg: -257, // RS256
+            },
+            // {
+            //   "type": "public-key",
+            //   "alg": -36
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -37
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -38
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -39
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -258
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -259
+            // }
+        ],
+    };
+    return options;
+};
+exports["default"] = VaultysId;
+
+
+/***/ }),
+
 /***/ "./src/crypto.ts":
 /*!***********************!*\
   !*** ./src/crypto.ts ***!
@@ -74461,6 +79338,7 @@ const p256_1 = __webpack_require__(/*! @noble/curves/p256 */ "./node_modules/.pn
 const p384_1 = __webpack_require__(/*! @noble/curves/p384 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p384.js");
 const p521_1 = __webpack_require__(/*! @noble/curves/p521 */ "./node_modules/.pnpm/@noble+curves@1.9.0/node_modules/@noble/curves/p521.js");
 const x509_1 = __webpack_require__(/*! @peculiar/x509 */ "./node_modules/.pnpm/@peculiar+x509@1.12.3/node_modules/@peculiar/x509/build/x509.es.js");
+const pqCrypto_1 = __webpack_require__(/*! ../pqCrypto */ "./src/pqCrypto.ts");
 const credentials = {};
 //const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
 const COSEKEYS = {
@@ -74476,6 +79354,7 @@ const COSEKTY = {
     OKP: 1,
     EC2: 2,
     RSA: 3,
+    DILITHIUM: pqCrypto_1.PQ_COSE_KEY_TYPE.DILITHIUM,
 };
 const COSERSASCHEME = {
     "-3": "pss-sha256",
@@ -74503,6 +79382,7 @@ const COSEALGHASH = {
     "-261": "SHA-512",
     "-7": "SHA-256",
     "-36": "SHA-512",
+    [pqCrypto_1.PQ_COSE_ALG.DILITHIUM2.toString()]: "SHA-256", // DILITHIUM2 uses SHA-256 for hashing
 };
 const hash = (alg, message) => (0, crypto_2.hash)(alg.replace("-", ""), message);
 const base64ToPem = (b64cert) => {
@@ -74711,15 +79591,26 @@ class SoftCredentials {
         const credential = new SoftCredentials();
         const publicKey = options.publicKey;
         credential.options = publicKey;
-        credential.rpId = publicKey.rp.id;
+        credential.rpId = publicKey.rp.id || publicKey.rp.name;
         credential.userHandle = buffer_1.Buffer.from(publicKey.user.id.toString(), "base64");
         credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
-        credential.alg = publicKey.pubKeyCredParams[0].alg;
+        // Get the algorithm from pubKeyCredParams
+        const pubKeyCredParams = publicKey.pubKeyCredParams;
+        // Check if DILITHIUM is supported (look for PQ_COSE_ALG.DILITHIUM2 in the params)
+        const supportsDilithium = pubKeyCredParams.some((param) => param.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2);
+        // Set algorithm, prioritizing DILITHIUM if it's supported
+        if (supportsDilithium) {
+            credential.alg = pqCrypto_1.PQ_COSE_ALG.DILITHIUM2;
+        }
+        else {
+            credential.alg = publicKey.pubKeyCredParams[0].alg;
+        }
         if (credential.alg === -8) {
             const random = ed25519_1.ed25519.utils.randomPrivateKey();
             credential.keyPair = {
                 privateKey: random,
                 publicKey: ed25519_1.ed25519.getPublicKey(random),
+                algorithm: "EdDSA",
             };
             credential.coseKey = new Map();
             credential.coseKey.set(1, 1);
@@ -74733,6 +79624,7 @@ class SoftCredentials {
             credential.keyPair = {
                 privateKey: random,
                 publicKey: p256_1.p256.getPublicKey(random, false),
+                algorithm: "ES256",
             };
             credential.coseKey = new Map();
             credential.coseKey.set(1, 2);
@@ -74743,6 +79635,20 @@ class SoftCredentials {
             credential.coseKey.set(-2, x);
             credential.coseKey.set(-3, y);
             // console.log(extpk,x,y)
+        }
+        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2) {
+            // Generate DILITHIUM key pair
+            const { publicKey: dilithiumPk, secretKey: dilithiumSk } = (0, pqCrypto_1.generateDilithiumKeyPair)();
+            //console.log("PQC", dilithiumPk, dilithiumSk);
+            credential.keyPair = {
+                privateKey: dilithiumSk,
+                publicKey: dilithiumPk,
+                algorithm: "DILITHIUM2",
+                isDILITHIUM: true,
+            };
+            // Create COSE key representation
+            credential.coseKey = (0, pqCrypto_1.createDilithiumCoseKey)(dilithiumPk);
+            //console.log("PQC", credential);
         }
         const clientData = {
             type: "webauthn.create",
@@ -74811,17 +79717,25 @@ class SoftCredentials {
             const pubKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), x, y]);
             return verifyECDSA(data, pubKey, buffer_1.Buffer.from(response.signature));
         }
+        else if (ckey.get(1) === COSEKTY.DILITHIUM) {
+            // DILITHIUM
+            const publicKey = ckey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
+            // Verify DILITHIUM signature asynchronously
+            //console.log(data, publicKey, Buffer.from(response.signature));
+            return (0, pqCrypto_1.verifyDilithium)(data, buffer_1.Buffer.from(response.signature), publicKey);
+        }
         return false;
     }
     static getCOSEPublicKey(attestation) {
         const response = attestation.response;
         const ato = cbor_1.default.decode(response.attestationObject);
+        //console.log("getCOSEPublicKey", ato, parseAuthData(ato.authData));
         return parseAuthData(ato.authData).COSEPublicKey;
     }
     static verifyPackedAttestation(attestation, userVerification = false) {
         return verifyPackedAttestation(attestation, userVerification);
     }
-    static verify(attestation, assertion, userVerifiation = false) {
+    static async verify(attestation, assertion, userVerifiation = false) {
         //if (assertion.id !== attestation.id) return false;
         const hash = (0, crypto_2.hash)("sha256", buffer_1.Buffer.from(assertion.response.clientDataJSON));
         const ass = assertion.response;
@@ -74836,20 +79750,30 @@ class SoftCredentials {
         if ((userVerifiation && !authData.flags.uv) || !authData.COSEPublicKey)
             return false;
         const ckey = cbor_1.default.decode(authData.COSEPublicKey);
+        // Hash data for ES256
         if (ckey.get(3) == -7) {
             data = (0, crypto_2.hash)("sha256", data);
         }
-        if (ckey.get(1) == 1) {
+        // Get key type
+        const keyType = ckey.get(1);
+        if (keyType === 1) {
             // EdDSA
             const x = ckey.get(-2);
             return verifyEdDSA(data, x, buffer_1.Buffer.from(ass.signature));
         }
-        else if (ckey.get(1) == 2) {
+        else if (keyType === 2) {
             // ECDSA
             const x = ckey.get(-2);
             const y = ckey.get(-3);
             const pubKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), x, y]);
             return verifyECDSA(data, pubKey, buffer_1.Buffer.from(ass.signature));
+        }
+        else if (keyType === COSEKTY.DILITHIUM) {
+            // DILITHIUM
+            const publicKey = ckey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
+            // Verify DILITHIUM signature asynchronously
+            //console.log(data, publicKey, Buffer.from(ass.signature));
+            return (0, pqCrypto_1.verifyDilithium)(data, buffer_1.Buffer.from(ass.signature), publicKey);
         }
         return false;
     }
@@ -74887,6 +79811,10 @@ class SoftCredentials {
         else if (credential.alg === -8) {
             signature = ed25519_1.ed25519.sign(toSign, credential.keyPair.privateKey);
         }
+        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2) {
+            // DILITHIUM signing - this returns a Promise so we need to await it
+            signature = (0, pqCrypto_1.signDilithium)(toSign, credential.keyPair.privateKey);
+        }
         const pkCredentials = {
             id,
             rawId: buffer_1.Buffer.from(id, "base64").buffer,
@@ -74913,6 +79841,194 @@ class SoftCredentials {
     }
 }
 exports["default"] = SoftCredentials;
+
+
+/***/ }),
+
+/***/ "./src/platform/webauthn.ts":
+/*!**********************************!*\
+  !*** ./src/platform/webauthn.ts ***!
+  \**********************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NodeWebAuthn = exports.BrowserWebAuthn = void 0;
+exports.getWebAuthnProvider = getWebAuthnProvider;
+exports.createCredentialRequest = createCredentialRequest;
+const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+// Browser implementation
+class BrowserWebAuthn {
+    isAvailable() {
+        return typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
+    }
+    async create(options) {
+        if (!this.isAvailable()) {
+            throw new Error("WebAuthn is not available in this environment");
+        }
+        return (await navigator.credentials.create({ publicKey: options }));
+    }
+    async get(options) {
+        if (!this.isAvailable()) {
+            throw new Error("WebAuthn is not available in this environment");
+        }
+        return (await navigator.credentials.get({ publicKey: options }));
+    }
+}
+exports.BrowserWebAuthn = BrowserWebAuthn;
+// Node.js implementation using SoftCredentials
+class NodeWebAuthn {
+    constructor(origin = "test") {
+        this.origin = origin;
+    }
+    isAvailable() {
+        return true; // Always available in mock mode
+    }
+    async create(options) {
+        return await SoftCredentials_1.default.create({
+            publicKey: options,
+        }, this.origin);
+    }
+    async get(options) {
+        return await SoftCredentials_1.default.get({
+            publicKey: options,
+        }, this.origin);
+    }
+}
+exports.NodeWebAuthn = NodeWebAuthn;
+// Factory function
+function getWebAuthnProvider(options) {
+    if (typeof window !== "undefined") {
+        return new BrowserWebAuthn();
+    }
+    return new NodeWebAuthn(options?.origin);
+}
+// Helper to create credential request
+function createCredentialRequest(alg, prf = false) {
+    return SoftCredentials_1.default.createRequest(alg, prf);
+}
+
+
+/***/ }),
+
+/***/ "./src/pqCrypto.ts":
+/*!*************************!*\
+  !*** ./src/pqCrypto.ts ***!
+  \*************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+/**
+ * Post-Quantum Cryptography Operations
+ *
+ * This file contains implementations for post-quantum cryptographic algorithms
+ * starting with DILITHIUM for digital signatures.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PQ_COSE_KEY_PARAMS = exports.PQ_COSE_KEY_TYPE = exports.PQ_COSE_ALG = void 0;
+exports.generateDilithiumKeyPair = generateDilithiumKeyPair;
+exports.signDilithium = signDilithium;
+exports.verifyDilithium = verifyDilithium;
+exports.createDilithiumCoseKey = createDilithiumCoseKey;
+exports.getDilithiumKeyInfo = getDilithiumKeyInfo;
+const dilithium_1 = __webpack_require__(/*! @asanrom/dilithium */ "./node_modules/.pnpm/@asanrom+dilithium@1.1.1/node_modules/@asanrom/dilithium/dist/index.js");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+/**
+ * COSE algorithm identifiers for post-quantum algorithms
+ * Note: These values are provisional and may need to be updated as standards evolve
+ */
+exports.PQ_COSE_ALG = {
+    // DILITHIUM variants (using negative values as per COSE convention for new algorithms)
+    DILITHIUM2: -46, // Level 2 (128-bit security)
+    DILITHIUM3: -47, // Level 3 (192-bit security)
+    DILITHIUM5: -48, // Level 5 (256-bit security)
+};
+/**
+ * COSE key type for DILITHIUM
+ */
+exports.PQ_COSE_KEY_TYPE = {
+    DILITHIUM: 4, // Custom key type for DILITHIUM
+};
+/**
+ * COSE key parameter identifiers for DILITHIUM
+ */
+exports.PQ_COSE_KEY_PARAMS = {
+    DILITHIUM_MODE: -100, // Mode parameter (2, 3, or 5)
+    DILITHIUM_PK: -101, // Public key
+    DILITHIUM_SK: -102, // Secret key
+};
+/**
+ * Generate a DILITHIUM Level 2 key pair
+ * @returns Promise resolving to an object containing the key pair
+ */
+function generateDilithiumKeyPair(seed) {
+    const level = dilithium_1.DilithiumLevel.get(2); // Get the security level config (2, 3, or 5)
+    // Generate a key pair
+    const keyPair = dilithium_1.DilithiumKeyPair.generate(level, seed);
+    return {
+        publicKey: buffer_1.Buffer.from(keyPair.getPublicKey().toBase64(), "base64"),
+        secretKey: buffer_1.Buffer.from(keyPair.getPrivateKey().toBase64(), "base64"),
+    };
+}
+/**
+ * Sign a message using DILITHIUM Level 2
+ * @param message - The message to sign
+ * @param privateKey - The DILITHIUM private key
+ * @returns Promise resolving to signature as Uint8Array
+ */
+function signDilithium(message, secretKey) {
+    const DKey = dilithium_1.DilithiumPrivateKey.fromBytes(secretKey, dilithium_1.DilithiumLevel.get(2));
+    return buffer_1.Buffer.from(DKey.sign(message).getBytes());
+}
+/**
+ * Verify a DILITHIUM Level 2 signature
+ * @param message - The original message
+ * @param signature - The signature to verify
+ * @param publicKey - The DILITHIUM public key
+ * @returns Promise resolving to boolean indicating if signature is valid
+ */
+function verifyDilithium(message, signature, publicKey) {
+    // Ensure we're working with Uint8Array
+    const DKey = dilithium_1.DilithiumPublicKey.fromBytes(publicKey, dilithium_1.DilithiumLevel.get(2));
+    try {
+        return DKey.verifySignature(message, dilithium_1.DilithiumSignature.fromBytes(signature, dilithium_1.DilithiumLevel.get(2)));
+    }
+    catch (error) {
+        console.error("DILITHIUM verification error:", error);
+        return false;
+    }
+}
+/**
+ * Create a COSE key representation for a DILITHIUM public key
+ * @param publicKey - The DILITHIUM public key
+ * @returns Map representing the COSE key
+ */
+function createDilithiumCoseKey(publicKey) {
+    const coseKey = new Map();
+    // Standard COSE key parameters
+    coseKey.set(1, exports.PQ_COSE_KEY_TYPE.DILITHIUM); // kty: Key Type
+    coseKey.set(3, exports.PQ_COSE_ALG.DILITHIUM2); // alg: Algorithm
+    // DILITHIUM-specific parameters
+    coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_MODE, 2); // Level 2
+    coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_PK, publicKey);
+    return coseKey;
+}
+/**
+ * Get key size information for DILITHIUM
+ * @returns Object with key size information
+ */
+function getDilithiumKeyInfo() {
+    return {
+        publicKeySize: 1312, // Size in bytes for DILITHIUM2 public key
+        secretKeySize: 2544, // Size in bytes for DILITHIUM2 private key
+        signatureSize: 2420, // Size in bytes for DILITHIUM2 signature
+    };
+}
 
 
 /***/ }),
@@ -74950,17 +80066,18 @@ const delay = (ms = 1000) => new Promise((resolve) => setTimeout(resolve, ms));
 const challengeNext = async (vaultysId, newCertificate, oldCertificate) => {
     //console.log(newCertificate, oldCertificate);
     const challenger = new __1.Challenger(vaultysId);
+    challenger.version = 1;
     if (oldCertificate) {
         await challenger.init(oldCertificate);
     }
     else if (!newCertificate) {
-        challenger.createChallenge("p2p", "test");
+        challenger.createChallenge("p2p", "test", 1);
     }
     if (newCertificate)
         await challenger.update(newCertificate);
     return challenger.getCertificate();
 };
-describe("Symetric Proof of Relationship - SRG", () => {
+describe("Symetric Proof of Relationship - SRG - v1", () => {
     it("Perform Protocol", async () => {
         const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
         const challenger1 = new __1.Challenger(vaultysId1);
@@ -74968,7 +80085,34 @@ describe("Symetric Proof of Relationship - SRG", () => {
         const challenger2 = new __1.Challenger(vaultysId2);
         assert_1.default.equal(challenger1.isComplete(), false);
         assert_1.default.equal(challenger1.hasFailed(), false);
-        challenger1.createChallenge("p2p", "auth");
+        challenger1.createChallenge("p2p", "auth", 1);
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, -1);
+        await challenger2.update(challenger1.getCertificate());
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, 1);
+        await challenger1.update(challenger2.getCertificate());
+        assert_1.default.equal(challenger1.state, 2);
+        assert_1.default.equal(challenger2.state, 1);
+        assert_1.default.ok(challenger1.isComplete());
+        assert_1.default.ok(!challenger2.isComplete());
+        await challenger2.update(challenger1.getCertificate());
+        assert_1.default.equal(challenger1.state, 2);
+        assert_1.default.equal(challenger2.state, 2);
+        // SYMETRIC PROOF
+        assert_1.default.ok(challenger1.isComplete());
+        assert_1.default.ok(challenger2.isComplete());
+        assert_1.default.equal(challenger1.toString(), challenger2.toString());
+    });
+    it("Perform Protocol downgrading to v0", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        assert_1.default.equal(challenger1.isComplete(), false);
+        assert_1.default.equal(challenger1.hasFailed(), false);
+        challenger1.createChallenge("p2p", "auth", 0);
+        //console.log(challenger1.challenge);
         assert_1.default.equal(challenger1.state, 0);
         assert_1.default.equal(challenger2.state, -1);
         await challenger2.update(challenger1.getCertificate());
@@ -74998,6 +80142,433 @@ describe("Symetric Proof of Relationship - SRG", () => {
         // console.log("complete", Challenger.deserializeCertificate(complete));
         const finalise = await challengeNext(vaultysId2, complete, step1);
         assert_1.default.equal(complete.toString("base64"), finalise.toString("base64"));
+    });
+    it("Perform Protocol attacking protocol", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        const challengerattack = new __1.Challenger(vaultysId2);
+        assert_1.default.equal(challenger1.isComplete(), false);
+        assert_1.default.equal(challenger1.hasFailed(), false);
+        challenger1.createChallenge("p2p", "auth", 1);
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, -1);
+        await challengerattack.setChallenge(challenger1.getCertificate());
+        challengerattack.challenge.protocol = "hack";
+        delete challengerattack.challenge?.pk2;
+        delete challengerattack.challenge?.sign2;
+        challengerattack.challenge.nonce = buffer_1.Buffer.from(challengerattack.challenge.nonce.subarray(0, 16));
+        await challenger2.update(challengerattack.getCertificate());
+        // console.log(challengerattack.challenge);
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, 1);
+        try {
+            await challenger1.update(challenger2.getCertificate());
+        }
+        catch (err) {
+            assert_1.default.equal(err?.message, "The challenge was expecting protocol 'p2p' and service 'auth', received 'hack' and 'auth'");
+            return;
+        }
+        assert_1.default.fail("The protocol with tampered nonce should have failed");
+    });
+    it("Perform Protocol attacking service", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        const challengerattack = new __1.Challenger(vaultysId2);
+        assert_1.default.equal(challenger1.isComplete(), false);
+        assert_1.default.equal(challenger1.hasFailed(), false);
+        challenger1.createChallenge("p2p", "auth", 1);
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, -1);
+        await challengerattack.setChallenge(challenger1.getCertificate());
+        challengerattack.challenge.service = "hack";
+        delete challengerattack.challenge?.pk2;
+        delete challengerattack.challenge?.sign2;
+        challengerattack.challenge.nonce = buffer_1.Buffer.from(challengerattack.challenge.nonce.subarray(0, 16));
+        await challenger2.update(challengerattack.getCertificate());
+        // console.log(challengerattack.challenge);
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, 1);
+        try {
+            await challenger1.update(challenger2.getCertificate());
+        }
+        catch (err) {
+            assert_1.default.equal(err?.message, "The challenge was expecting protocol 'p2p' and service 'auth', received 'p2p' and 'hack'");
+            return;
+        }
+        assert_1.default.fail("The protocol with tampered nonce should have failed");
+    });
+    it("Perform Protocol attacking nonce", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        const challengerattack = new __1.Challenger(vaultysId2);
+        assert_1.default.equal(challenger1.isComplete(), false);
+        assert_1.default.equal(challenger1.hasFailed(), false);
+        challenger1.createChallenge("p2p", "auth", 1);
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, -1);
+        await challengerattack.setChallenge(challenger1.getCertificate());
+        challengerattack.challenge.nonce = (0, crypto_1.randomBytes)(16);
+        delete challengerattack.challenge?.pk2;
+        delete challengerattack.challenge?.sign2;
+        // console.log(challengerattack.challenge);
+        // console.log("boom");
+        await challenger2.update(challengerattack.getCertificate());
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, 1);
+        try {
+            await challenger1.update(challenger2.getCertificate());
+        }
+        catch (err) {
+            assert_1.default.equal(err?.message, "Nonce has been tampered with");
+            return;
+        }
+        assert_1.default.fail("The protocol with tampered nonce should have failed");
+    });
+    it("Perform Protocol attacking timestamp", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        const challengerattack = new __1.Challenger(vaultysId2);
+        assert_1.default.equal(challenger1.isComplete(), false);
+        assert_1.default.equal(challenger1.hasFailed(), false);
+        challenger1.createChallenge("p2p", "auth", 1);
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, -1);
+        await challengerattack.setChallenge(challenger1.getCertificate());
+        await delay(2); //new timestamp might be the same!
+        challengerattack.challenge.timestamp = Date.now();
+        delete challengerattack.challenge?.pk2;
+        delete challengerattack.challenge?.sign2;
+        challengerattack.challenge.nonce = buffer_1.Buffer.from(challengerattack.challenge.nonce.subarray(0, 16));
+        await challenger2.update(challengerattack.getCertificate());
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, 1);
+        try {
+            await challenger1.update(challenger2.getCertificate());
+        }
+        catch (err) {
+            assert_1.default.equal(err?.message, "Timestamp has been tampered with");
+            return;
+        }
+        assert_1.default.fail("The protocol with tampered timestamp should have failed");
+    });
+    it("Perform Protocol attacking with legit but different certificate", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        challenger1.createChallenge("p2p", "auth", 1);
+        await challenger2.update(challenger1.getCertificate());
+        await challenger1.update(challenger2.getCertificate());
+        await challenger2.update(challenger1.getCertificate());
+        const challenger3 = new __1.Challenger(vaultysId1);
+        const challenger4 = new __1.Challenger(vaultysId2);
+        challenger3.createChallenge("p2p", "auth", 1);
+        await challenger4.update(challenger3.getCertificate());
+        await challenger3.update(challenger4.getCertificate());
+        try {
+            await challenger4.update(challenger1.getCertificate());
+        }
+        catch (err) {
+            assert_1.default.equal(err?.message, "Nonce has been tampered with");
+            return;
+        }
+        assert_1.default.fail("The protocol with tampered legit certificate should have failed");
+    });
+    it("Fail for liveliness at first round", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1, 50);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2, 50);
+        assert_1.default.ok(!challenger1.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        challenger1.createChallenge("p2p", "auth", 1);
+        await delay(100);
+        await assert_1.default.rejects(challenger2.update(challenger1.getCertificate()), {
+            name: "Error",
+            message: "challenge timestamp failed the liveliness",
+        });
+    });
+    it("Fail for liveliness at second round", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1, 50);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2, 50);
+        assert_1.default.ok(!challenger1.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        challenger1.createChallenge("p2p", "auth", 1);
+        await challenger2.update(challenger1.getCertificate());
+        await delay(100);
+        await assert_1.default.rejects(challenger1.update(challenger2.getCertificate()), {
+            name: "Error",
+            message: "challenge timestamp failed the liveliness",
+        });
+    });
+    it("Pass for liveliness at third round", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1, 500);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2, 500);
+        assert_1.default.ok(!challenger1.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        challenger1.createChallenge("p2p", "auth", 1);
+        await challenger2.update(challenger1.getCertificate());
+        await challenger1.update(challenger2.getCertificate());
+        await delay(200);
+        await challenger2.update(challenger1.getCertificate());
+        assert_1.default.ok(challenger1.isComplete());
+        assert_1.default.ok(challenger2.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        assert_1.default.equal(challenger1.toString(), challenger2.toString());
+    });
+    it("Pass with time deviation of 59s in the future", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        assert_1.default.ok(!challenger1.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        challenger1.createChallenge("p2p", "auth", 1);
+        if (!challenger1.challenge)
+            assert_1.default.fail();
+        challenger1.challenge.timestamp = challenger1.challenge.timestamp + 59000;
+        await challenger2.update(challenger1.getCertificate());
+        await challenger1.update(challenger2.getCertificate());
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await challenger2.update(challenger1.getCertificate());
+        assert_1.default.ok(challenger1.isComplete());
+        assert_1.default.ok(challenger2.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        assert_1.default.equal(challenger1.toString(), challenger2.toString());
+    });
+    it("Pass with time deviation of 59s in the past", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        assert_1.default.ok(!challenger1.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        challenger1.createChallenge("p2p", "auth", 1);
+        if (!challenger1.challenge)
+            assert_1.default.fail();
+        challenger1.challenge.timestamp = challenger1.challenge.timestamp - 59000;
+        await challenger2.update(challenger1.getCertificate());
+        await challenger1.update(challenger2.getCertificate());
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await challenger2.update(challenger1.getCertificate());
+        assert_1.default.ok(challenger1.isComplete());
+        assert_1.default.ok(challenger2.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        assert_1.default.equal(challenger1.toString(), challenger2.toString());
+    });
+    it("Fail with time deviation of 60s in the future", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        assert_1.default.ok(!challenger1.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        challenger1.createChallenge("p2p", "auth", 1);
+        challenger1.challenge.timestamp = challenger1.challenge.timestamp + 60001;
+        await assert_1.default.rejects(challenger2.update(challenger1.getCertificate()), {
+            name: "Error",
+            message: "challenge timestamp failed the liveliness",
+        });
+    });
+    it("Fail with time deviation of 60s in the past", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        assert_1.default.ok(!challenger1.isComplete());
+        assert_1.default.ok(!challenger1.hasFailed());
+        challenger1.createChallenge("p2p", "auth", 1);
+        challenger1.challenge.timestamp = challenger1.challenge.timestamp - 60000;
+        await assert_1.default.rejects(challenger2.update(challenger1.getCertificate()), {
+            name: "Error",
+            message: "challenge timestamp failed the liveliness",
+        });
+    });
+    /*
+    it("Fail with tampered certificate (FIDO2)", async () => {
+      const attestation1 = await navigator.credentials.create(
+        SoftCredentials.createRequest(-7),
+      );
+      const vaultysId1 = await VaultysId.fido2FromAttestation(attestation1);
+      const challenger1 = new Challenger(vaultysId1);
+  
+      const attestation2 = await navigator.credentials.create(
+        SoftCredentials.createRequest(-8),
+      );
+      const vaultysId2 = await VaultysId.fido2FromAttestation(attestation2);
+      const challenger2 = new Challenger(vaultysId2);
+  
+      challenger1.createChallenge("interesting", "stuff");
+      await challenger2.update(challenger1.getCertificate());
+      await challenger1.update(challenger2.getCertificate());
+      await challenger2.update(challenger1.getCertificate());
+      assert.ok(challenger1.isComplete());
+      assert.ok(challenger2.isComplete());
+      const rogueCert = challenger2.getCertificate();
+      for(let i = 0; i < rogueCert.length; i++) {
+        const back = rogueCert[i];
+        rogueCert[i] = back + Math.floor(Math.random() * 254) + 1
+        const t = testCertificate(rogueCert);
+        assert.notEqual(t.state, 2);
+        rogueCert[i] = back;
+      }
+    }).timeout(10000);
+  
+    it("Fail with tampered certificate all possibilities (FIDO2)", async () => {
+      const vaultysId1 = await VaultysId.generateMachine();
+      const challenger1 = new Challenger(vaultysId1);
+      const vaultysId2 = await VaultysId.generateMachine();
+      const challenger2 = new Challenger(vaultysId2);
+  
+      challenger1.createChallenge("interesting", "stuff");
+      await challenger2.update(challenger1.getCertificate());
+      await challenger1.update(challenger2.getCertificate());
+      await challenger2.update(challenger1.getCertificate());
+      assert.ok(challenger1.isComplete());
+      assert.ok(challenger2.isComplete());
+      const rogueCert = challenger2.getCertificate();
+      for(let i = 0; i < rogueCert.length; i++) {
+        const back = rogueCert[i];
+        // TODO fix this malleability for
+        // �timestamp��DS_� a974696d657374616d70cf000001884453195fa3
+        // �timestamp��DS_� a974696d657374616d70d3000001884453195fa3
+        // or use another serialisation for identifying certificate.
+        if(i != 46 && i != rogueCert.length - 1) {
+          for(let j = 0; j < 256; j++){
+            if(j != back) {
+              rogueCert[i] = j;
+              const t = testCertificate(rogueCert);
+              if(t.state == 2) {
+                console.log(i, j, t);
+                console.log(
+                  Buffer.from(rogueCert).toString("utf-8").slice(i-10, i+10),
+                  Buffer.from(rogueCert).toString("hex").slice(i*2-20, i*2+20),
+                  Buffer.from(challenger2.getCertificate()).toString("utf-8").slice(i-10, i+10),
+                  Buffer.from(challenger2.getCertificate()).toString("hex").slice(i*2-20, i*2+20)
+                );
+              }
+              assert.notEqual(t.state, 2);
+            }
+          }
+        }
+        console.log(i, rogueCert.length);
+        rogueCert[i] = back;
+      }
+    }).timeout(10000);
+  
+    it("Fail with tampered certificate", async () => {
+      const vaultysId1 = await VaultysId.generateMachine();
+      const challenger1 = new Challenger(vaultysId1);
+      const vaultysId2 = await VaultysId.generateMachine();
+      const challenger2 = new Challenger(vaultysId2);
+  
+      challenger1.createChallenge("random", "test");
+      await challenger2.update(challenger1.getCertificate());
+      await challenger1.update(challenger2.getCertificate());
+      await challenger2.update(challenger1.getCertificate());
+      assert.ok(challenger1.isComplete());
+      assert.ok(challenger2.isComplete());
+      const rogueCert = challenger2.getCertificate();
+      for(let i = 0; i < rogueCert.length; i++) {
+        const back = rogueCert[i];
+        rogueCert[i] = back + Math.floor(Math.random() * 254) + 1
+        const t = testCertificate(rogueCert);
+        assert.notEqual(t.state, 2);
+        rogueCert[i] = back;
+      }
+    }).timeout(10000);
+    */
+});
+
+
+/***/ }),
+
+/***/ "./test/challenger_v0.test.ts":
+/*!************************************!*\
+  !*** ./test/challenger_v0.test.ts ***!
+  \************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
+__webpack_require__(/*! ./shims */ "./test/shims.ts");
+const crypto_1 = __webpack_require__(/*! ../src/crypto */ "./src/crypto.ts");
+const utils_1 = __webpack_require__(/*! ./utils */ "./test/utils.ts");
+const cryptoChannel_1 = __webpack_require__(/*! ../src/cryptoChannel */ "./src/cryptoChannel.ts");
+const delay = (ms = 1000) => new Promise((resolve) => setTimeout(resolve, ms));
+const challengeNext = async (vaultysId, newCertificate, oldCertificate) => {
+    //console.log(newCertificate, oldCertificate);
+    const challenger = new __1.Challenger(vaultysId);
+    challenger.version = 0;
+    if (oldCertificate) {
+        await challenger.init(oldCertificate);
+    }
+    else if (!newCertificate) {
+        challenger.createChallenge("p2p", "test", 0);
+    }
+    if (newCertificate)
+        await challenger.update(newCertificate);
+    return challenger.getCertificate();
+};
+describe("Symetric Proof of Relationship - SRG - v0", () => {
+    it("Perform Protocol", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        assert_1.default.equal(challenger1.isComplete(), false);
+        assert_1.default.equal(challenger1.hasFailed(), false);
+        challenger1.createChallenge("p2p", "auth");
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, -1);
+        await challenger2.update(challenger1.getCertificate());
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, 1);
+        await challenger1.update(challenger2.getCertificate());
+        assert_1.default.equal(challenger1.state, 2);
+        assert_1.default.equal(challenger2.state, 1);
+        assert_1.default.ok(challenger1.isComplete());
+        assert_1.default.ok(!challenger2.isComplete());
+        await challenger2.update(challenger1.getCertificate());
+        assert_1.default.equal(challenger1.state, 2);
+        assert_1.default.equal(challenger2.state, 2);
+        // SYMETRIC PROOF
+        assert_1.default.ok(challenger1.isComplete());
+        assert_1.default.ok(challenger2.isComplete());
+        assert_1.default.equal(challenger1.toString(), challenger2.toString());
+    });
+    it("Perform Stateless Protocol", async () => {
+        for (let i = 0; i < 10; i++) {
+            const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+            const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+            const init = await challengeNext(vaultysId1);
+            // console.log("init", Challenger.deserializeCertificate(init));
+            const step1 = await challengeNext(vaultysId2, init);
+            // console.log("step1", Challenger.deserializeCertificate(step1));
+            const complete = await challengeNext(vaultysId1, step1);
+            // console.log("complete", Challenger.deserializeCertificate(complete));
+            const finalise = await challengeNext(vaultysId2, complete, step1);
+            assert_1.default.equal(complete.toString("base64"), finalise.toString("base64"));
+        }
     });
     it("Perform Protocol attacking protocol", async () => {
         const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
@@ -75115,6 +80686,30 @@ describe("Symetric Proof of Relationship - SRG", () => {
         }
         assert_1.default.fail("The protocol with tampered timestamp should have failed");
     });
+    it("Perform Protocol attacking version", async () => {
+        const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
+        const challenger1 = new __1.Challenger(vaultysId1);
+        const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
+        const challenger2 = new __1.Challenger(vaultysId2);
+        const challengerattack = new __1.Challenger(vaultysId2);
+        assert_1.default.equal(challenger1.isComplete(), false);
+        assert_1.default.equal(challenger1.hasFailed(), false);
+        challenger1.createChallenge("p2p", "auth");
+        assert_1.default.equal(challenger1.state, 0);
+        assert_1.default.equal(challenger2.state, -1);
+        await challengerattack.setChallenge(challenger1.getCertificate());
+        await delay(2); //new timestamp might be the same!
+        challengerattack.version = challengerattack.version ? 1 : 0;
+        challengerattack.challenge.version = challengerattack.challenge.version ? 1 : 0;
+        try {
+            await challenger2.update(challengerattack.getCertificate());
+        }
+        catch (err) {
+            assert_1.default.equal(err?.message, "challenge is not corresponding to the right id");
+            return;
+        }
+        assert_1.default.fail("The protocol with tampered version should have failed");
+    });
     it("Perform Protocol attacking with legit but different certificate", async () => {
         const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
         const challenger1 = new __1.Challenger(vaultysId1);
@@ -75169,9 +80764,9 @@ describe("Symetric Proof of Relationship - SRG", () => {
     });
     it("Pass for liveliness at third round", async () => {
         const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
-        const challenger1 = new __1.Challenger(vaultysId1, 50);
+        const challenger1 = new __1.Challenger(vaultysId1, 500);
         const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
-        const challenger2 = new __1.Challenger(vaultysId2, 50);
+        const challenger2 = new __1.Challenger(vaultysId2, 500);
         assert_1.default.ok(!challenger1.isComplete());
         assert_1.default.ok(!challenger1.hasFailed());
         challenger1.createChallenge("p2p", "auth");
@@ -75251,6 +80846,32 @@ describe("Symetric Proof of Relationship - SRG", () => {
             name: "Error",
             message: "challenge timestamp failed the liveliness",
         });
+    });
+    it("Should deserialize a succesful v0 certificate", async () => {
+        const cert = "iahwcm90b2NvbKNwMnCnc2VydmljZahyZWdpc3Rlcql0aW1lc3RhbXDPAAABko9gLwijcGsxxHQBhKF2AKFwxQAgthOolbL2HWtbnAkuAyLHAjfbnS8njgLhHlxWlosbC6uheMUAIBXMRt4jV1gxWK5/TF1jNx0kD+v2qKTWFnfEDQsrOeIvoWXFACCwkdnz8o6yhL86amqfB4/nUoznXnmSs9wAIIT30iGhaaNwazLEdACEoXYAoXDFACARZg0feo56ckkSEU8xc0G/xCH5vjeLeQjP9/KtRC4X76F4xQAg9qbrfdWleMqBsN8y7qPmZ1/ObCqFxeQmIopZBwJGfa2hZcUAIHKiC8fHbhLl902mhMbl/h04JvVnWLBCyAGb22orn5dVpW5vbmNlxCAofLkkt7f/YFen3ve05OcpDl8AFJRnejfZbMC6q37gOqVzaWduMcRAby4aZAta/aZL/8NxtqX8NnDUMTfXZ44qEdW5QVl3Gp/nh7sNDtdJfpF3XdJ1bJ7FtinGDDtTkRCzW5Hm9S+EAqVzaWduMsRA0xyketeALY1yA/KbPo7gTWTGdBVyxmG4u60kQJ2WtTDdjhVnCVzlb56xZtWhtGX/DJxw43yEehPyPxI/HvgwB6htZXRhZGF0YYA=";
+        const result = __1.Challenger.deserializeCertificate(buffer_1.Buffer.from(cert, "base64"));
+        assert_1.default.equal(result.error, "");
+        assert_1.default.equal(result.state, 2);
+    });
+    it("Should deserialize a succesful v0 certificate 2", async () => {
+        const message = "QNGwy7yyIskbWees8qH39YHp6QpODl4Gsp970YFp3j+VjWbU2j1wAw7qLMWk0Ra0YeE6mVcENvohrXRfGdcM763qrYTgpFj72+jznW6szC+XxvDFkwCm9tba/qj6H+wpoDKphscI7UzJ8J1RoKytcLl3yg5BF6ikoJW0DMG58jE/T44tyEVhS0XVD5buSF6nGgam0Hge/rOMIh4Z0G6W5XQzEjMlobk7HYEV4nQAxRV8qaSLPtspF1ZcPgke2Q278n/KTwd65Nq+YYkr6cFPkxkmz9jZx9Zv0jKGiOw48MuirweOnD2AtvkpWq5fg6vi+pNZ/tymfIxwQ9LTnYbyKOwMR6/OzTulrbOBNftwDb2+PXLLT9Y=";
+        const key = "9ee1d044677cac34984b2da0acbc66d238e884a5e944cde54b96be77e3fc1e8e";
+        const cert = (0, cryptoChannel_1.decrypt)(buffer_1.Buffer.from(message, "base64"), buffer_1.Buffer.from(key, "hex"));
+        // console.log(dearmorAndDecrypt(cert));
+        // console.log(decode(cert));
+        const result = __1.Challenger.deserializeCertificate(cert);
+        assert_1.default.equal(result.error, "");
+        assert_1.default.equal(result.state, 0);
+    });
+    it("Should deserialize a succesful v0 certificate 3", async () => {
+        const message = "Cf+KnycFC0odoGv9Yxjc2JvUgZSYBNmzBN1UomUz/3VzXds3K/Fr2odh9ZI4q86ZmFsKu/bIxsXhDNg2sM7PhESvgpAJte+3QfVD8e1pzSG4+mqQs2HSkXm5xo6gcPfoN7OyJfzUbaDW5ts1Cy9dIWxJpr8JcT6BUofVgoQk4loi8LPsDdsA4Kxk6FaAE05CeqvuglYayaOnOk/u+cQFHN9rBHe2cpHCrgQAr4Qa+MeLMo4GU7pB4Qd4nA7AQxDBXJqR+tVvPIA2GZWb/EW2OGDFU7YzRJJLP7RdXnjcsSYRkUzuCPpI7l7vfaVy8nxNqy9PkEIPlzyO3TCHOHqHWlEy2YN8O1Mx";
+        const key = "cc4dfd01327a30e10d9286344d485f2e4807ddb4c3e007f8b7fba20bb6c16985";
+        const cert = (0, cryptoChannel_1.decrypt)(buffer_1.Buffer.from(message, "base64"), buffer_1.Buffer.from(key, "hex"));
+        //console.log(dearmorAndDecrypt(cert));
+        // console.log(decode(cert));
+        const result = __1.Challenger.deserializeCertificate(cert);
+        assert_1.default.equal(result.error, "");
+        assert_1.default.equal(result.state, 0);
     });
     /*
     it("Fail with tampered certificate (FIDO2)", async () => {
@@ -75623,7 +81244,7 @@ const utils_1 = __webpack_require__(/*! ./utils */ "./test/utils.ts");
 const crypto_2 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 describe("IdManager", () => {
     it("serder a vaultys secret", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const secret = id1.getSecret();
             const id2 = __2.VaultysId.fromSecret(secret);
@@ -75637,7 +81258,7 @@ describe("IdManager", () => {
         }
     });
     it("serder a vaultys secret in base64", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const secret = id1.getSecret("base64");
             const id2 = __2.VaultysId.fromSecret(secret, "base64");
@@ -75651,7 +81272,7 @@ describe("IdManager", () => {
         }
     });
     it("serder to public Idmanager", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const id2 = __2.VaultysId.fromId(id1.id);
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
@@ -75664,7 +81285,7 @@ describe("IdManager", () => {
         }
     });
     it("serder to public Idmanager stringified", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const id = JSON.stringify(id1.id);
             const id2 = __2.VaultysId.fromId(JSON.parse(id));
@@ -75674,14 +81295,14 @@ describe("IdManager", () => {
         }
     });
     it("serder to public Idmanager as hex string", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const id2 = __2.VaultysId.fromId(id1.id.toString("hex"));
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
         }
     });
     it("serder to public Idmanager as base64 string", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const id2 = __2.VaultysId.fromId(id1.id.toString("base64"), undefined, "base64");
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
@@ -75690,7 +81311,7 @@ describe("IdManager", () => {
         }
     });
     it("sign unspecified data and log it in the store", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const s = (0, __2.MemoryStorage)(() => "");
             const manager = new __2.IdManager(id1, s);
@@ -75705,7 +81326,7 @@ describe("IdManager", () => {
         }
     });
     it("sign random document hash and log it in the store", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const s = (0, __2.MemoryStorage)(() => "");
             const file = { arrayBuffer: __1.Buffer.from((0, crypto_2.randomBytes)(1024)), type: "random" };
@@ -75739,9 +81360,9 @@ describe("IdManager", () => {
     //   assert.equal(signatures[0].type, 'LOGIN');
     // });
 });
-describe("SRG challenge with IdManager", () => {
+describe("SRG v0 challenge with IdManager", () => {
     it("pass a challenge", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const channel = __2.MemoryChannel.createBidirectionnal();
             if (!channel.otherend)
@@ -75787,7 +81408,7 @@ describe("SRG challenge with IdManager", () => {
         }
     });
     it("fail a challenge if user1 refuse", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const channel = __2.MemoryChannel.createBidirectionnal();
             if (!channel.otherend)
@@ -75815,7 +81436,7 @@ describe("SRG challenge with IdManager", () => {
         }
     });
     it("fail a challenge if user2 refuse", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const channel = __2.MemoryChannel.createBidirectionnal();
             if (!channel.otherend)
@@ -75843,7 +81464,7 @@ describe("SRG challenge with IdManager", () => {
         }
     });
     it("pass a challenge over encrypted Channel", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const channel = __2.MemoryChannel.createBidirectionnal();
             if (!channel.otherend)
@@ -75886,7 +81507,7 @@ describe("SRG challenge with IdManager", () => {
         }
     });
     it("perform PRF over Channel", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const channel = __2.MemoryChannel.createEncryptedBidirectionnal();
             if (!channel.otherend)
@@ -75902,7 +81523,7 @@ describe("SRG challenge with IdManager", () => {
         }
     });
     it("perform decrypt over Channel", async () => {
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
             const channel = __2.MemoryChannel.createEncryptedBidirectionnal();
             if (!channel.otherend)
@@ -76089,6 +81710,343 @@ describe("SRG challenge with IdManager", () => {
             assert_1.default.equal(id.contacts.length + id.apps.length, 8);
         }
     }).timeout(20000);
+});
+describe("SRG v1 challenge with IdManager", () => {
+    it("pass a challenge", async () => {
+        for (let i = 0; i < 5; i++) {
+            const id1 = await (0, utils_1.createRandomVaultysId)();
+            const channel = __2.MemoryChannel.createBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail();
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(id1, s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await __2.VaultysId.generateMachine(), s2);
+            const metadata1 = {
+                name: "a",
+                email: "b",
+                phone: "c",
+            };
+            const metadata2 = {
+                name: "d",
+                email: "e",
+                phone: "f",
+            };
+            const challengers = await Promise.all([manager1.startSRP(channel, "p2p", "auth", metadata1), manager2.acceptSRP(channel.otherend, "p2p", "auth", metadata2)]);
+            //console.log(challengers);
+            // assert.equal(contacts[0].did, manager2.vaultysId.did);
+            // assert.equal(contacts[1].did, manager1.vaultysId.did);
+            ///console.log(s2, s1);
+            // assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
+            // assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);
+            // assert.equal(s1.substore("wot").list().length, 1);
+            // assert.equal(s2.substore("wot").list().length, 1);
+            // console.log(Challenger.deserializeCertificate(s2.substore("wot").get(s2.substore("wot").list()[0])));
+            // if (manager1.vaultysId.type === 0) {
+            //   assert.equal(manager2.apps.length, 1);
+            //   assert.equal(manager2.getApp(manager1.vaultysId.did)?.fingerprint, manager1.vaultysId.fingerprint);
+            //   assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
+            //   assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
+            // } else {
+            //   assert.equal(manager2.contacts.length, 1);
+            //   assert.equal(manager2.getContact(manager1.vaultysId.did)?.fingerprint, manager1.vaultysId.fingerprint);
+            //   manager2.setContactMetadata(manager1.vaultysId.did, "name", "salut");
+            //   manager2.setContactMetadata(manager1.vaultysId.did, "group", "pro");
+            //   assert.equal(manager2.getContactMetadata(manager1.vaultysId.did, "name"), "salut");
+            //   assert.equal(manager2.getContactMetadata(manager1.vaultysId.did, "group"), "pro");
+            //   assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
+            //   assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
+            // }
+        }
+    });
+    it("fail a challenge if user1 refuse", async () => {
+        for (let i = 0; i < 5; i++) {
+            const id1 = await (0, utils_1.createRandomVaultysId)();
+            const channel = __2.MemoryChannel.createBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail();
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(id1, s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await __2.VaultysId.generateMachine(), s2);
+            const metadata1 = {
+                name: "a",
+                email: "b",
+                phone: "c",
+            };
+            const metadata2 = {
+                name: "d",
+                email: "e",
+                phone: "f",
+            };
+            try {
+                await Promise.all([manager1.askContact(channel, metadata1, () => Promise.resolve(false)), manager2.acceptContact(channel.otherend, metadata2)]);
+            }
+            catch (e) {
+                assert_1.default.equal(e.message, "Error: Contact refused");
+            }
+        }
+    });
+    it("fail a challenge if user2 refuse", async () => {
+        for (let i = 0; i < 5; i++) {
+            const id1 = await (0, utils_1.createRandomVaultysId)();
+            const channel = __2.MemoryChannel.createBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail();
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(id1, s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await __2.VaultysId.generateMachine(), s2);
+            const metadata1 = {
+                name: "a",
+                email: "b",
+                phone: "c",
+            };
+            const metadata2 = {
+                name: "d",
+                email: "e",
+                phone: "f",
+            };
+            try {
+                await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2, () => Promise.resolve(false))]);
+            }
+            catch (e) {
+                assert_1.default.equal(e.message, "Error: Contact refused");
+            }
+        }
+    });
+    it("pass a challenge over encrypted Channel", async () => {
+        for (let i = 0; i < 5; i++) {
+            const id1 = await (0, utils_1.createRandomVaultysId)();
+            const channel = __2.MemoryChannel.createBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail();
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(id1, s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await __2.VaultysId.generateOrganization(), s2);
+            const metadata1 = {
+                name: "a",
+                email: "b",
+            };
+            const metadata2 = {
+                name: "d",
+                phone: "f",
+            };
+            const contacts = await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2)]);
+            assert_1.default.equal(contacts[0].did, manager2.vaultysId.did);
+            assert_1.default.equal(contacts[1].did, manager1.vaultysId.did);
+            // assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
+            // assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);
+            assert_1.default.equal(s1.substore("wot").list().length, 1);
+            assert_1.default.equal(s2.substore("wot").list().length, 1);
+            manager1.setContactMetadata(manager2.vaultysId.did, "name", "salut");
+            manager1.setContactMetadata(manager2.vaultysId.did, "group", "pro");
+            // assert.deepStrictEqual(
+            //   manager1.getCertifiedMetadata(manager2.vaultysId.did),
+            //   metadata2
+            // );
+            // assert.deepStrictEqual(
+            //   manager1.getAllMetadata(manager2.vaultysId.did),
+            //   {
+            //     group: 'pro',
+            //     name: 'salut',
+            //     phone: 'f'
+            //   }
+            // );
+            assert_1.default.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
+            assert_1.default.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
+        }
+    });
+    it("perform PRF over Channel", async () => {
+        for (let i = 0; i < 5; i++) {
+            const id1 = await (0, utils_1.createRandomVaultysId)();
+            const channel = __2.MemoryChannel.createEncryptedBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail();
+            // channel.setLogger((data) => console.log(data.toString("utf-8")));
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(id1, s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await __2.VaultysId.generateOrganization(), s2);
+            manager1.acceptPRF(channel);
+            const result = await manager2.requestPRF(channel.otherend, "nostr");
+            assert_1.default.deepEqual(result, await manager1.vaultysId.hmac("prf|nostr|prf"));
+        }
+    });
+    it("perform decrypt over Channel", async () => {
+        for (let i = 0; i < 5; i++) {
+            const id1 = await (0, utils_1.createRandomVaultysId)();
+            const channel = __2.MemoryChannel.createEncryptedBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail();
+            // channel.setLogger((data) => console.log(data.toString("utf-8")));
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(id1, s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await __2.VaultysId.generateOrganization(), s2);
+            const message = "test decrypt on demand";
+            const toDecrypt = await __2.VaultysId.encrypt(message, [manager1.vaultysId.id]);
+            manager1.acceptDecrypt(channel);
+            //console.log(toDecrypt);
+            const result = await manager2.requestDecrypt(channel.otherend, __1.Buffer.from(toDecrypt, "utf-8"));
+            assert_1.default.deepEqual(result?.toString("utf-8"), message);
+        }
+    });
+    describe("IdManager File Encryption/Decryption", () => {
+        it("should encrypt and decrypt a file between two IdManagers", async () => {
+            let channel = __2.MemoryChannel.createEncryptedBidirectionnal();
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), s2);
+            // Create a sample file
+            const fileContent = (0, crypto_2.randomBytes)(1024);
+            const originalFile = {
+                arrayBuffer: __2.crypto.Buffer.from(fileContent),
+                type: "application/octet-stream",
+                name: "test.bin",
+            };
+            // Set up the decryption handler on manager2
+            manager2.acceptDecryptFile(channel.otherend);
+            // Request encryption from manager1 to manager2
+            const encryptedFile = await manager1.requestEncryptFile(channel, originalFile);
+            assert_1.default.ok(encryptedFile, "Encryption failed");
+            assert_1.default.equal(encryptedFile.type, originalFile.type, "File type should be preserved");
+            assert_1.default.equal(encryptedFile.name, originalFile.name, "File name should be preserved");
+            assert_1.default.ok(encryptedFile.arrayBuffer, "Encrypted data should be present");
+            assert_1.default.notDeepEqual(encryptedFile.arrayBuffer, originalFile.arrayBuffer, "Encrypted data should be different from original");
+            // Now decrypt the file
+            channel = __2.MemoryChannel.createEncryptedBidirectionnal();
+            manager2.acceptDecryptFile(channel.otherend);
+            const decryptedFile = await manager1.requestDecryptFile(channel, encryptedFile);
+            assert_1.default.ok(decryptedFile, "Decryption failed");
+            assert_1.default.equal(decryptedFile.type, originalFile.type, "File type should be preserved after decryption");
+            assert_1.default.equal(decryptedFile.name, originalFile.name, "File name should be preserved after decryption");
+            assert_1.default.deepEqual(decryptedFile.arrayBuffer, originalFile.arrayBuffer, "Decrypted file should match the original");
+        });
+        it("should work with different file types and sizes", async () => {
+            const channel = __2.MemoryChannel.createEncryptedBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail("Channel creation failed");
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), s2);
+            // Test with different file types and sizes
+            const testCases = [
+                { size: 10, type: "text/plain", name: "small.txt" },
+                { size: 1024, type: "application/pdf", name: "medium.pdf" },
+                { size: 4096, type: "image/jpeg", name: "large.jpg" },
+            ];
+            for (const testCase of testCases) {
+                const fileContent = (0, crypto_2.randomBytes)(testCase.size);
+                const originalFile = {
+                    arrayBuffer: __1.Buffer.from(fileContent),
+                    type: testCase.type,
+                    name: testCase.name,
+                };
+                manager2.acceptEncryptFile(channel.otherend);
+                const encryptedFile = await manager1.requestEncryptFile(channel, originalFile);
+                assert_1.default.ok(encryptedFile, `Encryption failed for ${testCase.name}`);
+                manager2.acceptDecryptFile(channel.otherend);
+                const decryptedFile = await manager1.requestDecryptFile(channel, encryptedFile);
+                assert_1.default.ok(decryptedFile, `Decryption failed for ${testCase.name}`);
+                assert_1.default.equal(decryptedFile.type, originalFile.type, `File type should be preserved for ${testCase.name}`);
+                assert_1.default.equal(decryptedFile.name, originalFile.name, `File name should be preserved for ${testCase.name}`);
+                assert_1.default.deepEqual(decryptedFile.arrayBuffer, originalFile.arrayBuffer, `Decrypted content should match original for ${testCase.name}`);
+            }
+        });
+        it("should handle acceptDecryptFile with custom acceptance function", async () => {
+            const channel = __2.MemoryChannel.createEncryptedBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail("Channel creation failed");
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), s2);
+            // First establish contact between the managers
+            const contactChannel = __2.MemoryChannel.createBidirectionnal();
+            if (!contactChannel.otherend)
+                assert_1.default.fail("Contact channel creation failed");
+            await Promise.all([manager1.askContact(contactChannel), manager2.acceptContact(contactChannel.otherend)]);
+            // Create a sample file
+            const originalFile = {
+                arrayBuffer: __1.Buffer.from((0, crypto_2.randomBytes)(512)),
+                type: "text/plain",
+                name: "test.txt",
+            };
+            // Test with accepting function that returns true
+            let acceptCalled = false;
+            manager2.acceptDecryptFile(channel.otherend, async (contact) => {
+                acceptCalled = true;
+                assert_1.default.equal(contact.toVersion(1).fingerprint, manager1.vaultysId.fingerprint);
+                return true;
+            });
+            const encryptedFile = await manager1.requestEncryptFile(channel, originalFile);
+            assert_1.default.ok(encryptedFile, "Encryption should succeed when accept returns true");
+            assert_1.default.ok(acceptCalled, "Accept function should be called");
+            // Test with accepting function that returns false
+            acceptCalled = false;
+            manager2.acceptDecryptFile(channel.otherend, async () => {
+                acceptCalled = true;
+                return false;
+            });
+            const failedResult = await manager1.requestEncryptFile(channel, originalFile);
+            assert_1.default.ok(acceptCalled, "Accept function should be called even when rejecting");
+            assert_1.default.equal(failedResult, null, "Encryption should fail when accept returns false");
+        });
+        it("should handle acceptEncryptFile with custom acceptance function", async () => {
+            const channel = __2.MemoryChannel.createEncryptedBidirectionnal();
+            if (!channel.otherend)
+                assert_1.default.fail("Channel creation failed");
+            const s1 = (0, __2.MemoryStorage)(() => "");
+            const s2 = (0, __2.MemoryStorage)(() => "");
+            const manager1 = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), s1);
+            manager1.setProtocolVersion(1);
+            const manager2 = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), s2);
+            // First establish contact between the managers
+            const contactChannel = __2.MemoryChannel.createBidirectionnal();
+            if (!contactChannel.otherend)
+                assert_1.default.fail("Contact channel creation failed");
+            await Promise.all([manager1.askContact(contactChannel), manager2.acceptContact(contactChannel.otherend)]);
+            // Create an encrypted file
+            let acceptCalled = false;
+            manager2.acceptEncryptFile(channel.otherend, async (contact) => {
+                acceptCalled = true;
+                assert_1.default.equal(contact.toVersion(1).fingerprint, manager1.vaultysId.fingerprint);
+                return true;
+            });
+            // Create a sample file and encrypt it
+            const originalFile = {
+                arrayBuffer: __1.Buffer.from((0, crypto_2.randomBytes)(256)),
+                type: "application/json",
+                name: "data.json",
+            };
+            const encryptedFile = await manager1.requestEncryptFile(channel, originalFile);
+            assert_1.default.ok(encryptedFile, "Encryption should succeed when accept returns true");
+            assert_1.default.ok(acceptCalled, "Accept function should be called");
+            // Verify we can decrypt it back
+            manager2.acceptDecryptFile(channel.otherend);
+            const decryptedFile = await manager1.requestDecryptFile(channel, encryptedFile);
+            assert_1.default.ok(decryptedFile, "Decryption should succeed");
+            assert_1.default.deepEqual(decryptedFile.arrayBuffer, originalFile.arrayBuffer, "Decrypted content should match original");
+        });
+        it("should verify that acceptEncryptFile and acceptDecryptFile are the same function", async () => {
+            const manager = new __2.IdManager(await (0, utils_1.createRandomVaultysId)(), (0, __2.MemoryStorage)(() => ""));
+            manager.setProtocolVersion(1);
+            assert_1.default.strictEqual(manager.acceptEncryptFile, manager.acceptDecryptFile, "acceptEncryptFile should be an alias of acceptDecryptFile");
+        });
+    });
 });
 
 
@@ -76443,6 +82401,210 @@ describe("KeyManager tests", () => {
 
 /***/ }),
 
+/***/ "./test/pqc.test.ts":
+/*!**************************!*\
+  !*** ./test/pqc.test.ts ***!
+  \**************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
+const pqCrypto_1 = __webpack_require__(/*! ../src/pqCrypto */ "./src/pqCrypto.ts");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+describe("Post-Quantum Cryptography", () => {
+    let keyPair;
+    const testMessage = buffer_1.Buffer.from("Hello, Post-Quantum World!");
+    beforeEach(() => {
+        keyPair = (0, pqCrypto_1.generateDilithiumKeyPair)();
+    });
+    describe("DILITHIUM Key Generation", () => {
+        it("should generate different key pairs on each call", async () => {
+            const keyPair1 = (0, pqCrypto_1.generateDilithiumKeyPair)();
+            const keyPair2 = (0, pqCrypto_1.generateDilithiumKeyPair)();
+            assert_1.default.notDeepEqual(keyPair1.publicKey, keyPair2.publicKey);
+            assert_1.default.notDeepEqual(keyPair1.secretKey, keyPair2.secretKey);
+        });
+        it("should generate keys with correct sizes", async () => {
+            const keyInfo = (0, pqCrypto_1.getDilithiumKeyInfo)();
+            assert_1.default.equal(keyPair.publicKey.length, keyInfo.publicKeySize);
+            assert_1.default.equal(keyPair.secretKey.length, keyInfo.secretKeySize);
+        });
+    });
+    describe("DILITHIUM Signing", () => {
+        it("should sign a message successfully", async () => {
+            const signature = (0, pqCrypto_1.signDilithium)(testMessage, keyPair.secretKey);
+            assert_1.default.equal(signature.length > 0, true);
+        });
+        it("should produce signatures of correct size", async () => {
+            const signature = (0, pqCrypto_1.signDilithium)(testMessage, keyPair.secretKey);
+            const keyInfo = (0, pqCrypto_1.getDilithiumKeyInfo)();
+            assert_1.default.equal(signature.length, keyInfo.signatureSize);
+        });
+        it("should produce different signatures for different messages", async () => {
+            const message1 = buffer_1.Buffer.from("Message 1");
+            const message2 = buffer_1.Buffer.from("Message 2");
+            const signature1 = (0, pqCrypto_1.signDilithium)(message1, keyPair.secretKey);
+            const signature2 = (0, pqCrypto_1.signDilithium)(message2, keyPair.secretKey);
+            assert_1.default.notDeepEqual(signature1, signature2);
+        });
+    });
+    describe("DILITHIUM Verification", () => {
+        let signature;
+        beforeEach(async () => {
+            signature = (0, pqCrypto_1.signDilithium)(testMessage, keyPair.secretKey);
+        });
+        it("should verify a valid signature", async () => {
+            const isValid = (0, pqCrypto_1.verifyDilithium)(testMessage, signature, keyPair.publicKey);
+            assert_1.default.equal(isValid, true);
+        });
+        it("should reject an invalid signature", async () => {
+            const invalidSignature = buffer_1.Buffer.alloc(signature.length, 0);
+            const isValid = (0, pqCrypto_1.verifyDilithium)(testMessage, invalidSignature, keyPair.publicKey);
+            assert_1.default.equal(isValid, false);
+        });
+        it("should reject signature with wrong message", async () => {
+            const wrongMessage = buffer_1.Buffer.from("Wrong message");
+            const isValid = (0, pqCrypto_1.verifyDilithium)(wrongMessage, signature, keyPair.publicKey);
+            assert_1.default.equal(isValid, false);
+        });
+        it("should reject signature with wrong public key", async () => {
+            const wrongKeyPair = (0, pqCrypto_1.generateDilithiumKeyPair)();
+            const isValid = (0, pqCrypto_1.verifyDilithium)(testMessage, signature, wrongKeyPair.publicKey);
+            assert_1.default.equal(isValid, false);
+        });
+        it("should work with Uint8Array inputs", async () => {
+            const messageArray = new Uint8Array(testMessage);
+            const signatureArray = new Uint8Array(signature);
+            const publicKeyArray = new Uint8Array(keyPair.publicKey);
+            const isValid = (0, pqCrypto_1.verifyDilithium)(messageArray, signatureArray, publicKeyArray);
+            assert_1.default.equal(isValid, true);
+        });
+        it("should handle corrupted signature gracefully", async () => {
+            const corruptedSignature = buffer_1.Buffer.from(signature);
+            corruptedSignature[0] = corruptedSignature[0] ^ 0xff; // Flip bits
+            const isValid = (0, pqCrypto_1.verifyDilithium)(testMessage, corruptedSignature, keyPair.publicKey);
+            assert_1.default.equal(isValid, false);
+        });
+    });
+    describe("COSE Key Creation", () => {
+        it("should create a valid COSE key", () => {
+            const coseKey = (0, pqCrypto_1.createDilithiumCoseKey)(keyPair.publicKey);
+            assert_1.default.equal(coseKey.get(1), pqCrypto_1.PQ_COSE_KEY_TYPE.DILITHIUM);
+            assert_1.default.equal(coseKey.get(3), pqCrypto_1.PQ_COSE_ALG.DILITHIUM2);
+            assert_1.default.equal(coseKey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_MODE), 2);
+            assert_1.default.deepEqual(coseKey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK), keyPair.publicKey);
+        });
+        it("should work with Uint8Array input", () => {
+            const publicKeyArray = new Uint8Array(keyPair.publicKey);
+            const coseKey = (0, pqCrypto_1.createDilithiumCoseKey)(publicKeyArray);
+            assert_1.default.equal(coseKey.get(1), pqCrypto_1.PQ_COSE_KEY_TYPE.DILITHIUM);
+        });
+    });
+    describe("Key Info", () => {
+        it("should return correct key size information", () => {
+            const keyInfo = (0, pqCrypto_1.getDilithiumKeyInfo)();
+            assert_1.default.equal(keyInfo.publicKeySize, 1312);
+            assert_1.default.equal(keyInfo.secretKeySize, 2544);
+            assert_1.default.equal(keyInfo.signatureSize, 2420);
+        });
+        it("should match actual generated key sizes", async () => {
+            const keyInfo = (0, pqCrypto_1.getDilithiumKeyInfo)();
+            const testKeyPair = (0, pqCrypto_1.generateDilithiumKeyPair)();
+            assert_1.default.equal(testKeyPair.publicKey.length, keyInfo.publicKeySize);
+            assert_1.default.equal(testKeyPair.secretKey.length, keyInfo.secretKeySize);
+        });
+    });
+    describe("Constants", () => {
+        it("should have correct COSE algorithm identifiers", () => {
+            assert_1.default.equal(pqCrypto_1.PQ_COSE_ALG.DILITHIUM2, -46);
+            assert_1.default.equal(pqCrypto_1.PQ_COSE_ALG.DILITHIUM3, -47);
+            assert_1.default.equal(pqCrypto_1.PQ_COSE_ALG.DILITHIUM5, -48);
+        });
+        it("should have correct COSE key type", () => {
+            assert_1.default.equal(pqCrypto_1.PQ_COSE_KEY_TYPE.DILITHIUM, 4);
+        });
+        it("should have correct COSE key parameters", () => {
+            assert_1.default.equal(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_MODE, -100);
+            assert_1.default.equal(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK, -101);
+            assert_1.default.equal(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_SK, -102);
+        });
+    });
+    describe("End-to-End Workflow", () => {
+        it("should complete full sign-verify cycle", async () => {
+            // Generate keys
+            const testKeyPair = (0, pqCrypto_1.generateDilithiumKeyPair)();
+            // Sign message
+            const message = buffer_1.Buffer.from("End-to-end test message");
+            const signature = (0, pqCrypto_1.signDilithium)(message, testKeyPair.secretKey);
+            // Verify signature
+            const isValid = (0, pqCrypto_1.verifyDilithium)(message, signature, testKeyPair.publicKey);
+            // Create COSE key
+            const coseKey = (0, pqCrypto_1.createDilithiumCoseKey)(testKeyPair.publicKey);
+            assert_1.default.equal(isValid, true);
+            assert_1.default.equal(coseKey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK), testKeyPair.publicKey);
+        });
+        it("should handle multiple signatures with same key pair", async () => {
+            const messages = [buffer_1.Buffer.from("Message 1"), buffer_1.Buffer.from("Message 2"), buffer_1.Buffer.from("Message 3")];
+            const signatures = [];
+            // Sign all messages
+            for (const message of messages) {
+                const signature = (0, pqCrypto_1.signDilithium)(message, keyPair.secretKey);
+                signatures.push(signature);
+            }
+            // Verify all signatures
+            for (let i = 0; i < messages.length; i++) {
+                const isValid = (0, pqCrypto_1.verifyDilithium)(messages[i], signatures[i], keyPair.publicKey);
+                assert_1.default.equal(isValid, true);
+            }
+        });
+    });
+});
+
+
+/***/ }),
+
+/***/ "./test/pqcManager.test.ts":
+/*!*********************************!*\
+  !*** ./test/pqcManager.test.ts ***!
+  \*********************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
+__webpack_require__(/*! ./shims */ "./test/shims.ts");
+const VaultysId_1 = __importDefault(__webpack_require__(/*! ../src/VaultysId */ "./src/VaultysId.ts"));
+const crypto_1 = __webpack_require__(/*! ../src/crypto */ "./src/crypto.ts");
+describe("PQC", () => {
+    it("serder a VaultytsID (PQC)", async () => {
+        const vaultysId = await VaultysId_1.default.createPQC();
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
+        assert_1.default.equal(vaultysId?.keyManager.signer.publicKey.length, 1312);
+        const id2 = VaultysId_1.default.fromSecret(vaultysId?.getSecret());
+        assert_1.default.equal(vaultysId?.id.toString("hex"), id2.id.toString("hex"));
+    });
+    it("sign/verify with VaultytsID (PQC)", async () => {
+        const vaultysId = await VaultysId_1.default.createPQC();
+        const challenge = (0, crypto_1.randomBytes)(32);
+        const signature = await vaultysId.signChallenge(challenge);
+        //console.log(signature);
+        assert_1.default.equal(vaultysId?.verifyChallenge(challenge, signature, false), true);
+    });
+});
+
+
+/***/ }),
+
 /***/ "./test/saltpack.test.ts":
 /*!*******************************!*\
   !*** ./test/saltpack.test.ts ***!
@@ -76707,26 +82869,28 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.createRandomVaultysId = void 0;
 const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
 const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ../src/platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+const pqCrypto_1 = __webpack_require__(/*! ../src/pqCrypto */ "./src/pqCrypto.ts");
 const createRandomVaultysId = async () => {
     const types = [0, 1, 2];
     if (typeof window === "undefined") {
         types.push(3);
         types.push(4);
     }
+    const pqc = Math.random() < 0.5;
     const type = types[Math.floor(Math.random() * types.length)];
     switch (type) {
         case 0:
-            return __1.VaultysId.generateMachine();
+            return __1.VaultysId.generateMachine(pqc);
         case 1:
-            return __1.VaultysId.generatePerson();
+            return __1.VaultysId.generatePerson(pqc);
         case 2:
-            return __1.VaultysId.generateOrganization();
+            return __1.VaultysId.generateOrganization(pqc);
         case 3:
-            const attestation1 = await navigator.credentials.create(SoftCredentials_1.default.createRequest(Math.random() < 0.5 ? -7 : -8, false));
+            const attestation1 = await navigator.credentials.create(SoftCredentials_1.default.createRequest(pqc ? pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, false));
             // @ts-expect-error mockup
             return __1.VaultysId.fido2FromAttestation(attestation1);
         case 4:
-            const attestation2 = await navigator.credentials.create(SoftCredentials_1.default.createRequest(Math.random() < 0.5 ? -7 : -8, true));
+            const attestation2 = await navigator.credentials.create(SoftCredentials_1.default.createRequest(pqc ? pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, true));
             // @ts-expect-error mockup
             return __1.VaultysId.fido2FromAttestation(attestation2);
         default:
@@ -76820,7 +82984,7 @@ describe("VaultysId Migration", () => {
 describe("Symetric Proof of Relationship - SRG - V0", () => {
     it("Perform Protocol with KeyManager", async () => {
         const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
-        const challenger1 = new __1.Challenger(vaultysId1.toVersion(0));
+        const challenger1 = new __1.Challenger(vaultysId1);
         const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
         const challenger2 = new __1.Challenger(vaultysId2.toVersion(0));
         assert_1.default.equal(challenger1.isComplete(), false);
@@ -76836,25 +83000,17 @@ describe("Symetric Proof of Relationship - SRG - V0", () => {
         assert_1.default.ok(challenger2.isComplete());
         assert_1.default.equal(challenger1.toString(), challenger2.toString());
     });
-    it("Fail for different vaultysId versions", async () => {
+    it("Succeed for different vaultysId versions", async () => {
         const vaultysId1 = await (0, utils_1.createRandomVaultysId)();
-        const challenger1 = new __1.Challenger(vaultysId1.toVersion(0));
+        const challenger1 = new __1.Challenger(vaultysId1);
         const vaultysId2 = await (0, utils_1.createRandomVaultysId)();
-        const challenger2 = new __1.Challenger(vaultysId2);
+        const challenger2 = new __1.Challenger(vaultysId2.toVersion(0));
         assert_1.default.ok(!challenger1.isComplete());
         assert_1.default.ok(!challenger1.hasFailed());
         challenger1.createChallenge("p2p", "auth", 0);
         await challenger2.update(challenger1.getCertificate());
         await challenger1.update(challenger2.getCertificate());
-        try {
-            await challenger2.update(challenger1.getCertificate());
-        }
-        catch (err) {
-            // @ts-expect-error useless type check
-            assert_1.default.equal(err?.message, "[COMPLETE] failed the verification of pk2");
-            return;
-        }
-        assert_1.default.fail("The protocol should have failed");
+        assert_1.default.equal(challenger1.toString(), challenger2.toString());
     });
 });
 describe("Symetric Proof of Relationship - SRG - V1", () => {
@@ -77050,6 +83206,9 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 /******/ 	// Load entry module and return exports
 /******/ 	// This entry module is referenced by other modules so it can't be inlined
 /******/ 	__webpack_require__("./test/shims.ts");
+/******/ 	__webpack_require__("./test/pqc.test.ts");
+/******/ 	__webpack_require__("./test/pqcManager.test.ts");
+/******/ 	__webpack_require__("./test/challenger_v0.test.ts");
 /******/ 	__webpack_require__("./test/challenger.test.ts");
 /******/ 	__webpack_require__("./test/file.browser_test.ts");
 /******/ 	__webpack_require__("./test/channel.test.ts");

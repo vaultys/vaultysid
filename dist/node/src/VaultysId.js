@@ -17,7 +17,6 @@ const TYPE_PERSON = 1;
 const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
 const TYPE_FIDO2PRF = 4;
-const TYPE_PQ_SOFTWARE = 5;
 class VaultysId {
     constructor(keyManager, certificate, type = TYPE_MACHINE) {
         this.encrypt = VaultysId.encrypt;
@@ -65,11 +64,7 @@ class VaultysId {
             cleanId = buffer_1.Buffer.from(id, encoding);
         }
         const type = cleanId[0];
-        if (type === TYPE_PQ_SOFTWARE) {
-            const pqm = PQManager_1.default.fromId(cleanId.slice(1));
-            return new VaultysId(pqm, certificate, type);
-        }
-        else if (type === TYPE_FIDO2) {
+        if (type === TYPE_FIDO2) {
             const f2m = Fido2Manager_1.default.fromId(cleanId.slice(1));
             return new VaultysId(f2m, certificate, type);
         }
@@ -78,13 +73,19 @@ class VaultysId {
             return new VaultysId(f2m, certificate, type);
         }
         else {
-            const km = KeyManager_1.default.fromId(cleanId.slice(1));
-            return new VaultysId(km, certificate, type);
+            if (cleanId.length > 1312) {
+                const pqm = PQManager_1.default.fromId(cleanId.slice(1));
+                return new VaultysId(pqm, certificate, type);
+            }
+            else {
+                const km = KeyManager_1.default.fromId(cleanId.slice(1));
+                return new VaultysId(km, certificate, type);
+            }
         }
     }
-    static async fromEntropy(entropy, type) {
+    static async fromEntropy(entropy, type, pqc = false) {
         const cleanedEntropy = entropy;
-        if (type === TYPE_PQ_SOFTWARE) {
+        if (pqc) {
             const km = await PQManager_1.default.create_PQ_fromEntropy(cleanedEntropy);
             return new VaultysId(km, undefined, type);
         }
@@ -134,17 +135,10 @@ class VaultysId {
     static async personFromEntropy(entropy) {
         return VaultysId.fromEntropy(entropy, TYPE_PERSON);
     }
-    static async pqFromEntropy(entropy) {
-        return VaultysId.fromEntropy(entropy, TYPE_PQ_SOFTWARE);
-    }
     static fromSecret(secret, encoding = "hex") {
         const secretBuffer = buffer_1.Buffer.from(secret, encoding);
         const type = secretBuffer[0];
-        if (type == TYPE_PQ_SOFTWARE) {
-            const pqm = PQManager_1.default.fromSecret(secretBuffer.slice(1));
-            return new VaultysId(pqm, undefined, type);
-        }
-        else if (type == TYPE_FIDO2) {
+        if (type == TYPE_FIDO2) {
             const f2m = Fido2Manager_1.default.fromSecret(secretBuffer.slice(1));
             return new VaultysId(f2m, undefined, type);
         }
@@ -153,25 +147,45 @@ class VaultysId {
             return new VaultysId(f2m, undefined, type);
         }
         else {
-            const km = KeyManager_1.default.fromSecret(secretBuffer.slice(1));
-            return new VaultysId(km, undefined, type);
+            if (secretBuffer.length > 1312) {
+                const pqm = PQManager_1.default.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(pqm, undefined, type);
+            }
+            else {
+                const km = KeyManager_1.default.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(km, undefined, type);
+            }
         }
     }
-    static async generatePerson() {
-        const km = await KeyManager_1.default.generate_Id25519();
-        return new VaultysId(km, undefined, TYPE_PERSON);
+    static async generatePerson(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
     }
-    static async generatePostQuantum() {
-        const km = await PQManager_1.default.generate_PQ();
-        return new VaultysId(km, undefined, TYPE_PQ_SOFTWARE);
+    static async generateOrganization(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
     }
-    static async generateOrganization() {
-        const km = await KeyManager_1.default.generate_Id25519();
-        return new VaultysId(km, undefined, TYPE_ORGANIZATION);
-    }
-    static async generateMachine() {
-        const km = await KeyManager_1.default.generate_Id25519();
-        return new VaultysId(km, undefined, TYPE_MACHINE);
+    static async generateMachine(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
     }
     get relationshipCertificate() {
         return this.certificate;
