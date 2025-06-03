@@ -18,7 +18,7 @@
     "build:browser": "webpack --config webpack.config.js",
     "prettier": "find src -name \"*.ts\" | xargs prettier --write",
     "test": "mocha ./test/*.test.[jt]s",
-    "test:pqc": "mocha ./test/pqcManager.test.ts ",
+    "test:pqc": "mocha ./test/pqc.test.ts ",
     "test:server": "http-server . -p 8080",
     "test:web": "webpack --config webpack.test.config.js && mocha --require tsx test/runner.ts",
     "testone": "mocha",

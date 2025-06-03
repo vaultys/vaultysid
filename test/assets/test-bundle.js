@@ -493,6 +493,10 @@ class Challenger {
                 throw new Error(tempchallenge.error);
             }
             if (!isLive(tempchallenge, this.liveliness)) {
+                // console.log(this.liveliness);
+                // const time = Date.now();
+                // console.log(time - tempchallenge.timestamp, this.liveliness);
+                // console.log(tempchallenge.timestamp > time - this.liveliness && tempchallenge.timestamp < time + this.liveliness);
                 this.state = ERROR;
                 throw new Error("challenge timestamp failed the liveliness");
             }
@@ -82568,10 +82572,10 @@ describe("Post-Quantum Cryptography", () => {
 
 /***/ }),
 
-/***/ "./test/pqcManager.test.ts":
-/*!*********************************!*\
-  !*** ./test/pqcManager.test.ts ***!
-  \*********************************/
+/***/ "./test/pqcManager.web.test.ts":
+/*!*************************************!*\
+  !*** ./test/pqcManager.web.test.ts ***!
+  \*************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -82585,20 +82589,33 @@ __webpack_require__(/*! ./shims */ "./test/shims.ts");
 const VaultysId_1 = __importDefault(__webpack_require__(/*! ../src/VaultysId */ "./src/VaultysId.ts"));
 const crypto_1 = __webpack_require__(/*! ../src/crypto */ "./src/crypto.ts");
 describe("PQC", () => {
-    it("serder a VaultytsID (PQC)", async () => {
-        const vaultysId = await VaultysId_1.default.createPQC();
+    it("serder a VaultytsID secret - software", async () => {
+        const vaultysId = await VaultysId_1.default.generatePerson(true);
         if (!vaultysId)
             assert_1.default.fail("VaultysId creation failed");
-        assert_1.default.equal(vaultysId?.keyManager.signer.publicKey.length, 1312);
-        const id2 = VaultysId_1.default.fromSecret(vaultysId?.getSecret());
-        assert_1.default.equal(vaultysId?.id.toString("hex"), id2.id.toString("hex"));
+        assert_1.default.equal(vaultysId.id.length, 1394);
+        assert_1.default.equal(vaultysId.id.toString("hex").length, 2788);
+        assert_1.default.equal(vaultysId.id.toString("base64").length, 1860);
+        assert_1.default.equal(vaultysId.keyManager.signer.publicKey.length, 1312);
+        const id2 = VaultysId_1.default.fromSecret(vaultysId.getSecret());
+        assert_1.default.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
     });
-    it("sign/verify with VaultytsID (PQC)", async () => {
-        const vaultysId = await VaultysId_1.default.createPQC();
+    it("serder a VaultytsID - software", async () => {
+        const vaultysId = await VaultysId_1.default.generateOrganization(true);
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
+        assert_1.default.equal(vaultysId.keyManager.signer.publicKey.length, 1312);
+        assert_1.default.equal(vaultysId.id.length, 1394);
+        const id2 = VaultysId_1.default.fromId(vaultysId.id);
+        assert_1.default.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
+    });
+    it("sign/verify with VaultytsID - software", async () => {
+        const vaultysId = await VaultysId_1.default.generateMachine(true);
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
         const challenge = (0, crypto_1.randomBytes)(32);
         const signature = await vaultysId.signChallenge(challenge);
-        //console.log(signature);
-        assert_1.default.equal(vaultysId?.verifyChallenge(challenge, signature, false), true);
+        assert_1.default.equal(vaultysId.verifyChallenge(challenge, signature, false), true);
     });
 });
 
@@ -83207,7 +83224,7 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 /******/ 	// This entry module is referenced by other modules so it can't be inlined
 /******/ 	__webpack_require__("./test/shims.ts");
 /******/ 	__webpack_require__("./test/pqc.test.ts");
-/******/ 	__webpack_require__("./test/pqcManager.test.ts");
+/******/ 	__webpack_require__("./test/pqcManager.web.test.ts");
 /******/ 	__webpack_require__("./test/challenger_v0.test.ts");
 /******/ 	__webpack_require__("./test/challenger.test.ts");
 /******/ 	__webpack_require__("./test/file.browser_test.ts");
