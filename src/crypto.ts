@@ -1,20 +1,21 @@
-import { randomBytes } from "crypto";
-import nacl from "tweetnacl";
+import nacl, { randomBytes } from "tweetnacl";
 import { Buffer } from "buffer/";
-import { sha224, sha256 } from "@noble/hashes/sha256";
-import { sha512 } from "@noble/hashes/sha512";
+import { sha224, sha256, sha512 } from "@noble/hashes/sha2";
+import { hmac } from "@noble/hashes/hmac";
 
 const getAlgorithm = (alg: string) => {
   const cleanAlg = alg.replaceAll("-", "").toLowerCase();
-  if (cleanAlg === "sha256") return sha256.create();
-  if (cleanAlg === "sha512") return sha512.create();
-  if (cleanAlg === "sha224") return sha224.create();
-  return sha256.create();
+  if (cleanAlg === "sha256") return sha256;
+  if (cleanAlg === "sha512") return sha512;
+  if (cleanAlg === "sha224") return sha224;
+  return sha256;
 };
 
-const _randomBytes = (size: number) => Buffer.from(randomBytes ? randomBytes(size) : crypto.getRandomValues(new Uint8Array(size)));
+const _randomBytes = (size: number) => Buffer.from(randomBytes(size));
 
-const hash = (alg: string, buffer: Buffer | Uint8Array) => Buffer.from(getAlgorithm(alg).update(buffer).digest());
+const hash = (alg: string, buffer: Buffer | Uint8Array) => Buffer.from(getAlgorithm(alg).create().update(buffer).digest());
+const _hmac = (alg: string, key: Buffer | Uint8Array, data: string | Buffer | Uint8Array) => Buffer.from(hmac(getAlgorithm(alg), key, data));
+
 const secretbox = nacl.secretbox;
 const toBase64 = (bufferLike: Buffer) => Buffer.from(bufferLike).toString("base64");
 const toHex = (bufferLike: Buffer) => Buffer.from(bufferLike).toString("hex");
@@ -28,4 +29,4 @@ const secureErase = (buffer: Buffer | Uint8Array) => {
   }
 };
 
-export { Buffer, hash, _randomBytes as randomBytes, secretbox, toBase64, toHex, toUTF8, fromBase64, fromHex, fromUTF8, secureErase };
+export { Buffer, hash, _hmac as hmac, _randomBytes as randomBytes, secretbox, toBase64, toHex, toUTF8, fromBase64, fromHex, fromUTF8, secureErase };

@@ -1,9 +1,8 @@
 import { dearmorAndDecrypt, encryptAndArmor } from "@vaultys/saltpack";
-import { hash, randomBytes, secureErase } from "./crypto";
+import { hash, hmac, randomBytes, secureErase } from "./crypto";
 import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
-import { createHmac } from "crypto";
 import { ed25519 } from "@noble/curves/ed25519";
 
 ed25519.CURVE = { ...ed25519.CURVE };
@@ -297,7 +296,6 @@ export default class KeyManager {
     // const derivedKey = privateDerivePath(await bip32.Bip32PrivateKey.fromEntropy(seed.slice(0, 32)), `m/1'/0'/${swapIndex}'`);
     km.proofKey = {
       publicKey: Buffer.from([]), //deprecated
-      //secretKey: derivedKey.toBytes(),
     };
     km.swapIndex = swapIndex;
     km.proof = hash("sha256", km.proofKey.publicKey);
@@ -338,14 +336,7 @@ export default class KeyManager {
     // todo fetch secretKey here
     const cypher = this.cypher;
     return {
-      hmac: (message: string) =>
-        cypher.secretKey
-          ? Buffer.from(
-              createHmac("sha256", Buffer.from(cypher.secretKey).toString("hex"))
-                .update("VaultysID/" + message + "/end")
-                .digest(),
-            )
-          : undefined,
+      hmac: (message: string) => (cypher.secretKey ? hmac("sha256", Buffer.from(cypher.secretKey), "VaultysID/" + message + "/end") : undefined),
       signcrypt: async (plaintext: string, publicKeys: Buffer[]) => encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys),
       decrypt: async (encryptedMessage: string, senderKey?: Buffer | null) => dearmorAndDecrypt(encryptedMessage, cypher as BoxKeyPair, senderKey),
       diffieHellman: async (publicKey: Buffer) => Buffer.from(nacl.scalarMult(cypher.secretKey!, publicKey)),

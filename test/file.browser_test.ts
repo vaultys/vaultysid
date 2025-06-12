@@ -1,17 +1,11 @@
 import { Buffer } from "buffer/";
-import { createHash } from "crypto";
 import assert from "assert";
 import { IdManager } from "../";
 import { createRandomVaultysId } from "./utils";
 import { convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, MemoryChannel, StreamChannel } from "../src/MemoryChannel";
 import { MemoryStorage } from "../src/MemoryStorage";
 import "./shims";
-
-const hashBuffer = (buffer: ArrayBuffer) => {
-  const hashSum = createHash("sha256");
-  hashSum.update(Buffer.from(buffer));
-  return hashSum.digest("hex");
-};
+import { hash } from "../src/crypto";
 
 const fetchFile = async (url: string) => {
   const response = await fetch(url);
@@ -47,8 +41,8 @@ describe("IdManager with files in browser", () => {
       await promise;
 
       const outputBuffer = Buffer.concat(outputChunks);
-      const hash1 = hashBuffer(inputBuffer);
-      const hash2 = hashBuffer(outputBuffer.buffer);
+      const hash1 = hash("sha256", Buffer.from(inputBuffer));
+      const hash2 = hash("sha256", outputBuffer);
       assert.equal(hash1, hash2);
     }
   });
@@ -101,8 +95,8 @@ describe("Channel tests for browser", () => {
     await promise;
 
     const outputBuffer = Buffer.concat(outputChunks);
-    const hash1 = hashBuffer(inputBuffer);
-    const hash2 = hashBuffer(outputBuffer.buffer);
+    const hash1 = hash("sha256", Buffer.from(inputBuffer));
+    const hash2 = hash("sha256", outputBuffer);
     assert.equal(hash1, hash2);
   });
 
@@ -126,8 +120,8 @@ describe("Channel tests for browser", () => {
     await promise;
 
     const outputBuffer = Buffer.concat(outputChunks);
-    const hash1 = hashBuffer(inputBuffer);
-    const hash2 = hashBuffer(outputBuffer.buffer);
+    const hash1 = hash("sha256", Buffer.from(inputBuffer));
+    const hash2 = hash("sha256", outputBuffer);
     assert.equal(hash1, hash2);
   });
 });

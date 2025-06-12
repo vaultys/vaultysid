@@ -4,15 +4,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 // TODO: to revamp and optimize
-const crypto_1 = __importDefault(require("crypto"));
+// import crypto from "crypto";
 const buffer_1 = require("buffer/");
-const crypto_2 = require("../crypto");
+const crypto_1 = require("../crypto");
 const cbor_1 = __importDefault(require("cbor"));
 const ed25519_1 = require("@noble/curves/ed25519");
 const p256_1 = require("@noble/curves/p256");
 const p384_1 = require("@noble/curves/p384");
 const p521_1 = require("@noble/curves/p521");
-const x509_1 = require("@peculiar/x509");
+// import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
 const pqCrypto_1 = require("../pqCrypto");
 const credentials = {};
 //const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
@@ -59,36 +59,36 @@ const COSEALGHASH = {
     "-36": "SHA-512",
     [pqCrypto_1.PQ_COSE_ALG.DILITHIUM2.toString()]: "SHA-256", // DILITHIUM2 uses SHA-256 for hashing
 };
-const hash = (alg, message) => (0, crypto_2.hash)(alg.replace("-", ""), message);
+const hash = (alg, message) => (0, crypto_1.hash)(alg.replace("-", ""), message);
 const base64ToPem = (b64cert) => {
     let pemcert = "";
     for (let i = 0; i < b64cert.length; i += 64)
         pemcert += b64cert.slice(i, i + 64) + "\n";
     return "-----BEGIN CERTIFICATE-----\n" + pemcert + "-----END CERTIFICATE-----";
 };
-const getCertificateInfo = (certificate) => {
-    const x509 = new x509_1.X509Certificate(certificate);
-    const subjectString = x509.subject;
-    const issuer = x509.issuer;
-    const issuerName = x509.issuerName.toString();
-    const subjectParts = subjectString.split(",");
-    const subject = {};
-    for (const field of subjectParts) {
-        const kv = field.split("=");
-        subject[kv[0].trim()] = kv[1];
-    }
-    // console.log(subject);
-    const { Version } = x509.toTextObject().Data;
-    const bc = x509.getExtension(x509_1.BasicConstraintsExtension);
-    const basicConstraintsCA = bc ? bc.ca : false;
-    return {
-        issuer,
-        issuerName,
-        subject,
-        version: Version,
-        basicConstraintsCA,
-    };
-};
+// const getCertificateInfo = (certificate: Buffer) => {
+//   const x509 = new X509Certificate(certificate);
+//   const subjectString = x509.subject;
+//   const issuer = x509.issuer;
+//   const issuerName = x509.issuerName.toString();
+//   const subjectParts = subjectString.split(",");
+//   const subject: Record<string, string> = {};
+//   for (const field of subjectParts) {
+//     const kv = field.split("=");
+//     subject[kv[0].trim()] = kv[1];
+//   }
+//   // console.log(subject);
+//   const { Version } = x509.toTextObject().Data as unknown as { Version: string };
+//   const bc = x509.getExtension(BasicConstraintsExtension);
+//   const basicConstraintsCA = bc ? bc.ca : false;
+//   return {
+//     issuer,
+//     issuerName,
+//     subject,
+//     version: Version,
+//     basicConstraintsCA,
+//   };
+// };
 const parseAuthData = (buffer) => {
     const rpIdHash = buffer.slice(0, 32);
     buffer = buffer.slice(32);
@@ -147,27 +147,26 @@ const verifyPackedAttestation = (response, userVerification = false) => {
     const signature = attestationStruct.attStmt.sig;
     let signatureIsValid = false;
     /* ----- Verify FULL attestation ----- */
-    if (attestationStruct.attStmt.x5c) {
-        const leafCert = base64ToPem(attestationStruct.attStmt.x5c[0].toString("base64"));
-        const certInfo = getCertificateInfo(attestationStruct.attStmt.x5c[0]);
-        const subject = certInfo.subject;
-        // console.log(certInfo);
-        if (subject.OU !== "Authenticator Attestation")
-            throw new Error('Batch certificate OU MUST be set strictly to "Authenticator Attestation"!');
-        if (!subject.CN)
-            throw new Error("Batch certificate CN MUST no be empty!");
-        if (!subject.O)
-            throw new Error("Batch certificate O MUST no be empty!");
-        if (!subject.C || subject.C.length !== 2)
-            throw new Error("Batch certificate C MUST be set to two character ISO 3166 code!");
-        if (certInfo.basicConstraintsCA)
-            throw new Error("Batch certificate basic constraints CA MUST be false!");
-        if (certInfo.version !== "v3 (2)")
-            throw new Error("Batch certificate version MUST be 3(ASN1 2)!");
-        signatureIsValid = crypto_1.default.createVerify("sha256").update(dataBuffer).verify(leafCert, signature);
-        /* ----- Verify FULL attestation ENDS ----- */
-    }
-    else if (attestationStruct.attStmt.ecdaaKeyId) {
+    // if (attestationStruct.attStmt.x5c) {
+    //   const leafCert = base64ToPem(attestationStruct.attStmt.x5c[0].toString("base64"));
+    //   const certInfo = getCertificateInfo(attestationStruct.attStmt.x5c[0]);
+    //   const subject = certInfo.subject as {
+    //     OU: string;
+    //     O: string;
+    //     C: string;
+    //     CN: string;
+    //   };
+    //   // console.log(certInfo);
+    //   if (subject.OU !== "Authenticator Attestation") throw new Error('Batch certificate OU MUST be set strictly to "Authenticator Attestation"!');
+    //   if (!subject.CN) throw new Error("Batch certificate CN MUST no be empty!");
+    //   if (!subject.O) throw new Error("Batch certificate O MUST no be empty!");
+    //   if (!subject.C || subject.C.length !== 2) throw new Error("Batch certificate C MUST be set to two character ISO 3166 code!");
+    //   if (certInfo.basicConstraintsCA) throw new Error("Batch certificate basic constraints CA MUST be false!");
+    //   if (certInfo.version !== "v3 (2)") throw new Error("Batch certificate version MUST be 3(ASN1 2)!");
+    //   signatureIsValid = crypto.createVerify("sha256").update(dataBuffer).verify(leafCert, signature);
+    //   /* ----- Verify FULL attestation ENDS ----- */
+    // } else
+    if (attestationStruct.attStmt.ecdaaKeyId) {
         throw new Error("ECDAA IS NOT SUPPORTED!");
     }
     else {
@@ -221,12 +220,12 @@ const verifyEdDSA = (data, publicKey, signature) => {
 class SoftCredentials {
     constructor() {
         this.signCount = 0;
-        this.rawId = (0, crypto_2.randomBytes)(32);
+        this.rawId = (0, crypto_1.randomBytes)(32);
         this.aaguid = buffer_1.Buffer.alloc(16);
     }
     // credentials request payload
     static createRequest(alg, prf = false) {
-        const challenge = buffer_1.Buffer.from((0, crypto_2.randomBytes)(32).toString("base64"));
+        const challenge = buffer_1.Buffer.from((0, crypto_1.randomBytes)(32).toString("base64"));
         const result = {
             publicKey: {
                 challenge,
@@ -248,20 +247,19 @@ class SoftCredentials {
             },
         };
         if (prf) {
-            result.publicKey.extensions = { prf: { eval: { first: (0, crypto_2.randomBytes)(32) } } };
+            result.publicKey.extensions = { prf: { eval: { first: (0, crypto_1.randomBytes)(32) } } };
         }
         return result;
     }
-    static getCertificateInfo(response) {
-        const attestationBuffer = buffer_1.Buffer.from(response.attestationObject);
-        const attestationStruct = cbor_1.default.decodeAllSync(attestationBuffer)[0];
-        if (attestationStruct.attStmt.x5c) {
-            return getCertificateInfo(attestationStruct.attStmt.x5c[0]);
-        }
-        else {
-            return null;
-        }
-    }
+    // static getCertificateInfo(response: AuthenticatorAttestationResponse) {
+    //   const attestationBuffer = Buffer.from(response.attestationObject);
+    //   const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
+    //   if (attestationStruct.attStmt.x5c) {
+    //     return getCertificateInfo(attestationStruct.attStmt.x5c[0]);
+    //   } else {
+    //     return null;
+    //   }
+    // }
     static async create(options, origin = "test") {
         const credential = new SoftCredentials();
         const publicKey = options.publicKey;
@@ -330,7 +328,7 @@ class SoftCredentials {
             challenge: publicKey.challenge,
             origin,
         };
-        const rpIdHash = (0, crypto_2.hash)("sha256", buffer_1.Buffer.from(credential.rpId, "ascii"));
+        const rpIdHash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(credential.rpId, "ascii"));
         const flags = buffer_1.Buffer.from("41", "hex"); // attested_data + user_present
         const signCount = buffer_1.Buffer.allocUnsafe(4);
         signCount.writeUInt32BE(credential.signCount, 0);
@@ -375,10 +373,10 @@ class SoftCredentials {
         const goodflags = userVerification ? !!(flagsInt & 0x04) : !!(flagsInt & 0x01);
         if (!goodflags)
             return false;
-        const hash = (0, crypto_2.hash)("sha256", buffer_1.Buffer.from(response.clientDataJSON));
+        const hash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(response.clientDataJSON));
         let data = buffer_1.Buffer.concat([buffer_1.Buffer.from(response.authenticatorData), hash]);
         if (ckey.get(3) == -7) {
-            data = (0, crypto_2.hash)("sha256", data);
+            data = (0, crypto_1.hash)("sha256", data);
         }
         if (ckey.get(1) == 1) {
             // EdDSA
@@ -412,7 +410,7 @@ class SoftCredentials {
     }
     static async verify(attestation, assertion, userVerifiation = false) {
         //if (assertion.id !== attestation.id) return false;
-        const hash = (0, crypto_2.hash)("sha256", buffer_1.Buffer.from(assertion.response.clientDataJSON));
+        const hash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(assertion.response.clientDataJSON));
         const ass = assertion.response;
         const att = attestation.response;
         let data = buffer_1.Buffer.concat([buffer_1.Buffer.from(ass.authenticatorData), hash]);
@@ -427,7 +425,7 @@ class SoftCredentials {
         const ckey = cbor_1.default.decode(authData.COSEPublicKey);
         // Hash data for ES256
         if (ckey.get(3) == -7) {
-            data = (0, crypto_2.hash)("sha256", data);
+            data = (0, crypto_1.hash)("sha256", data);
         }
         // Get key type
         const keyType = ckey.get(1);
@@ -472,8 +470,8 @@ class SoftCredentials {
             challenge: buffer_1.Buffer.from(publicKey.challenge).toString("base64"),
             origin,
         };
-        const clientDataHash = (0, crypto_2.hash)("sha256", (0, crypto_2.fromUTF8)(JSON.stringify(clientData)));
-        const rpIdHash = (0, crypto_2.hash)("sha256", buffer_1.Buffer.from(credential.rpId, "utf-8"));
+        const clientDataHash = (0, crypto_1.hash)("sha256", (0, crypto_1.fromUTF8)(JSON.stringify(clientData)));
+        const rpIdHash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(credential.rpId, "utf-8"));
         const flags = buffer_1.Buffer.from("05", "hex"); // user verification
         const signCount = buffer_1.Buffer.allocUnsafe(4);
         signCount.writeUInt32BE(credential.signCount, 0);

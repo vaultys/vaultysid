@@ -1,6 +1,6 @@
 import assert from "assert";
 import { generateDilithiumKeyPair, signDilithium, verifyDilithium, createDilithiumCoseKey, getDilithiumKeyInfo, PQ_COSE_ALG, PQ_COSE_KEY_TYPE, PQ_COSE_KEY_PARAMS } from "../src/pqCrypto";
-import { Buffer } from "buffer/";
+import { Buffer } from "../src/crypto";
 
 describe("Post-Quantum Cryptography", () => {
   let keyPair: { publicKey: Buffer; secretKey: Buffer };

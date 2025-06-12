@@ -1,5 +1,5 @@
 // TODO: to revamp and optimize
-import crypto from "crypto";
+// import crypto from "crypto";
 import { Buffer } from "buffer/";
 import { randomBytes, hash as myhash, fromUTF8 } from "../crypto";
 import cbor from "cbor";
@@ -7,7 +7,7 @@ import { ed25519 } from "@noble/curves/ed25519";
 import { p256 } from "@noble/curves/p256";
 import { p384 } from "@noble/curves/p384";
 import { p521 } from "@noble/curves/p521";
-import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
+// import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
 import { PQ_COSE_ALG, PQ_COSE_KEY_TYPE, PQ_COSE_KEY_PARAMS, signDilithium, verifyDilithium, createDilithiumCoseKey, generateDilithiumKeyPair } from "../pqCrypto";
 
 const credentials: Record<string, SoftCredentials> = {};
@@ -72,31 +72,31 @@ const base64ToPem = (b64cert: string) => {
   return "-----BEGIN CERTIFICATE-----\n" + pemcert + "-----END CERTIFICATE-----";
 };
 
-const getCertificateInfo = (certificate: Buffer) => {
-  const x509 = new X509Certificate(certificate);
+// const getCertificateInfo = (certificate: Buffer) => {
+//   const x509 = new X509Certificate(certificate);
 
-  const subjectString = x509.subject;
-  const issuer = x509.issuer;
-  const issuerName = x509.issuerName.toString();
-  const subjectParts = subjectString.split(",");
+//   const subjectString = x509.subject;
+//   const issuer = x509.issuer;
+//   const issuerName = x509.issuerName.toString();
+//   const subjectParts = subjectString.split(",");
 
-  const subject: Record<string, string> = {};
-  for (const field of subjectParts) {
-    const kv = field.split("=");
-    subject[kv[0].trim()] = kv[1];
-  }
-  // console.log(subject);
-  const { Version } = x509.toTextObject().Data as unknown as { Version: string };
-  const bc = x509.getExtension(BasicConstraintsExtension);
-  const basicConstraintsCA = bc ? bc.ca : false;
-  return {
-    issuer,
-    issuerName,
-    subject,
-    version: Version,
-    basicConstraintsCA,
-  };
-};
+//   const subject: Record<string, string> = {};
+//   for (const field of subjectParts) {
+//     const kv = field.split("=");
+//     subject[kv[0].trim()] = kv[1];
+//   }
+//   // console.log(subject);
+//   const { Version } = x509.toTextObject().Data as unknown as { Version: string };
+//   const bc = x509.getExtension(BasicConstraintsExtension);
+//   const basicConstraintsCA = bc ? bc.ca : false;
+//   return {
+//     issuer,
+//     issuerName,
+//     subject,
+//     version: Version,
+//     basicConstraintsCA,
+//   };
+// };
 
 const parseAuthData = (buffer: Buffer) => {
   const rpIdHash = buffer.slice(0, 32);
@@ -162,32 +162,33 @@ const verifyPackedAttestation = (response: AuthenticatorAttestationResponse, use
   let signatureIsValid = false;
 
   /* ----- Verify FULL attestation ----- */
-  if (attestationStruct.attStmt.x5c) {
-    const leafCert = base64ToPem(attestationStruct.attStmt.x5c[0].toString("base64"));
-    const certInfo = getCertificateInfo(attestationStruct.attStmt.x5c[0]);
-    const subject = certInfo.subject as {
-      OU: string;
-      O: string;
-      C: string;
-      CN: string;
-    };
+  // if (attestationStruct.attStmt.x5c) {
+  //   const leafCert = base64ToPem(attestationStruct.attStmt.x5c[0].toString("base64"));
+  //   const certInfo = getCertificateInfo(attestationStruct.attStmt.x5c[0]);
+  //   const subject = certInfo.subject as {
+  //     OU: string;
+  //     O: string;
+  //     C: string;
+  //     CN: string;
+  //   };
 
-    // console.log(certInfo);
-    if (subject.OU !== "Authenticator Attestation") throw new Error('Batch certificate OU MUST be set strictly to "Authenticator Attestation"!');
+  //   // console.log(certInfo);
+  //   if (subject.OU !== "Authenticator Attestation") throw new Error('Batch certificate OU MUST be set strictly to "Authenticator Attestation"!');
 
-    if (!subject.CN) throw new Error("Batch certificate CN MUST no be empty!");
+  //   if (!subject.CN) throw new Error("Batch certificate CN MUST no be empty!");
 
-    if (!subject.O) throw new Error("Batch certificate O MUST no be empty!");
+  //   if (!subject.O) throw new Error("Batch certificate O MUST no be empty!");
 
-    if (!subject.C || subject.C.length !== 2) throw new Error("Batch certificate C MUST be set to two character ISO 3166 code!");
+  //   if (!subject.C || subject.C.length !== 2) throw new Error("Batch certificate C MUST be set to two character ISO 3166 code!");
 
-    if (certInfo.basicConstraintsCA) throw new Error("Batch certificate basic constraints CA MUST be false!");
+  //   if (certInfo.basicConstraintsCA) throw new Error("Batch certificate basic constraints CA MUST be false!");
 
-    if (certInfo.version !== "v3 (2)") throw new Error("Batch certificate version MUST be 3(ASN1 2)!");
+  //   if (certInfo.version !== "v3 (2)") throw new Error("Batch certificate version MUST be 3(ASN1 2)!");
 
-    signatureIsValid = crypto.createVerify("sha256").update(dataBuffer).verify(leafCert, signature);
-    /* ----- Verify FULL attestation ENDS ----- */
-  } else if (attestationStruct.attStmt.ecdaaKeyId) {
+  //   signatureIsValid = crypto.createVerify("sha256").update(dataBuffer).verify(leafCert, signature);
+  //   /* ----- Verify FULL attestation ENDS ----- */
+  // } else
+  if (attestationStruct.attStmt.ecdaaKeyId) {
     throw new Error("ECDAA IS NOT SUPPORTED!");
   } else {
     /* ----- Verify SURROGATE attestation ----- */
@@ -301,15 +302,15 @@ export default class SoftCredentials {
     return result;
   }
 
-  static getCertificateInfo(response: AuthenticatorAttestationResponse) {
-    const attestationBuffer = Buffer.from(response.attestationObject);
-    const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
-    if (attestationStruct.attStmt.x5c) {
-      return getCertificateInfo(attestationStruct.attStmt.x5c[0]);
-    } else {
-      return null;
-    }
-  }
+  // static getCertificateInfo(response: AuthenticatorAttestationResponse) {
+  //   const attestationBuffer = Buffer.from(response.attestationObject);
+  //   const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
+  //   if (attestationStruct.attStmt.x5c) {
+  //     return getCertificateInfo(attestationStruct.attStmt.x5c[0]);
+  //   } else {
+  //     return null;
+  //   }
+  // }
 
   static async create(options: CredentialCreationOptions, origin = "test"): Promise<PublicKeyCredential> {
     const credential = new SoftCredentials();

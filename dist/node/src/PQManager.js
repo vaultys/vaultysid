@@ -3,12 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const saltpack_1 = require("@vaultys/saltpack");
 const crypto_1 = require("./crypto");
 const buffer_1 = require("buffer/");
 const tweetnacl_1 = __importDefault(require("tweetnacl"));
 const msgpack_1 = require("@msgpack/msgpack");
-const crypto_2 = require("crypto");
 const pqCrypto_1 = require("./pqCrypto");
 const KeyManager_1 = __importDefault(require("./KeyManager"));
 const LEVEL_ROOT = 1;
@@ -39,20 +37,6 @@ class PQManager extends KeyManager_1.default {
     }
     static generate_PQ() {
         return PQManager.create_PQ_fromEntropy((0, crypto_1.randomBytes)(32));
-    }
-    async getCypher() {
-        // todo fetch secretKey here
-        const cypher = this.cypher;
-        return {
-            hmac: (message) => cypher.secretKey
-                ? buffer_1.Buffer.from((0, crypto_2.createHmac)("sha256", buffer_1.Buffer.from(cypher.secretKey).toString("hex"))
-                    .update("VaultysID/" + message + "/end")
-                    .digest())
-                : undefined,
-            signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
-            decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
-            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
-        };
     }
     getSecret() {
         return buffer_1.Buffer.from((0, msgpack_1.encode)({

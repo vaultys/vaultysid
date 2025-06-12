@@ -9,7 +9,6 @@ const crypto_1 = require("./crypto");
 const buffer_1 = require("buffer/");
 const tweetnacl_1 = __importDefault(require("tweetnacl"));
 const msgpack_1 = require("@msgpack/msgpack");
-const crypto_2 = require("crypto");
 const ed25519_1 = require("@noble/curves/ed25519");
 ed25519_1.ed25519.CURVE = { ...ed25519_1.ed25519.CURVE };
 // @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
@@ -212,7 +211,6 @@ class KeyManager {
         // const derivedKey = privateDerivePath(await bip32.Bip32PrivateKey.fromEntropy(seed.slice(0, 32)), `m/1'/0'/${swapIndex}'`);
         km.proofKey = {
             publicKey: buffer_1.Buffer.from([]), //deprecated
-            //secretKey: derivedKey.toBytes(),
         };
         km.swapIndex = swapIndex;
         km.proof = (0, crypto_1.hash)("sha256", km.proofKey.publicKey);
@@ -249,11 +247,7 @@ class KeyManager {
         // todo fetch secretKey here
         const cypher = this.cypher;
         return {
-            hmac: (message) => cypher.secretKey
-                ? buffer_1.Buffer.from((0, crypto_2.createHmac)("sha256", buffer_1.Buffer.from(cypher.secretKey).toString("hex"))
-                    .update("VaultysID/" + message + "/end")
-                    .digest())
-                : undefined,
+            hmac: (message) => (cypher.secretKey ? (0, crypto_1.hmac)("sha256", buffer_1.Buffer.from(cypher.secretKey), "VaultysID/" + message + "/end") : undefined),
             signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
             decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
             diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),

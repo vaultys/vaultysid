@@ -24,13 +24,12 @@ module.exports = {
   resolve: {
     extensions: [".ts", ".js"],
     fallback: {
-      crypto: require.resolve("crypto-browserify"),
       buffer: require.resolve("buffer/"),
       stream: require.resolve("stream-browserify"),
-      vm: require.resolve("vm-browserify"),
+      //vm: require.resolve("vm-browserify"),
       // path: require.resolve("path-browserify"),
-      util: require.resolve("util/"),
-      assert: require.resolve("assert/"),
+      //util: require.resolve("util/"),
+      //assert: require.resolve("assert/"),
     },
   },
   plugins: [

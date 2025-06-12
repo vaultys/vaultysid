@@ -3,9 +3,8 @@ import { Buffer } from "..";
 import { FileSignature } from "../src/IdManager";
 import { IdManager, VaultysId, MemoryChannel, MemoryStorage, File, crypto } from "..";
 import "./shims";
-import { hash } from "../src/crypto";
+import { hash, randomBytes } from "../src/crypto";
 import { createRandomVaultysId } from "./utils";
-import { randomBytes } from "crypto";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {

@@ -1,6 +1,7 @@
 import { assert } from "chai";
 import VaultysId from "../src/VaultysId";
 import { migrateVaultysId } from "../src/utils/migration";
+import { Buffer } from "buffer/";
 
 const serializer = (object: any) => {
   return JSON.stringify(
@@ -74,7 +75,7 @@ describe("Test Vectors", () => {
 
     const id1 = VaultysId.fromId(vid, undefined, "base64");
     const id2 = VaultysId.fromId(newvid, undefined, "base64");
-    id1.keyManager.proof = "";
+    id1.keyManager.proof = Buffer.from([]);
     assert.equal(serializer(id1), serializer(id2));
   });
 });

@@ -1,9 +1,8 @@
-import { dearmorAndDecrypt, encryptAndArmor } from "@vaultys/saltpack";
 import { hash, randomBytes } from "./crypto";
+
 import { Buffer } from "buffer/";
-import nacl, { BoxKeyPair } from "tweetnacl";
+import nacl from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
-import { createHmac } from "crypto";
 import { generateDilithiumKeyPair, signDilithium, verifyDilithium } from "./pqCrypto";
 import KeyManager from "./KeyManager";
 
@@ -59,24 +58,6 @@ export default class PQManager extends KeyManager {
 
   static generate_PQ() {
     return PQManager.create_PQ_fromEntropy(randomBytes(32));
-  }
-
-  async getCypher() {
-    // todo fetch secretKey here
-    const cypher = this.cypher;
-    return {
-      hmac: (message: string) =>
-        cypher.secretKey
-          ? Buffer.from(
-              createHmac("sha256", Buffer.from(cypher.secretKey).toString("hex"))
-                .update("VaultysID/" + message + "/end")
-                .digest(),
-            )
-          : undefined,
-      signcrypt: async (plaintext: string, publicKeys: Buffer[]) => encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys),
-      decrypt: async (encryptedMessage: string, senderKey?: Buffer | null) => dearmorAndDecrypt(encryptedMessage, cypher as BoxKeyPair, senderKey),
-      diffieHellman: async (publicKey: Buffer) => Buffer.from(nacl.scalarMult(cypher.secretKey!, publicKey)),
-    };
   }
 
   getSecret() {
