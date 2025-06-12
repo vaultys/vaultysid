@@ -34,7 +34,7 @@
   "devDependencies": {
     "@playwright/test": "^1.53.0",
     "@types/chai": "^5.2.2",
-    "@types/express": "^5.0.1",
+    "@types/express": "^5.0.3",
     "@types/mocha": "^8.2.3",
     "@types/node": "^22.15.31",
     "@types/pbkdf2": "^3.1.2",
@@ -56,7 +56,7 @@
     "stream-browserify": "^3.0.0",
     "ts-loader": "^9.5.2",
     "tslib": "^2.8.1",
-    "tsx": "^4.20.1",
+    "tsx": "^4.20.2",
     "typescript": "^5.8.3",
     "vm-browserify": "^1.1.2",
     "webpack": "^5.99.9",
@@ -67,7 +67,7 @@
     "@noble/curves": "^1.9.2",
     "@noble/hashes": "^1.8.0",
     "@noble/post-quantum": "^0.4.1",
-    "@vaultys/saltpack": "^1.0.0-beta",
+    "@vaultys/saltpack": "1.0.0-beta",
     "cbor": "^10.0.3",
     "tweetnacl": "^1.0.3"
   },

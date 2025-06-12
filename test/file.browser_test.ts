@@ -43,7 +43,7 @@ describe("IdManager with files in browser", () => {
       const outputBuffer = Buffer.concat(outputChunks);
       const hash1 = hash("sha256", Buffer.from(inputBuffer));
       const hash2 = hash("sha256", outputBuffer);
-      assert.equal(hash1, hash2);
+      assert.equal(hash1.toString("hex"), hash2.toString("hex"));
     }
   });
 
@@ -97,7 +97,7 @@ describe("Channel tests for browser", () => {
     const outputBuffer = Buffer.concat(outputChunks);
     const hash1 = hash("sha256", Buffer.from(inputBuffer));
     const hash2 = hash("sha256", outputBuffer);
-    assert.equal(hash1, hash2);
+    assert.equal(hash1.toString("hex"), hash2.toString("hex"));
   });
 
   it("stream file over encrypted channel", async () => {
@@ -122,6 +122,6 @@ describe("Channel tests for browser", () => {
     const outputBuffer = Buffer.concat(outputChunks);
     const hash1 = hash("sha256", Buffer.from(inputBuffer));
     const hash2 = hash("sha256", outputBuffer);
-    assert.equal(hash1, hash2);
+    assert.equal(hash1.toString("hex"), hash2.toString("hex"));
   });
 });

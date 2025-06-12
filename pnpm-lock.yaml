@@ -21,7 +21,7 @@ importers:
         specifier: ^0.4.1
         version: 0.4.1
       '@vaultys/saltpack':
-        specifier: ^1.0.0-beta
+        specifier: 1.0.0-beta
         version: 1.0.0-beta
       cbor:
         specifier: ^10.0.3
@@ -37,7 +37,7 @@ importers:
         specifier: ^5.2.2
         version: 5.2.2
       '@types/express':
-        specifier: ^5.0.1
+        specifier: ^5.0.3
         version: 5.0.3
       '@types/mocha':
         specifier: ^8.2.3
@@ -103,7 +103,7 @@ importers:
         specifier: ^2.8.1
         version: 2.8.1
       tsx:
-        specifier: ^4.20.1
+        specifier: ^4.20.2
         version: 4.20.2
       typescript:
         specifier: ^5.8.3
