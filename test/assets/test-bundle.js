@@ -1829,7 +1829,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DHIES = void 0;
-const saltpack_1 = __webpack_require__(/*! @vaultys/saltpack */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/index.js");
+const saltpack_1 = __webpack_require__(/*! @vaultys/saltpack */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/index.js");
 const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
@@ -12674,10 +12674,10 @@ function getMessagePrehash(hashName, msg, ctx = exports.EMPTY) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/armor.js":
-/*!******************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/armor.js ***!
-  \******************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/armor.js":
+/*!*******************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/armor.js ***!
+  \*******************************************************************************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -12693,8 +12693,8 @@ exports.dearmor = dearmor;
 exports.encodeBlock = encodeBlock;
 exports.decodeBlock = decodeBlock;
 exports.efficientCharsSizes = efficientCharsSizes;
-const message_header_1 = __webpack_require__(/*! ./message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/message-header.js");
-const util_1 = __webpack_require__(/*! ./util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const message_header_1 = __webpack_require__(/*! ./message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/message-header.js");
+const util_1 = __webpack_require__(/*! ./util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 const stream_1 = __webpack_require__(/*! stream */ "./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js");
 const lodash_chunk_1 = __importDefault(__webpack_require__(/*! lodash.chunk */ "./node_modules/.pnpm/lodash.chunk@4.2.0/node_modules/lodash.chunk/index.js"));
 exports.debug = false;
@@ -13078,10 +13078,10 @@ function efficientCharsSizes(alphabet_size, chars_size_upper_bound = 50) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/header.js":
-/*!******************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/header.js ***!
-  \******************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/header.js":
+/*!*******************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/header.js ***!
+  \*******************************************************************************************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -13124,10 +13124,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const message_header_1 = __importStar(__webpack_require__(/*! ../message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/message-header.js"));
-const recipient_1 = __importDefault(__webpack_require__(/*! ./recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/recipient.js"));
+const message_header_1 = __importStar(__webpack_require__(/*! ../message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/message-header.js"));
+const recipient_1 = __importDefault(__webpack_require__(/*! ./recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/recipient.js"));
 const tweetnacl_1 = __webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js");
-const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 class EncryptedMessageHeader extends message_header_1.default {
@@ -13244,10 +13244,10 @@ exports["default"] = EncryptedMessageHeader;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/index.js":
-/*!*****************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/index.js ***!
-  \*****************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/index.js":
+/*!******************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/index.js ***!
+  \******************************************************************************************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -13278,10 +13278,10 @@ exports.debugSetKey = debugSetKey;
 exports.debugSetKeypair = debugSetKeypair;
 exports.encrypt = encrypt;
 exports.decrypt = decrypt;
-const header_1 = __importDefault(__webpack_require__(/*! ./header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/header.js"));
-const recipient_1 = __importDefault(__webpack_require__(/*! ./recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/recipient.js"));
-const payload_1 = __importDefault(__webpack_require__(/*! ./payload */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/payload.js"));
-const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const header_1 = __importDefault(__webpack_require__(/*! ./header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/header.js"));
+const recipient_1 = __importDefault(__webpack_require__(/*! ./recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/recipient.js"));
+const payload_1 = __importDefault(__webpack_require__(/*! ./payload */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/payload.js"));
+const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 const stream_1 = __webpack_require__(/*! stream */ "./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js");
 const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 const tweetnacl_1 = __webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js");
@@ -13523,10 +13523,10 @@ exports.DecryptStream = DecryptStream;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/payload.js":
-/*!*******************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/payload.js ***!
-  \*******************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/payload.js":
+/*!********************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/payload.js ***!
+  \********************************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -13627,10 +13627,10 @@ exports["default"] = EncryptedMessagePayload;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/recipient.js":
-/*!*********************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/recipient.js ***!
-  \*********************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/recipient.js":
+/*!**********************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/recipient.js ***!
+  \**********************************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -13639,7 +13639,7 @@ exports["default"] = EncryptedMessagePayload;
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 const tweetnacl_1 = __webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js");
-const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 class EncryptedMessageRecipient {
     constructor(public_key, encrypted_payload_key, index, anonymous = false) {
         /** The MAC key for this recipient (this is used to generate the per-payload authenticators for this recipient) */
@@ -13755,43 +13755,43 @@ exports["default"] = EncryptedMessageRecipient;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/index.js":
-/*!******************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/index.js ***!
-  \******************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/index.js":
+/*!*******************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/index.js ***!
+  \*******************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DearmorAndDesigncryptStream = exports.SigncryptAndArmorStream = exports.dearmorAndDesigncrypt = exports.signcryptAndArmor = exports.verifyDetachedArmored = exports.signDetachedAndArmor = exports.DearmorAndVerifyStream = exports.SignAndArmorStream = exports.verifyArmored = exports.signAndArmor = exports.DearmorAndDecryptStream = exports.EncryptAndArmorStream = exports.dearmorAndDecrypt = exports.encryptAndArmor = exports.SymmetricKeyRecipient = exports.DesigncryptStream = exports.designcrypt = exports.SigncryptStream = exports.signcrypt = exports.verifyDetached = exports.signDetached = exports.VerifyStream = exports.verify = exports.SignStream = exports.sign = exports.DecryptStream = exports.decrypt = exports.EncryptStream = exports.encrypt = exports.MessageType = exports.DearmorStream = exports.dearmor = exports.ArmorStream = exports.armor = void 0;
-var armor_1 = __webpack_require__(/*! ./armor */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/armor.js");
+var armor_1 = __webpack_require__(/*! ./armor */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/armor.js");
 Object.defineProperty(exports, "armor", ({ enumerable: true, get: function () { return armor_1.armor; } }));
 Object.defineProperty(exports, "ArmorStream", ({ enumerable: true, get: function () { return armor_1.ArmorStream; } }));
 Object.defineProperty(exports, "dearmor", ({ enumerable: true, get: function () { return armor_1.dearmor; } }));
 Object.defineProperty(exports, "DearmorStream", ({ enumerable: true, get: function () { return armor_1.DearmorStream; } }));
-var message_header_1 = __webpack_require__(/*! ./message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/message-header.js");
+var message_header_1 = __webpack_require__(/*! ./message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/message-header.js");
 Object.defineProperty(exports, "MessageType", ({ enumerable: true, get: function () { return message_header_1.MessageType; } }));
-var encryption_1 = __webpack_require__(/*! ./encryption */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/index.js");
+var encryption_1 = __webpack_require__(/*! ./encryption */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/index.js");
 Object.defineProperty(exports, "encrypt", ({ enumerable: true, get: function () { return encryption_1.encrypt; } }));
 Object.defineProperty(exports, "EncryptStream", ({ enumerable: true, get: function () { return encryption_1.EncryptStream; } }));
 Object.defineProperty(exports, "decrypt", ({ enumerable: true, get: function () { return encryption_1.decrypt; } }));
 Object.defineProperty(exports, "DecryptStream", ({ enumerable: true, get: function () { return encryption_1.DecryptStream; } }));
-var signing_1 = __webpack_require__(/*! ./signing */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/index.js");
+var signing_1 = __webpack_require__(/*! ./signing */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/index.js");
 Object.defineProperty(exports, "sign", ({ enumerable: true, get: function () { return signing_1.sign; } }));
 Object.defineProperty(exports, "SignStream", ({ enumerable: true, get: function () { return signing_1.SignStream; } }));
 Object.defineProperty(exports, "verify", ({ enumerable: true, get: function () { return signing_1.verify; } }));
 Object.defineProperty(exports, "VerifyStream", ({ enumerable: true, get: function () { return signing_1.VerifyStream; } }));
 Object.defineProperty(exports, "signDetached", ({ enumerable: true, get: function () { return signing_1.signDetached; } }));
 Object.defineProperty(exports, "verifyDetached", ({ enumerable: true, get: function () { return signing_1.verifyDetached; } }));
-var signcryption_1 = __webpack_require__(/*! ./signcryption */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/index.js");
+var signcryption_1 = __webpack_require__(/*! ./signcryption */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/index.js");
 Object.defineProperty(exports, "signcrypt", ({ enumerable: true, get: function () { return signcryption_1.signcrypt; } }));
 Object.defineProperty(exports, "SigncryptStream", ({ enumerable: true, get: function () { return signcryption_1.SigncryptStream; } }));
 Object.defineProperty(exports, "designcrypt", ({ enumerable: true, get: function () { return signcryption_1.designcrypt; } }));
 Object.defineProperty(exports, "DesigncryptStream", ({ enumerable: true, get: function () { return signcryption_1.DesigncryptStream; } }));
-var recipient_1 = __webpack_require__(/*! ./signcryption/recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js");
+var recipient_1 = __webpack_require__(/*! ./signcryption/recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js");
 Object.defineProperty(exports, "SymmetricKeyRecipient", ({ enumerable: true, get: function () { return recipient_1.SymmetricKeyRecipient; } }));
-var with_armor_1 = __webpack_require__(/*! ./with-armor */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/with-armor.js");
+var with_armor_1 = __webpack_require__(/*! ./with-armor */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/with-armor.js");
 Object.defineProperty(exports, "encryptAndArmor", ({ enumerable: true, get: function () { return with_armor_1.encryptAndArmor; } }));
 Object.defineProperty(exports, "dearmorAndDecrypt", ({ enumerable: true, get: function () { return with_armor_1.dearmorAndDecrypt; } }));
 Object.defineProperty(exports, "EncryptAndArmorStream", ({ enumerable: true, get: function () { return with_armor_1.EncryptAndArmorStream; } }));
@@ -13810,10 +13810,10 @@ Object.defineProperty(exports, "DearmorAndDesigncryptStream", ({ enumerable: tru
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/message-header.js":
-/*!***************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/message-header.js ***!
-  \***************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/message-header.js":
+/*!****************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/message-header.js ***!
+  \****************************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -13859,10 +13859,10 @@ exports["default"] = Header;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/header.js":
-/*!********************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/header.js ***!
-  \********************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/header.js":
+/*!*********************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/header.js ***!
+  \*********************************************************************************************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -13905,10 +13905,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const message_header_1 = __importStar(__webpack_require__(/*! ../message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/message-header.js"));
-const recipient_1 = __importDefault(__webpack_require__(/*! ./recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js"));
+const message_header_1 = __importStar(__webpack_require__(/*! ../message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/message-header.js"));
+const recipient_1 = __importDefault(__webpack_require__(/*! ./recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js"));
 const tweetnacl_1 = __webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js");
-const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 class SigncryptedMessageHeader extends message_header_1.default {
@@ -14044,10 +14044,10 @@ exports["default"] = SigncryptedMessageHeader;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/index.js":
-/*!*******************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/index.js ***!
-  \*******************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/index.js":
+/*!********************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/index.js ***!
+  \********************************************************************************************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -14111,10 +14111,10 @@ exports.debugSetKey = debugSetKey;
 exports.debugSetKeypair = debugSetKeypair;
 exports.signcrypt = signcrypt;
 exports.designcrypt = designcrypt;
-const header_1 = __importDefault(__webpack_require__(/*! ./header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/header.js"));
-const recipient_1 = __importStar(__webpack_require__(/*! ./recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js"));
-const payload_1 = __importDefault(__webpack_require__(/*! ./payload */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/payload.js"));
-const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const header_1 = __importDefault(__webpack_require__(/*! ./header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/header.js"));
+const recipient_1 = __importStar(__webpack_require__(/*! ./recipient */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js"));
+const payload_1 = __importDefault(__webpack_require__(/*! ./payload */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/payload.js"));
+const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 const stream_1 = __webpack_require__(/*! stream */ "./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js");
 const tweetnacl_1 = __webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js");
 const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
@@ -14361,10 +14361,10 @@ exports.DesigncryptStream = DesigncryptStream;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/payload.js":
-/*!*********************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/payload.js ***!
-  \*********************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/payload.js":
+/*!**********************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/payload.js ***!
+  \**********************************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -14466,10 +14466,10 @@ exports["default"] = SigncryptedMessagePayload;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js":
-/*!***********************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js ***!
-  \***********************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js":
+/*!************************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/recipient.js ***!
+  \************************************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -14479,7 +14479,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SymmetricKeyRecipient = void 0;
 const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 const tweetnacl_1 = __webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js");
-const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 class SymmetricKeyRecipient {
     constructor(recipient_identifier, key) {
         this.recipient_identifier = recipient_identifier;
@@ -14575,10 +14575,10 @@ exports["default"] = SigncryptedMessageRecipient;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/header.js":
-/*!***************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/header.js ***!
-  \***************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/header.js":
+/*!****************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/header.js ***!
+  \****************************************************************************************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -14622,8 +14622,8 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const crypto_1 = __webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js");
 const tweetnacl_1 = __webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js");
-const message_header_1 = __importStar(__webpack_require__(/*! ../message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/message-header.js"));
-const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const message_header_1 = __importStar(__webpack_require__(/*! ../message-header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/message-header.js"));
+const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 // [
 //     format name,
 //     version,
@@ -14675,7 +14675,7 @@ class SignedMessageHeader extends message_header_1.default {
         return [header_hash, Buffer.from((0, msgpack_1.encode)(encoded))];
     }
     static decode(encoded, unwrapped = false) {
-        const [header_hash, data] = super.decode1(encoded, unwrapped);
+        const [, data] = super.decode1(encoded, unwrapped);
         if (data[2] !== message_header_1.MessageType.ATTACHED_SIGNING && data[2] !== message_header_1.MessageType.DETACHED_SIGNING)
             throw new Error("Invalid data");
         const [, , , public_key, nonce] = data;
@@ -14707,10 +14707,10 @@ exports["default"] = SignedMessageHeader;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/index.js":
-/*!**************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/index.js ***!
-  \**************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/index.js":
+/*!***************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/index.js ***!
+  \***************************************************************************************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -14741,9 +14741,9 @@ exports.sign = sign;
 exports.verify = verify;
 exports.signDetached = signDetached;
 exports.verifyDetached = verifyDetached;
-const header_1 = __importDefault(__webpack_require__(/*! ./header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/header.js"));
-const payload_1 = __importDefault(__webpack_require__(/*! ./payload */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/payload.js"));
-const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js");
+const header_1 = __importDefault(__webpack_require__(/*! ./header */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/header.js"));
+const payload_1 = __importDefault(__webpack_require__(/*! ./payload */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/payload.js"));
+const util_1 = __webpack_require__(/*! ../util */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js");
 const stream_1 = __webpack_require__(/*! stream */ "./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js");
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 let debug = false;
@@ -14973,10 +14973,10 @@ function verifyDetached(signature, data, public_key) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/payload.js":
-/*!****************************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/payload.js ***!
-  \****************************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/payload.js":
+/*!*****************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/payload.js ***!
+  \*****************************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -15057,10 +15057,10 @@ exports["default"] = SignedMessagePayload;
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js":
-/*!*****************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/util.js ***!
-  \*****************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js":
+/*!******************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/util.js ***!
+  \******************************************************************************************************/
 /***/ ((__unused_webpack_module, exports, __webpack_require__) => {
 
 "use strict";
@@ -15104,10 +15104,10 @@ function chunkString(string, length) {
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/with-armor.js":
-/*!***********************************************************************************************************!*\
-  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/with-armor.js ***!
-  \***********************************************************************************************************/
+/***/ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/with-armor.js":
+/*!************************************************************************************************************!*\
+  !*** ./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/with-armor.js ***!
+  \************************************************************************************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -15134,10 +15134,10 @@ exports.signDetachedAndArmor = signDetachedAndArmor;
 exports.verifyDetachedArmored = verifyDetachedArmored;
 exports.signcryptAndArmor = signcryptAndArmor;
 exports.dearmorAndDesigncrypt = dearmorAndDesigncrypt;
-const encryption_1 = __webpack_require__(/*! ./encryption */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/encryption/index.js");
-const signing_1 = __webpack_require__(/*! ./signing */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signing/index.js");
-const signcryption_1 = __webpack_require__(/*! ./signcryption */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/signcryption/index.js");
-const armor_1 = __webpack_require__(/*! ./armor */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta/node_modules/@vaultys/saltpack/dist/armor.js");
+const encryption_1 = __webpack_require__(/*! ./encryption */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/encryption/index.js");
+const signing_1 = __webpack_require__(/*! ./signing */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signing/index.js");
+const signcryption_1 = __webpack_require__(/*! ./signcryption */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/signcryption/index.js");
+const armor_1 = __webpack_require__(/*! ./armor */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta2/node_modules/@vaultys/saltpack/dist/armor.js");
 const pumpify_1 = __importDefault(__webpack_require__(/*! pumpify */ "./node_modules/.pnpm/pumpify@2.0.1/node_modules/pumpify/index.js"));
 function encryptAndArmor(data, keypair, recipients_keys) {
     return __awaiter(this, void 0, void 0, function* () {

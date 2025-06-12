@@ -21,8 +21,8 @@ importers:
         specifier: ^0.4.1
         version: 0.4.1
       '@vaultys/saltpack':
-        specifier: 1.0.0-beta
-        version: 1.0.0-beta
+        specifier: 1.0.0-beta2
+        version: 1.0.0-beta2
       cbor:
         specifier: ^10.0.3
         version: 10.0.3
@@ -517,9 +517,9 @@ packages:
     resolution: {integrity: sha512-qHV7pW7E85A0x6qyrFn+O+q1k1p3tQCsqIZ1KZ5ESLXY57aTvUd3/a4rdPTeXisvhXn2VQG0VSKUqs8KHF2zcA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@vaultys/saltpack@1.0.0-beta':
-    resolution: {integrity: sha512-Z82kEX5OgtTCVgQ76KA1MIpFvqHOHMpfzKWL4eQW+CY3kS4vRHTeGX3S59SUnr5VmDYaST0Jik2cDtEz2RM/ZQ==}
-    engines: {node: ^12.0.0 || >=14.0.0}
+  '@vaultys/saltpack@1.0.0-beta2':
+    resolution: {integrity: sha512-MdnD/ihtpGIjx2FJ/5muat25MkjUx9XqjxcY9u5M3he8kg1a06vqvW6EOnyXcj5bgVSqNfqQxgY+toui1hOzmA==}
+    engines: {node: '>=16.0.0'}
 
   '@webassemblyjs/ast@1.14.1':
     resolution: {integrity: sha512-nuBEDgQfm1ccRp/8bCQrx1frohyufl4JlbMMZ4P1wpeOfDhF6FQkxZJ1b/e+PLwr6X1Nhw6OLme5usuBWYBvuQ==}
@@ -2481,7 +2481,7 @@ snapshots:
       '@typescript-eslint/types': 8.34.0
       eslint-visitor-keys: 4.2.1
 
-  '@vaultys/saltpack@1.0.0-beta':
+  '@vaultys/saltpack@1.0.0-beta2':
     dependencies:
       '@msgpack/msgpack': 3.1.2
       lodash.chunk: 4.2.0
