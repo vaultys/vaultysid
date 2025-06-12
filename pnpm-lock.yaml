@@ -21,8 +21,8 @@ importers:
         specifier: ^0.4.1
         version: 0.4.1
       '@vaultys/saltpack':
-        specifier: 1.0.0-beta2
-        version: 1.0.0-beta2
+        specifier: 1.0.0-beta4
+        version: 1.0.0-beta4
       cbor:
         specifier: ^10.0.3
         version: 10.0.3
@@ -517,8 +517,8 @@ packages:
     resolution: {integrity: sha512-qHV7pW7E85A0x6qyrFn+O+q1k1p3tQCsqIZ1KZ5ESLXY57aTvUd3/a4rdPTeXisvhXn2VQG0VSKUqs8KHF2zcA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@vaultys/saltpack@1.0.0-beta2':
-    resolution: {integrity: sha512-MdnD/ihtpGIjx2FJ/5muat25MkjUx9XqjxcY9u5M3he8kg1a06vqvW6EOnyXcj5bgVSqNfqQxgY+toui1hOzmA==}
+  '@vaultys/saltpack@1.0.0-beta4':
+    resolution: {integrity: sha512-l3TBsVKmfr2FaRE/6IArPmcOo3K00BuVxmBPrCX/HO23OPHZ5gSmEBHOwdZm4xE/AVwvzK/lj83vnfZxc2UqUw==}
     engines: {node: '>=16.0.0'}
 
   '@webassemblyjs/ast@1.14.1':
@@ -2481,9 +2481,10 @@ snapshots:
       '@typescript-eslint/types': 8.34.0
       eslint-visitor-keys: 4.2.1
 
-  '@vaultys/saltpack@1.0.0-beta2':
+  '@vaultys/saltpack@1.0.0-beta4':
     dependencies:
       '@msgpack/msgpack': 3.1.2
+      '@noble/hashes': 1.8.0
       lodash.chunk: 4.2.0
       pumpify: 2.0.1
       tweetnacl: 1.0.3
