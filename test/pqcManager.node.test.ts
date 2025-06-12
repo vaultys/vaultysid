@@ -8,11 +8,11 @@ describe("PQC", () => {
   it("serder a VaultytsID secret - webauthn", async () => {
     const vaultysId = await VaultysId.createPQC();
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.id.length, 1372);
-    assert.equal(vaultysId.id.toString("hex").length, 2744);
-    assert.equal(vaultysId.id.toString("base64").length, 1832);
-    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1312);
-    assert.equal((vaultysId.keyManager as Fido2Manager).ckey.length, 1326);
+    assert.equal(vaultysId.id.length, 2012);
+    assert.equal(vaultysId.id.toString("hex").length, 4024);
+    assert.equal(vaultysId.id.toString("base64").length, 2684);
+    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
+    assert.equal((vaultysId.keyManager as Fido2Manager).ckey.length, 1966);
     const id2 = VaultysId.fromSecret(vaultysId.getSecret());
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
@@ -21,11 +21,11 @@ describe("PQC", () => {
   it("serder a VaultytsID - webauthn", async () => {
     const vaultysId = await VaultysId.createPQC();
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1312);
-    assert.equal((vaultysId.keyManager as Fido2Manager).ckey.length, 1326);
-    assert.equal(vaultysId.id.length, 1372);
+    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
+    assert.equal((vaultysId.keyManager as Fido2Manager).ckey.length, 1966);
+    assert.equal(vaultysId.id.length, 2012);
     const id2 = VaultysId.fromId(vaultysId.id);
-    assert.equal((id2.keyManager as Fido2Manager).ckey.length, 1326);
+    assert.equal((id2.keyManager as Fido2Manager).ckey.length, 1966);
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
   });

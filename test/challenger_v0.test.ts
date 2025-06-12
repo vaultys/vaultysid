@@ -4,7 +4,6 @@ import assert from "assert";
 import "./shims";
 import { randomBytes } from "../src/crypto";
 import { createRandomVaultysId } from "./utils";
-import { decode } from "@msgpack/msgpack";
 import { decrypt } from "../src/cryptoChannel";
 
 const delay = (ms: number = 1000) => new Promise((resolve) => setTimeout(resolve, ms));

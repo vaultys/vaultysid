@@ -1,4 +1,4 @@
-import { dearmorAndDecrypt, encryptAndArmor } from "@samuelthomas2774/saltpack";
+import { dearmorAndDecrypt, encryptAndArmor } from "@vaultys/saltpack";
 import { hash, randomBytes } from "./crypto";
 import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
@@ -6,7 +6,6 @@ import { decode, encode } from "@msgpack/msgpack";
 import { createHmac } from "crypto";
 import { generateDilithiumKeyPair, signDilithium, verifyDilithium } from "./pqCrypto";
 import KeyManager from "./KeyManager";
-import { DilithiumLevel, DilithiumPrivateKey, DilithiumPublicKey } from "@asanrom/dilithium";
 
 const LEVEL_ROOT = 1;
 const LEVEL_DERIVED = 2;
@@ -22,11 +21,19 @@ export type KeyPair = {
 type DataExport = {
   v: 0; // version
   p: Buffer; // proof
-  x: Buffer; // signing secretKey or publicKey
-  e: Buffer; // encrypting secretKey or publicKey
+  x: Buffer; // signing
+  e: Buffer; // encrypting
+};
+
+type SecretExport = {
+  v: 0; // version
+  p: Buffer; // proof
+  s: Buffer; // seed for signing and cypher
 };
 
 export default class PQManager extends KeyManager {
+  seed?: Buffer;
+
   constructor() {
     super();
     this.authType = "DilithiumVerificationKey2025";
@@ -37,11 +44,11 @@ export default class PQManager extends KeyManager {
     km.entropy = entropy;
     km.level = LEVEL_ROOT;
     km.capability = "private";
-    const seed = sha512(entropy);
+    km.seed = sha512(entropy);
     km.swapIndex = swapIndex;
     km.proof = hash("sha256", Buffer.from([]));
-    km.signer = generateDilithiumKeyPair(seed.slice(0, 32));
-    const seed2 = sha256(seed.slice(32, 64));
+    km.signer = generateDilithiumKeyPair(km.seed.slice(0, 32));
+    const seed2 = sha256(km.seed.slice(32, 64));
     const cypher = nacl.box.keyPair.fromSecretKey(seed2);
     km.cypher = {
       publicKey: Buffer.from(cypher.publicKey),
@@ -72,18 +79,27 @@ export default class PQManager extends KeyManager {
     };
   }
 
+  getSecret() {
+    return Buffer.from(
+      encode({
+        v: this.version,
+        p: this.proof,
+        s: this.seed,
+      }),
+    );
+  }
+
   static fromSecret(secret: Buffer) {
-    const data = decode(secret) as DataExport;
+    const data = decode(secret) as SecretExport;
     const km = new PQManager();
     km.version = data.v ?? 0;
     km.level = LEVEL_DERIVED;
     km.capability = "private";
     km.proof = data.p;
-    km.signer = {
-      secretKey: data.x,
-      publicKey: Buffer.from(DilithiumPrivateKey.fromBytes(data.x, DilithiumLevel.get(2)).derivePublicKey().getBytes()),
-    };
-    const cypher = nacl.box.keyPair.fromSecretKey(data.e);
+    km.seed = Buffer.from(data.s);
+    km.signer = generateDilithiumKeyPair(km.seed.slice(0, 32));
+    const seed2 = sha256(km.seed.slice(32, 64));
+    const cypher = nacl.box.keyPair.fromSecretKey(seed2);
     km.cypher = {
       publicKey: Buffer.from(cypher.publicKey),
       secretKey: Buffer.from(cypher.secretKey),

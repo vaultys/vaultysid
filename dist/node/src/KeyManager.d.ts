@@ -1,7 +1,4 @@
 import { Buffer } from "buffer/";
-declare const bip32: any;
-export declare const publicDerivePath: (node: InstanceType<typeof bip32.Bip32PublicKey>, path: string) => any;
-export declare const privateDerivePath: (node: InstanceType<typeof bip32.Bip32PrivateKey>, path: string) => any;
 export type KeyPair = {
     publicKey: Buffer;
     secretKey?: Buffer;
@@ -66,18 +63,18 @@ export default class KeyManager {
     getCypher(): Promise<{
         hmac: (message: string) => Buffer | undefined;
         signcrypt: (plaintext: string, publicKeys: Buffer[]) => Promise<string>;
-        decrypt: (encryptedMessage: string, senderKey?: Buffer | null) => Promise<import("@samuelthomas2774/saltpack").DearmorAndDecryptResult>;
+        decrypt: (encryptedMessage: string, senderKey?: Buffer | null) => Promise<import("@vaultys/saltpack").DearmorAndDecryptResult>;
         diffieHellman: (publicKey: Buffer) => Promise<Buffer>;
     }>;
-    getSigner(): Promise<any>;
+    getSigner(): Promise<{
+        sign: (data: Buffer) => Promise<Buffer | null>;
+    }>;
     getSecret(): Buffer;
     static fromSecret(secret: Buffer): KeyManager;
     static instantiate(obj: any): KeyManager;
     static fromId(id: Buffer): KeyManager;
-    sign(data: Buffer): Promise<any>;
+    sign(data: Buffer): Promise<Buffer | null>;
     verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean;
-    createSwapingCertificate(): Promise<HISCP | null>;
-    verifySwapingCertificate(hiscp: HISCP): Promise<any>;
     cleanSecureData(): void;
     /**
      * Performs a Diffie-Hellman key exchange with another KeyManager instance
@@ -110,4 +107,3 @@ export default class KeyManager {
     decrypt(encryptedMessage: string, senderId?: Buffer | null): Promise<string>;
     getSecretHash(data: Buffer): Buffer;
 }
-export {};

@@ -5,15 +5,17 @@ export type KeyPair = {
     secretKey?: Buffer;
 };
 export default class PQManager extends KeyManager {
+    seed?: Buffer;
     constructor();
     static create_PQ_fromEntropy(entropy: Buffer, swapIndex?: number): Promise<PQManager>;
     static generate_PQ(): Promise<PQManager>;
     getCypher(): Promise<{
         hmac: (message: string) => Buffer | undefined;
         signcrypt: (plaintext: string, publicKeys: Buffer[]) => Promise<string>;
-        decrypt: (encryptedMessage: string, senderKey?: Buffer | null) => Promise<import("@samuelthomas2774/saltpack").DearmorAndDecryptResult>;
+        decrypt: (encryptedMessage: string, senderKey?: Buffer | null) => Promise<import("@vaultys/saltpack").DearmorAndDecryptResult>;
         diffieHellman: (publicKey: Buffer) => Promise<Buffer>;
     }>;
+    getSecret(): Buffer;
     static fromSecret(secret: Buffer): PQManager;
     static instantiate(obj: any): PQManager;
     static fromId(id: Buffer): PQManager;

@@ -1,13 +1,26 @@
-import { dearmorAndDecrypt, encryptAndArmor } from "@samuelthomas2774/saltpack";
+import { dearmorAndDecrypt, encryptAndArmor } from "@vaultys/saltpack";
 import { hash, randomBytes, secureErase } from "./crypto";
 import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
-import * as bip32fix from "@stricahq/bip32ed25519";
 import { createHmac } from "crypto";
+import { ed25519 } from "@noble/curves/ed25519";
 
-//@ts-expect-error fix for wrong way of exporting bip32ed25519
-const bip32 = bip32fix.default ?? bip32fix;
+ed25519.CURVE = { ...ed25519.CURVE };
+// @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
+ed25519.CURVE.adjustScalarBytes = (bytes: Uint8Array): Uint8Array => {
+  // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
+  // set the three least significant bits of the first byte
+  bytes[0] &= 248; // 0b1111_1000
+  // and the most significant bit of the last to zero,
+  bytes[31] &= 63; // 0b0001_1111
+  // set the second most significant bit of the last byte to 1
+  bytes[31] |= 64; // 0b0100_0000
+  return bytes;
+};
+
+////@ts-expect-error fix for wrong way of exporting bip32ed25519
+//const bip32 = bip32fix.default ?? bip32fix;
 
 const LEVEL_ROOT = 1;
 const LEVEL_DERIVED = 2;
@@ -33,25 +46,25 @@ const serializeID_v0 = (km: KeyManager) => {
   return Buffer.concat([version, proof, sign, cypher]);
 };
 
-export const publicDerivePath = (node: InstanceType<typeof bip32.Bip32PublicKey>, path: string) => {
-  let result = node;
-  if (path.startsWith("m/")) path = path.slice(2);
-  path.split("/").forEach((d) => {
-    if (d[d.length - 1] == "'") result = result.derive(2147483648 + parseInt(d.substring(0, d.length - 1)));
-    else result = result.derive(parseInt(d));
-  });
-  return result;
-};
+// export const publicDerivePath = (node: InstanceType<typeof bip32.Bip32PublicKey>, path: string) => {
+//   let result = node;
+//   if (path.startsWith("m/")) path = path.slice(2);
+//   path.split("/").forEach((d) => {
+//     if (d[d.length - 1] == "'") result = result.derive(2147483648 + parseInt(d.substring(0, d.length - 1)));
+//     else result = result.derive(parseInt(d));
+//   });
+//   return result;
+// };
 
-export const privateDerivePath = (node: InstanceType<typeof bip32.Bip32PrivateKey>, path: string) => {
-  let result = node;
-  if (path.startsWith("m/")) path = path.slice(2);
-  path.split("/").forEach((d) => {
-    if (d[d.length - 1] == "'") result = result.derive(2147483648 + parseInt(d.substring(0, d.length - 1)));
-    else result = result.derive(parseInt(d));
-  });
-  return result;
-};
+// export const privateDerivePath = (node: InstanceType<typeof bip32.Bip32PrivateKey>, path: string) => {
+//   let result = node;
+//   if (path.startsWith("m/")) path = path.slice(2);
+//   path.split("/").forEach((d) => {
+//     if (d[d.length - 1] == "'") result = result.derive(2147483648 + parseInt(d.substring(0, d.length - 1)));
+//     else result = result.derive(parseInt(d));
+//   });
+//   return result;
+// };
 
 export type KeyPair = {
   publicKey: Buffer;
@@ -281,17 +294,17 @@ export default class KeyManager {
     km.level = LEVEL_ROOT;
     km.capability = "private";
     const seed = sha512(entropy);
-    const derivedKey = privateDerivePath(await bip32.Bip32PrivateKey.fromEntropy(seed.slice(0, 32)), `m/1'/0'/${swapIndex}'`);
+    // const derivedKey = privateDerivePath(await bip32.Bip32PrivateKey.fromEntropy(seed.slice(0, 32)), `m/1'/0'/${swapIndex}'`);
     km.proofKey = {
-      publicKey: derivedKey.toBip32PublicKey().toPublicKey().toBytes(),
-      secretKey: derivedKey.toBytes(),
+      publicKey: Buffer.from([]), //deprecated
+      //secretKey: derivedKey.toBytes(),
     };
     km.swapIndex = swapIndex;
     km.proof = hash("sha256", km.proofKey.publicKey);
-    const privateKey = privateDerivePath(derivedKey, "/0'");
+    // const privateKey = privateDerivePath(derivedKey, "/0'");
     km.signer = {
-      publicKey: privateKey.toBip32PublicKey().toPublicKey().toBytes(),
-      secretKey: privateKey.toBytes(),
+      publicKey: Buffer.from(ed25519.getPublicKey(seed.slice(0, 32))),
+      secretKey: seed.slice(0, 32),
     };
     const swapIndexBuffer = Buffer.alloc(8);
     swapIndexBuffer.writeBigInt64LE(BigInt(swapIndex) as unknown as number, 0);
@@ -339,10 +352,14 @@ export default class KeyManager {
     };
   }
 
-  async getSigner() {
+  getSigner(): Promise<{
+    sign: (data: Buffer) => Promise<Buffer | null>;
+  }> {
     // todo fetch secretKey here
     const secretKey = this.signer.secretKey!;
-    return new bip32.Bip32PrivateKey(secretKey).toPrivateKey();
+    const sign = (data: Buffer) => Promise.resolve(Buffer.from(ed25519.sign(data, secretKey)));
+    //console.log(secretKey.toString("hex"), new bip32.PrivateKey(secretKey).toPublicKey().toBytes().toString("hex"), Buffer.from(ed25519.getPublicKey(secretKey)).toString("hex"));
+    return Promise.resolve({ sign });
   }
 
   getSecret() {
@@ -364,8 +381,8 @@ export default class KeyManager {
     km.capability = "private";
     km.proof = data.p;
     km.signer = {
-      secretKey: data.x,
-      publicKey: new bip32.Bip32PrivateKey(data.x).toBip32PublicKey().toPublicKey().toBytes(),
+      secretKey: data.x.slice(0, 32),
+      publicKey: Buffer.from(ed25519.getPublicKey(data.x.slice(0, 32))),
     };
     const cypher = nacl.box.keyPair.fromSecretKey(data.e);
     km.cypher = {
@@ -413,7 +430,7 @@ export default class KeyManager {
   }
 
   verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean {
-    return bip32.Bip32PublicKey.fromBytes(this.signer.publicKey).toPublicKey().verify(signature, data);
+    return ed25519.verify(signature, data, this.signer.publicKey);
   }
 
   // async createRevocationCertificate(newId) {
@@ -436,38 +453,38 @@ export default class KeyManager {
   //   } else return null;
   // }
 
-  async createSwapingCertificate() {
-    if (this.level === LEVEL_ROOT && this.entropy) {
-      const newKey = await KeyManager.create_Id25519_fromEntropy(this.entropy, this.swapIndex + 1);
+  // async createSwapingCertificate() {
+  //   if (this.level === LEVEL_ROOT && this.entropy) {
+  //     const newKey = await KeyManager.create_Id25519_fromEntropy(this.entropy, this.swapIndex + 1);
 
-      const hiscp: HISCP = {
-        newId: newKey.id,
-        proofKey: this.proofKey.publicKey,
-        timestamp: Date.now(),
-        signature: Buffer.from([]),
-      };
-      const timestampBuffer = Buffer.alloc(8);
-      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
-      const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
-      hiscp.signature = new bip32.Bip32PrivateKey(this.proofKey.secretKey!).toPrivateKey().sign(hiscpBuffer);
-      return hiscp;
-    }
-    return null;
-  }
+  //     const hiscp: HISCP = {
+  //       newId: newKey.id,
+  //       proofKey: this.proofKey.publicKey,
+  //       timestamp: Date.now(),
+  //       signature: Buffer.from([]),
+  //     };
+  //     const timestampBuffer = Buffer.alloc(8);
+  //     timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
+  //     const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
+  //     hiscp.signature = new bip32.Bip32PrivateKey(this.proofKey.secretKey!).toPrivateKey().sign(hiscpBuffer);
+  //     return hiscp;
+  //   }
+  //   return null;
+  // }
 
-  async verifySwapingCertificate(hiscp: HISCP) {
-    const proof = hash("sha256", hiscp.proofKey).toString("hex");
-    if (proof === this.proof.toString("hex")) {
-      const timestampBuffer = Buffer.alloc(8);
-      timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
-      const newKey = KeyManager.fromId(hiscp.newId);
-      const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
-      const proofVerifier = bip32.Bip32PublicKey.fromBytes(hiscp.proofKey);
-      return proofVerifier.toPublicKey().verify(hiscpBuffer, hiscp.signature);
-    } else {
-      return false;
-    }
-  }
+  // async verifySwapingCertificate(hiscp: HISCP) {
+  //   const proof = hash("sha256", hiscp.proofKey).toString("hex");
+  //   if (proof === this.proof.toString("hex")) {
+  //     const timestampBuffer = Buffer.alloc(8);
+  //     timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
+  //     const newKey = KeyManager.fromId(hiscp.newId);
+  //     const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
+  //     const proofVerifier = bip32.Bip32PublicKey.fromBytes(hiscp.proofKey);
+  //     return proofVerifier.toPublicKey().verify(hiscpBuffer, hiscp.signature);
+  //   } else {
+  //     return false;
+  //   }
+  // }
 
   cleanSecureData() {
     if (this.cypher?.secretKey) {

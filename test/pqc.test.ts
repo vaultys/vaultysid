@@ -128,9 +128,9 @@ describe("Post-Quantum Cryptography", () => {
     it("should return correct key size information", () => {
       const keyInfo = getDilithiumKeyInfo();
 
-      assert.equal(keyInfo.publicKeySize, 1312);
-      assert.equal(keyInfo.secretKeySize, 2544);
-      assert.equal(keyInfo.signatureSize, 2420);
+      assert.equal(keyInfo.publicKeySize, 1952);
+      assert.equal(keyInfo.secretKeySize, 4032);
+      assert.equal(keyInfo.signatureSize, 3309);
     });
 
     it("should match actual generated key sizes", async () => {

@@ -15,7 +15,7 @@ export default class Fido2PRFManager extends Fido2Manager {
     getCypher(): Promise<{
         hmac: (message: string) => Buffer | undefined;
         signcrypt: (plaintext: string, publicKeys: Buffer[]) => Promise<string>;
-        decrypt: (encryptedMessage: string, senderKey?: Buffer | null) => Promise<import("@samuelthomas2774/saltpack").DearmorAndDecryptResult>;
+        decrypt: (encryptedMessage: string, senderKey?: Buffer | null) => Promise<import("@vaultys/saltpack").DearmorAndDecryptResult>;
         diffieHellman: (publicKey: Buffer) => Promise<Buffer>;
     }>;
     createRevocationCertificate(): Promise<null>;

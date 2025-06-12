@@ -12,8 +12,9 @@ exports.signDilithium = signDilithium;
 exports.verifyDilithium = verifyDilithium;
 exports.createDilithiumCoseKey = createDilithiumCoseKey;
 exports.getDilithiumKeyInfo = getDilithiumKeyInfo;
-const dilithium_1 = require("@asanrom/dilithium");
+const ml_dsa_js_1 = require("@noble/post-quantum/ml-dsa.js");
 const buffer_1 = require("buffer/");
+const crypto_1 = require("./crypto");
 /**
  * COSE algorithm identifiers for post-quantum algorithms
  * Note: These values are provisional and may need to be updated as standards evolve
@@ -43,12 +44,12 @@ exports.PQ_COSE_KEY_PARAMS = {
  * @returns Promise resolving to an object containing the key pair
  */
 function generateDilithiumKeyPair(seed) {
-    const level = dilithium_1.DilithiumLevel.get(2); // Get the security level config (2, 3, or 5)
-    // Generate a key pair
-    const keyPair = dilithium_1.DilithiumKeyPair.generate(level, seed);
+    if (!seed)
+        seed = (0, crypto_1.randomBytes)(32);
+    const keyPair = ml_dsa_js_1.ml_dsa65.keygen(seed);
     return {
-        publicKey: buffer_1.Buffer.from(keyPair.getPublicKey().toBase64(), "base64"),
-        secretKey: buffer_1.Buffer.from(keyPair.getPrivateKey().toBase64(), "base64"),
+        publicKey: buffer_1.Buffer.from(keyPair.publicKey),
+        secretKey: buffer_1.Buffer.from(keyPair.secretKey),
     };
 }
 /**
@@ -58,8 +59,7 @@ function generateDilithiumKeyPair(seed) {
  * @returns Promise resolving to signature as Uint8Array
  */
 function signDilithium(message, secretKey) {
-    const DKey = dilithium_1.DilithiumPrivateKey.fromBytes(secretKey, dilithium_1.DilithiumLevel.get(2));
-    return buffer_1.Buffer.from(DKey.sign(message).getBytes());
+    return buffer_1.Buffer.from(ml_dsa_js_1.ml_dsa65.sign(secretKey, message));
 }
 /**
  * Verify a DILITHIUM Level 2 signature
@@ -69,15 +69,7 @@ function signDilithium(message, secretKey) {
  * @returns Promise resolving to boolean indicating if signature is valid
  */
 function verifyDilithium(message, signature, publicKey) {
-    // Ensure we're working with Uint8Array
-    const DKey = dilithium_1.DilithiumPublicKey.fromBytes(publicKey, dilithium_1.DilithiumLevel.get(2));
-    try {
-        return DKey.verifySignature(message, dilithium_1.DilithiumSignature.fromBytes(signature, dilithium_1.DilithiumLevel.get(2)));
-    }
-    catch (error) {
-        console.error("DILITHIUM verification error:", error);
-        return false;
-    }
+    return ml_dsa_js_1.ml_dsa65.verify(publicKey, message, signature);
 }
 /**
  * Create a COSE key representation for a DILITHIUM public key
@@ -100,8 +92,8 @@ function createDilithiumCoseKey(publicKey) {
  */
 function getDilithiumKeyInfo() {
     return {
-        publicKeySize: 1312, // Size in bytes for DILITHIUM2 public key
-        secretKeySize: 2544, // Size in bytes for DILITHIUM2 private key
-        signatureSize: 2420, // Size in bytes for DILITHIUM2 signature
+        publicKeySize: 1952, // Size in bytes for DILITHIUM2 public key
+        secretKeySize: 4032, // Size in bytes for DILITHIUM2 private key
+        signatureSize: 3309, // Size in bytes for DILITHIUM2 signature
     };
 }

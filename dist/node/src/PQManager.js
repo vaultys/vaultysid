@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const saltpack_1 = require("@samuelthomas2774/saltpack");
+const saltpack_1 = require("@vaultys/saltpack");
 const crypto_1 = require("./crypto");
 const buffer_1 = require("buffer/");
 const tweetnacl_1 = __importDefault(require("tweetnacl"));
@@ -11,7 +11,6 @@ const msgpack_1 = require("@msgpack/msgpack");
 const crypto_2 = require("crypto");
 const pqCrypto_1 = require("./pqCrypto");
 const KeyManager_1 = __importDefault(require("./KeyManager"));
-const dilithium_1 = require("@asanrom/dilithium");
 const LEVEL_ROOT = 1;
 const LEVEL_DERIVED = 2;
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
@@ -26,11 +25,11 @@ class PQManager extends KeyManager_1.default {
         km.entropy = entropy;
         km.level = LEVEL_ROOT;
         km.capability = "private";
-        const seed = sha512(entropy);
+        km.seed = sha512(entropy);
         km.swapIndex = swapIndex;
         km.proof = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from([]));
-        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(seed.slice(0, 32));
-        const seed2 = sha256(seed.slice(32, 64));
+        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
+        const seed2 = sha256(km.seed.slice(32, 64));
         const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
         km.cypher = {
             publicKey: buffer_1.Buffer.from(cypher.publicKey),
@@ -55,6 +54,13 @@ class PQManager extends KeyManager_1.default {
             diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
         };
     }
+    getSecret() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            p: this.proof,
+            s: this.seed,
+        }));
+    }
     static fromSecret(secret) {
         const data = (0, msgpack_1.decode)(secret);
         const km = new PQManager();
@@ -62,11 +68,10 @@ class PQManager extends KeyManager_1.default {
         km.level = LEVEL_DERIVED;
         km.capability = "private";
         km.proof = data.p;
-        km.signer = {
-            secretKey: data.x,
-            publicKey: buffer_1.Buffer.from(dilithium_1.DilithiumPrivateKey.fromBytes(data.x, dilithium_1.DilithiumLevel.get(2)).derivePublicKey().getBytes()),
-        };
-        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
+        km.seed = buffer_1.Buffer.from(data.s);
+        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
+        const seed2 = sha256(km.seed.slice(32, 64));
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
         km.cypher = {
             publicKey: buffer_1.Buffer.from(cypher.publicKey),
             secretKey: buffer_1.Buffer.from(cypher.secretKey),

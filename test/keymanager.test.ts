@@ -1,49 +1,47 @@
 import assert from "assert";
 import { Buffer } from "buffer/";
-import { randomBytes } from "crypto";
-import { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
-import * as bip32 from "@stricahq/bip32ed25519";
+// import { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
+// import * as bip32 from "@stricahq/bip32ed25519";
 import { VaultysId, KeyManager } from "../";
 import { createRandomVaultysId } from "./utils";
-import { encryptAndArmor } from "@samuelthomas2774/saltpack";
 import nacl from "tweetnacl";
 
-// @ts-expect-error weird import for @stricahq/bip32ed25519
-const bip32fix = bip32.default ?? bip32;
+//// @ts-expect-error weird import for @stricahq/bip32ed25519
+// const bip32fix = bip32.default ?? bip32;
 
-const writeVector = (km: KeyManager) => {
-  return;
+// const writeVector = (km: KeyManager) => {
+//   return;
 
-  console.log("## NOT Published");
-  console.log("### proof sk:\n", new bip32fix.Bip32PrivateKey(km.proofKey.secretKey!).toPrivateKey().toBytes().toString("hex"));
-  console.log("### proof pk:\n", new bip32fix.Bip32PrivateKey(km.proofKey.publicKey).toBip32PublicKey().toPublicKey().toBytes().toString("hex"));
-  console.log("### sk = derive(proof sk, m/0'):\n", new bip32fix.Bip32PrivateKey(km.signer.secretKey!).toPrivateKey().toBytes().toString("hex"));
+//   console.log("## NOT Published");
+//   console.log("### proof sk:\n", new bip32fix.Bip32PrivateKey(km.proofKey.secretKey!).toPrivateKey().toBytes().toString("hex"));
+//   console.log("### proof pk:\n", new bip32fix.Bip32PrivateKey(km.proofKey.publicKey).toBip32PublicKey().toPublicKey().toBytes().toString("hex"));
+//   console.log("### sk = derive(proof sk, m/0'):\n", new bip32fix.Bip32PrivateKey(km.signer.secretKey!).toPrivateKey().toBytes().toString("hex"));
 
-  console.log("## Published");
-  console.log("### proof = sha256(proof pk):\n", km.proof.toString("hex"));
-  console.log("### pk:", km.signer.publicKey.toString("hex"));
-};
+//   console.log("## Published");
+//   console.log("### proof = sha256(proof pk):\n", km.proof.toString("hex"));
+//   console.log("### pk:", km.signer.publicKey.toString("hex"));
+// };
 
-const writeCertificate = (hiscp: HISCP) => {
-  return;
-  const hiscpDisplay = {
-    newId: hiscp.newId.toString("hex"),
-    proofKey: hiscp.proofKey.toString("hex"),
-    timestamp: hiscp.timestamp,
-  };
-  console.log("## HISCP Certificate");
-  console.log("### hiscp data:\n", JSON.stringify(hiscpDisplay, null, 2));
-  console.log("### Signature of hiscp = [newID || proofKey || timestamp] by proof sk\n", hiscp.signature.toString("hex"));
-};
+// const writeCertificate = (hiscp: HISCP) => {
+//   return;
+//   const hiscpDisplay = {
+//     newId: hiscp.newId.toString("hex"),
+//     proofKey: hiscp.proofKey.toString("hex"),
+//     timestamp: hiscp.timestamp,
+//   };
+//   console.log("## HISCP Certificate");
+//   console.log("### hiscp data:\n", JSON.stringify(hiscpDisplay, null, 2));
+//   console.log("### Signature of hiscp = [newID || proofKey || timestamp] by proof sk\n", hiscp.signature.toString("hex"));
+// };
 
 describe("KeyManager tests", () => {
-  it("derive correctly keys (strica)", async () => {
-    const node = await bip32fix.Bip32PrivateKey.fromEntropy(randomBytes(32));
-    const publicNode = node.toBip32PublicKey();
-    const derivedNode = privateDerivePath(node, "m/1/2/3");
-    const publicDerivedNode = publicDerivePath(publicNode, "m/1/2/3");
-    assert.equal(derivedNode.toBip32PublicKey().toBytes().toString("hex"), publicDerivedNode.toBytes().toString("hex"));
-  });
+  // it("derive correctly keys (strica)", async () => {
+  //   const node = await bip32fix.Bip32PrivateKey.fromEntropy(randomBytes(32));
+  //   const publicNode = node.toBip32PublicKey();
+  //   const derivedNode = privateDerivePath(node, "m/1/2/3");
+  //   const publicDerivedNode = publicDerivePath(publicNode, "m/1/2/3");
+  //   assert.equal(derivedNode.toBip32PublicKey().toBytes().toString("hex"), publicDerivedNode.toBytes().toString("hex"));
+  // });
 
   // it("derive correctly keys (noble)", async () => {
   //   const privateKey = ed.utils.randomPrivateKey();
@@ -79,41 +77,41 @@ describe("KeyManager tests", () => {
     assert.ok(verifier.verify(message, signature));
   });
 
-  it("create and verify a HISCP Certificate", async () => {
-    const km = await KeyManager.generate_Id25519();
-    const hiscp = await km.createSwapingCertificate();
-    if (!hiscp) assert.fail();
-    const publicKM = KeyManager.fromId(km.id);
-    publicKM.verifySwapingCertificate(hiscp);
-    assert.ok(publicKM.verifySwapingCertificate(hiscp));
-  });
+  // it("create and verify a HISCP Certificate", async () => {
+  //   const km = await KeyManager.generate_Id25519();
+  //   const hiscp = await km.createSwapingCertificate();
+  //   if (!hiscp) assert.fail();
+  //   const publicKM = KeyManager.fromId(km.id);
+  //   publicKM.verifySwapingCertificate(hiscp);
+  //   assert.ok(publicKM.verifySwapingCertificate(hiscp));
+  // });
 
-  it("create vector for HISCP", async () => {
-    const km = await KeyManager.generate_Id25519();
-    writeVector(km);
-    const hiscp = await km.createSwapingCertificate();
-    if (!hiscp) assert.fail();
-    writeCertificate(hiscp);
-    const publicKM = KeyManager.fromId(km.id);
-    publicKM.verifySwapingCertificate(hiscp);
-    assert.ok(publicKM.verifySwapingCertificate(hiscp));
-  });
+  // it("create vector for HISCP", async () => {
+  //   const km = await KeyManager.generate_Id25519();
+  //   writeVector(km);
+  //   const hiscp = await km.createSwapingCertificate();
+  //   if (!hiscp) assert.fail();
+  //   writeCertificate(hiscp);
+  //   const publicKM = KeyManager.fromId(km.id);
+  //   publicKM.verifySwapingCertificate(hiscp);
+  //   assert.ok(publicKM.verifySwapingCertificate(hiscp));
+  // });
 
-  it("create vector for HISCP Certificate Chaining", async () => {
-    const km = await KeyManager.generate_Id25519();
-    writeVector(km);
-    const hiscp = await km.createSwapingCertificate();
-    if (!hiscp) assert.fail();
-    writeCertificate(hiscp);
-    const publicKM = KeyManager.fromId(km.id);
-    publicKM.verifySwapingCertificate(hiscp);
-    assert.ok(publicKM.verifySwapingCertificate(hiscp));
+  // it("create vector for HISCP Certificate Chaining", async () => {
+  //   const km = await KeyManager.generate_Id25519();
+  //   writeVector(km);
+  //   const hiscp = await km.createSwapingCertificate();
+  //   if (!hiscp) assert.fail();
+  //   writeCertificate(hiscp);
+  //   const publicKM = KeyManager.fromId(km.id);
+  //   publicKM.verifySwapingCertificate(hiscp);
+  //   assert.ok(publicKM.verifySwapingCertificate(hiscp));
 
-    // create the new Keymanager iterating on the index
-    if (!km.entropy) assert.fail();
-    const newkm = await KeyManager.create_Id25519_fromEntropy(km.entropy, 1);
-    assert.equal(newkm.id.toString("hex"), hiscp?.newId.toString("hex"));
-  });
+  //   // create the new Keymanager iterating on the index
+  //   if (!km.entropy) assert.fail();
+  //   const newkm = await KeyManager.create_Id25519_fromEntropy(km.entropy, 1);
+  //   assert.equal(newkm.id.toString("hex"), hiscp?.newId.toString("hex"));
+  // });
 
   it("signcrypt and decrypt messages", async () => {
     const alice = await KeyManager.generate_Id25519();

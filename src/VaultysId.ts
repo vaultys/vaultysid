@@ -79,7 +79,7 @@ export default class VaultysId {
       const f2m = Fido2PRFManager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
     } else {
-      if (cleanId.length > 1312) {
+      if (cleanId.length > 1952) {
         const pqm = PQManager.fromId(cleanId.slice(1));
         return new VaultysId(pqm, certificate, type);
       } else {
@@ -259,7 +259,8 @@ export default class VaultysId {
       const f2m = Fido2PRFManager.fromSecret(secretBuffer.slice(1));
       return new VaultysId(f2m, undefined, type);
     } else {
-      if (secretBuffer.length > 1312) {
+      //console.log(secretBuffer.length);
+      if (secretBuffer.length === 109) {
         const pqm = PQManager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(pqm, undefined, type);
       } else {
@@ -436,7 +437,9 @@ export default class VaultysId {
       challenge = Buffer.from(challenge, "hex");
     }
     const result = hash("sha256", Buffer.concat([this.id, challenge as Buffer]));
-    return this.keyManager.sign(result);
+    const signature = await this.keyManager.sign(result);
+    if (!signature) throw new Error("Could not sign challenge");
+    else return signature;
   }
 
   verifyChallenge(challenge: Buffer | string, signature: Buffer | string, userVerification: boolean) {

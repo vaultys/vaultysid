@@ -7,10 +7,10 @@ describe("PQC", () => {
   it("serder a VaultytsID secret - software", async () => {
     const vaultysId = await VaultysId.generatePerson(true);
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.id.length, 1394);
-    assert.equal(vaultysId.id.toString("hex").length, 2788);
-    assert.equal(vaultysId.id.toString("base64").length, 1860);
-    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1312);
+    assert.equal(vaultysId.id.length, 2034);
+    assert.equal(vaultysId.id.toString("hex").length, 4068);
+    assert.equal(vaultysId.id.toString("base64").length, 2712);
+    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
     const id2 = VaultysId.fromSecret(vaultysId.getSecret());
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
@@ -19,8 +19,8 @@ describe("PQC", () => {
   it("serder a VaultytsID - software", async () => {
     const vaultysId = await VaultysId.generateOrganization(true);
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1312);
-    assert.equal(vaultysId.id.length, 1394);
+    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
+    assert.equal(vaultysId.id.length, 2034);
     const id2 = VaultysId.fromId(vaultysId.id);
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));

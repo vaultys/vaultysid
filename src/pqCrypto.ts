@@ -5,8 +5,9 @@
  * starting with DILITHIUM for digital signatures.
  */
 
-import { DilithiumKeyPair, DilithiumLevel, DilithiumPrivateKey, DilithiumPublicKey, DilithiumSignature } from "@asanrom/dilithium";
+import { ml_dsa65 } from "@noble/post-quantum/ml-dsa.js";
 import { Buffer } from "buffer/";
+import { randomBytes } from "./crypto";
 
 /**
  * COSE algorithm identifiers for post-quantum algorithms
@@ -43,13 +44,11 @@ export function generateDilithiumKeyPair(seed?: Buffer): {
   publicKey: Buffer;
   secretKey: Buffer;
 } {
-  const level = DilithiumLevel.get(2); // Get the security level config (2, 3, or 5)
-
-  // Generate a key pair
-  const keyPair = DilithiumKeyPair.generate(level, seed);
+  if (!seed) seed = randomBytes(32);
+  const keyPair = ml_dsa65.keygen(seed);
   return {
-    publicKey: Buffer.from(keyPair.getPublicKey().toBase64(), "base64"),
-    secretKey: Buffer.from(keyPair.getPrivateKey().toBase64(), "base64"),
+    publicKey: Buffer.from(keyPair.publicKey),
+    secretKey: Buffer.from(keyPair.secretKey),
   };
 }
 
@@ -60,8 +59,7 @@ export function generateDilithiumKeyPair(seed?: Buffer): {
  * @returns Promise resolving to signature as Uint8Array
  */
 export function signDilithium(message: Uint8Array | Buffer, secretKey: Uint8Array | Buffer): Buffer {
-  const DKey = DilithiumPrivateKey.fromBytes(secretKey, DilithiumLevel.get(2));
-  return Buffer.from(DKey.sign(message).getBytes());
+  return Buffer.from(ml_dsa65.sign(secretKey, message));
 }
 
 /**
@@ -72,15 +70,7 @@ export function signDilithium(message: Uint8Array | Buffer, secretKey: Uint8Arra
  * @returns Promise resolving to boolean indicating if signature is valid
  */
 export function verifyDilithium(message: Uint8Array | Buffer, signature: Uint8Array | Buffer, publicKey: Uint8Array | Buffer): boolean {
-  // Ensure we're working with Uint8Array
-  const DKey = DilithiumPublicKey.fromBytes(publicKey, DilithiumLevel.get(2));
-
-  try {
-    return DKey.verifySignature(message, DilithiumSignature.fromBytes(signature, DilithiumLevel.get(2)));
-  } catch (error) {
-    console.error("DILITHIUM verification error:", error);
-    return false;
-  }
+  return ml_dsa65.verify(publicKey, message, signature);
 }
 
 /**
@@ -112,8 +102,8 @@ export function getDilithiumKeyInfo(): {
   signatureSize: number;
 } {
   return {
-    publicKeySize: 1312, // Size in bytes for DILITHIUM2 public key
-    secretKeySize: 2544, // Size in bytes for DILITHIUM2 private key
-    signatureSize: 2420, // Size in bytes for DILITHIUM2 signature
+    publicKeySize: 1952, // Size in bytes for DILITHIUM2 public key
+    secretKeySize: 4032, // Size in bytes for DILITHIUM2 private key
+    signatureSize: 3309, // Size in bytes for DILITHIUM2 signature
   };
 }
