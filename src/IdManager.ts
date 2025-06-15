@@ -11,6 +11,7 @@ import Fido2PRFManager from "./Fido2PRFManager";
 import { decode, encode } from "@msgpack/msgpack";
 import { Buffer } from "buffer/";
 import nacl from "tweetnacl";
+import PQManager from "./PQManager";
 
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
@@ -56,7 +57,11 @@ const instanciateContact = (c: StoredContact) => {
   } else if (c.type === 4) {
     vaultysId = new VaultysId(Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
   } else {
-    vaultysId = new VaultysId(KeyManager.instantiate(c.keyManager), c.certificate, c.type);
+    if (c.keyManager.signer.publicKey.length === 1952) {
+      vaultysId = new VaultysId(PQManager.instantiate(c.keyManager), c.certificate, c.type);
+    } else {
+      vaultysId = new VaultysId(KeyManager.instantiate(c.keyManager), c.certificate, c.type);
+    }
   }
   return vaultysId;
 };

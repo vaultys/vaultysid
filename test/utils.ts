@@ -32,3 +32,21 @@ export const createRandomVaultysId = async (): Promise<VaultysId> => {
       return VaultysId.generatePerson();
   }
 };
+
+export const allVaultysIdType = async (): Promise<VaultysId[]> => {
+  const result: VaultysId[] = [await VaultysId.generateMachine(), await VaultysId.generateMachine(true), await VaultysId.generatePerson(), await VaultysId.generatePerson(true)];
+
+  if (typeof window === "undefined") {
+    let attestation = await navigator.credentials.create(SoftCredentials.createRequest(PQ_COSE_ALG.DILITHIUM2));
+    // @ts-expect-error mockup
+    result.push(await VaultysId.fido2FromAttestation(attestation));
+    attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-expect-error mockup
+    result.push(await VaultysId.fido2FromAttestation(attestation));
+    attestation = await navigator.credentials.create(SoftCredentials.createRequest(-8));
+    // @ts-expect-error mockup
+    result.push(await VaultysId.fido2FromAttestation(attestation));
+  }
+
+  return result;
+};

@@ -14,6 +14,7 @@ const Fido2PRFManager_1 = __importDefault(require("./Fido2PRFManager"));
 const msgpack_1 = require("@msgpack/msgpack");
 const buffer_1 = require("buffer/");
 const tweetnacl_1 = __importDefault(require("tweetnacl"));
+const PQManager_1 = __importDefault(require("./PQManager"));
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = buffer_1.Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
 const PRF_NONCE_LENGTH = 32;
@@ -37,7 +38,12 @@ const instanciateContact = (c) => {
         vaultysId = new VaultysId_1.default(Fido2PRFManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
     }
     else {
-        vaultysId = new VaultysId_1.default(KeyManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+        if (c.keyManager.signer.publicKey.length === 1952) {
+            vaultysId = new VaultysId_1.default(PQManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+        }
+        else {
+            vaultysId = new VaultysId_1.default(KeyManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+        }
     }
     return vaultysId;
 };

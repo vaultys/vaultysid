@@ -4,7 +4,7 @@ import { FileSignature } from "../src/IdManager";
 import { IdManager, VaultysId, MemoryChannel, MemoryStorage, File, crypto } from "..";
 import "./shims";
 import { hash, randomBytes } from "../src/crypto";
-import { createRandomVaultysId } from "./utils";
+import { allVaultysIdType, createRandomVaultysId } from "./utils";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
@@ -134,8 +134,7 @@ describe("IdManager", () => {
 
 describe("SRG v0 challenge with IdManager", () => {
   it("pass a challenge", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const channel = MemoryChannel.createBidirectionnal();
       if (!channel.otherend) assert.fail();
       const s1 = MemoryStorage(() => "");
@@ -167,12 +166,18 @@ describe("SRG v0 challenge with IdManager", () => {
       assert.equal(s2.substore("wot").list().length, 1);
       if (manager1.vaultysId.type === 0) {
         assert.equal(manager2.apps.length, 1);
-        assert.equal(manager2.getApp(manager1.vaultysId.did)?.fingerprint, manager1.vaultysId.fingerprint);
+        const app1 = manager2.getApp(manager1.vaultysId.did);
+        assert.equal(app1?.fingerprint, manager1.vaultysId.fingerprint);
+        assert.equal(app1?.keyManager.authType, manager1.vaultysId.keyManager.authType);
+        assert.equal(app1?.keyManager.encType, manager1.vaultysId.keyManager.encType);
         assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
         assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
       } else {
         assert.equal(manager2.contacts.length, 1);
-        assert.equal(manager2.getContact(manager1.vaultysId.did)?.fingerprint, manager1.vaultysId.fingerprint);
+        const contact1 = manager2.getContact(manager1.vaultysId.did);
+        assert.equal(contact1?.fingerprint, manager1.vaultysId.fingerprint);
+        assert.equal(contact1?.keyManager.authType, manager1.vaultysId.keyManager.authType);
+        assert.equal(contact1?.keyManager.encType, manager1.vaultysId.keyManager.encType);
         manager2.setContactMetadata(manager1.vaultysId.did, "name", "salut");
         manager2.setContactMetadata(manager1.vaultysId.did, "group", "pro");
         assert.equal(manager2.getContactMetadata(manager1.vaultysId.did, "name"), "salut");

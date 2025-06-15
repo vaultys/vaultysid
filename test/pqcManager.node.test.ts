@@ -16,6 +16,8 @@ describe("PQC", () => {
     const id2 = VaultysId.fromSecret(vaultysId.getSecret());
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
+    assert.equal(vaultysId.keyManager instanceof Fido2Manager, true);
+    assert.equal(id2.keyManager instanceof Fido2Manager, true);
   });
 
   it("serder a VaultytsID - webauthn", async () => {
@@ -28,6 +30,8 @@ describe("PQC", () => {
     assert.equal((id2.keyManager as Fido2Manager).ckey.length, 1966);
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
+    assert.equal(vaultysId.keyManager instanceof Fido2Manager, true);
+    assert.equal(id2.keyManager instanceof Fido2Manager, true);
   });
 
   it("sign/verify with VaultytsID - webauthn", async () => {

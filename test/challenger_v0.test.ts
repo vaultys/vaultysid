@@ -380,6 +380,13 @@ describe("Symetric Proof of Relationship - SRG - v0", () => {
     assert.equal(result.state, 0);
   });
 
+  // it("should deserialize old certificate", () => {
+  //   const oldCert = "X2J4X2lhaHdjbTkwYjJOdmJLTndNbkNuYzJWeWRtbGpaYVJoZFhSb3FYUnBiV1Z6ZEdGdGNNOEFBQUdXa2RIeHQ2TndhekhFZkFPRG9YWUFvV1BGQUUybEFRSURKaUFCSVZnZ0hBMUZiazh3QXJvZUczQkNOUWFHYXZ4bWpPRWwvRUREWkNXZkFGS05GTjBpV0NCcjUza3p6U0t6TUdER1BpUGRvcUxzTDF1b2Z2SllBbkF5Z3I3dDI3REJHcUZseFFBZ2RoMTRaMDlyWndrNjl6blVxU3lLZENJdnk1N0tGL25PdGFDdndKa2Jkd3lqY0dzeXhIUUJoS0YyQUtGd3hRQWdPck13SmNDNHpYemFzWWtTd2FFU2VmM1JRdC9DL3NPK2JSQmd2WFd1a095aGVNVUFJRWpEcWd3N3Z5SXRETzNGS0l0NFpVRHo5QTBSWW00NGNISk5lbW1CNkxKMW9XWEZBQ0R6bUsrUDBCbGZIMVBDTzduRStLQ1FOQ0FoSnJ5cXB5aCtNRlpuMlZOREthVnViMjVqWmNRZ1NPWE9NbkNwOHZIYlFoNmtGa0UrM2VnZEwrYTNMa2tndFBZa2VaZEMwWG1sYzJsbmJqSEUvNE9oYzhSSE1FVUNJUUNCcERKenpIRVpHdExxV0IxRVJlK3E4dW56RXJHNmlrU2hNbnBkcVRZc05BSWdBcnpNbHNtZjlqOGNjQWZsdG1Tb1dhWjRNeGtjOXJPbHI4aXQzemRHejhXaFk4U0dleUowZVhCbElqb2lkMlZpWVhWMGFHNHVaMlYwSWl3aVkyaGhiR3hsYm1kbElqb2lUMmd0T0dsd1l6TkpiR0puVUZGVE5FbEZTazlGWjNrNE56Vk1jVlJNZGxOV1FrMVhiRXBhY1VJelp5SXNJbTl5YVdkcGJpSTZJbWgwZEhBNkx5OXNiMk5oYkdodmMzUTZNekF3TUNJc0ltTnliM056VDNKcFoybHVJanBtWVd4elpYMmhZY1FsU1pZTjVZZ09qR2gwTkJjUFpIWmdXNC9rcnJtaWhqTEhtVnp6dW9NZGwyTWRBQUFBQUtWemFXZHVNc1JBVjJvL0hSdS9PSjBCMllVdXoyN0o3OThkWE5aTmV5VmlVclVLclBNeHpzd0dNeVloRy9Bc1QxWjJ3WWVHaUhlbVNyQ1NNeDRrSVpIcjNHdHhtVERvQnFodFpYUmhaR0YwWVlBPQ==";
+  //   console.log(Buffer.from(oldCert, "base64").toString("utf-8"));
+  //   const result = Challenger.deserializeCertificate(Buffer.from(oldCert, "base64"));
+  //   assert.equal(result.state, 2);
+  // });
+
   /*
   it("Fail with tampered certificate (FIDO2)", async () => {
     const attestation1 = await navigator.credentials.create(

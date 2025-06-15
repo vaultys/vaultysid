@@ -1149,6 +1149,7 @@ const Fido2PRFManager_1 = __importDefault(__webpack_require__(/*! ./Fido2PRFMana
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const PQManager_1 = __importDefault(__webpack_require__(/*! ./PQManager */ "./dist/node/src/PQManager.js"));
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = buffer_1.Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
 const PRF_NONCE_LENGTH = 32;
@@ -1172,7 +1173,12 @@ const instanciateContact = (c) => {
         vaultysId = new VaultysId_1.default(Fido2PRFManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
     }
     else {
-        vaultysId = new VaultysId_1.default(KeyManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+        if (c.keyManager.signer.publicKey.length === 1952) {
+            vaultysId = new VaultysId_1.default(PQManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+        }
+        else {
+            vaultysId = new VaultysId_1.default(KeyManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+        }
     }
     return vaultysId;
 };
@@ -36161,6 +36167,871 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
+/***/ "./src/Fido2Manager.ts":
+/*!*****************************!*\
+  !*** ./src/Fido2Manager.ts ***!
+  \*****************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const webauthn_1 = __webpack_require__(/*! ./platform/webauthn */ "./src/platform/webauthn.ts");
+const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./src/KeyManager.ts"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./src/pqCrypto.ts");
+const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
+const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
+const lookup = {
+    usb: 1,
+    nfc: 2,
+    ble: 4,
+    internal: 8,
+    hybrid: 16,
+    "smart-card": 32,
+};
+const encodeBinary = (data) => {
+    if (data.length <= 65535) {
+        // bin16: binary data whose length is upto (2^16)-1 bytes
+        return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+    }
+    else {
+        // bin32: binary data whose length is upto (2^32)-1 bytes
+        return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+    }
+};
+const serializeID_v0 = (km) => {
+    const version = buffer_1.Buffer.from([0x83, 0xa1, 0x76, km.version]);
+    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
+    const ckey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x63]), encodeBinary(km.ckey)]);
+    return buffer_1.Buffer.concat([version, ckey, cypher]);
+};
+const getTransports = (num) => Object.keys(lookup).filter((i) => num && lookup[i]);
+const fromTransports = (transports) => transports.reduceRight((memo, i) => memo + (lookup[i] ? lookup[i] : 0), 0);
+const getAuthTypeFromCkey = (ckey) => {
+    const type = cbor_1.default.decode(ckey).get(1);
+    if (type === 1) {
+        return "Ed25519VerificationKey2020";
+    }
+    else if (type === 2) {
+        return "P256VerificationKey2020";
+    }
+    else
+        return "Unknown";
+};
+const getSignerFromCkey = (ckey) => {
+    const k = cbor_1.default.decode(ckey);
+    let publicKey = buffer_1.Buffer.from([]);
+    if (k.get(3) == -7)
+        publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
+    else if (k.get(3) == -8)
+        publicKey = k.get(-2);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
+        publicKey = k.get(-101);
+    return { publicKey };
+};
+class Fido2Manager extends KeyManager_1.default {
+    constructor() {
+        super();
+        this._transports = 0;
+        this.level = 1; // ROOT, no Proof Management
+        this.encType = "X25519KeyAgreementKey2019";
+        this.webAuthn = (0, webauthn_1.getWebAuthnProvider)();
+    }
+    get transports() {
+        return getTransports(this._transports);
+    }
+    static async createFromAttestation(attestation) {
+        const f2m = new Fido2Manager();
+        f2m.ckey = SoftCredentials_1.default.getCOSEPublicKey(attestation);
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.fid = buffer_1.Buffer.from(attestation.id, "base64");
+        // fix for firefox, getTransports not available ! https://developer.mozilla.org/en-US/docs/Web/API/AuthenticatorAttestationResponse/getTransports
+        const response = attestation.response;
+        const transports = response.getTransports ? response.getTransports() : ["usb"];
+        f2m._transports = fromTransports(transports);
+        // signing
+        f2m.signer = getSignerFromCkey(f2m.ckey);
+        //encrypting
+        const entropy = (0, crypto_1.randomBytes)(32);
+        const seed = sha512(entropy);
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed.slice(0, 32));
+        f2m.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        f2m.entropy = entropy;
+        return f2m;
+    }
+    get id() {
+        if (this.version == 0)
+            return serializeID_v0(this);
+        else
+            return buffer_1.Buffer.from((0, msgpack_1.encode)({
+                v: this.version,
+                c: this.ckey,
+                e: this.cypher.publicKey,
+            }));
+    }
+    get id_v0() {
+        return serializeID_v0(this);
+    }
+    getSecret() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            f: this.fid,
+            t: this._transports,
+            c: this.ckey,
+            e: this.cypher.secretKey,
+        }));
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const f2m = new Fido2Manager();
+        f2m.version = data.v ?? 0;
+        f2m.capability = "private";
+        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
+        f2m._transports = data.t ? data.t : 15;
+        f2m.ckey = data.c;
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.signer = getSignerFromCkey(data.c);
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
+        f2m.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return f2m;
+    }
+    static instantiate(obj) {
+        const f2m = new Fido2Manager();
+        f2m.version = obj.version ?? 0;
+        f2m.level = obj.level;
+        f2m.fid = typeof obj.fid === "string" ? buffer_1.Buffer.from(obj.fid, "base64") : obj.fid;
+        f2m._transports = obj.t ? obj.t : 15;
+        f2m.ckey = obj.ckey.data ? buffer_1.Buffer.from(obj.ckey.data) : buffer_1.Buffer.from(obj.ckey);
+        f2m.signer = getSignerFromCkey(f2m.ckey);
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.cypher = {
+            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
+        };
+        return f2m;
+    }
+    static fromId(id) {
+        const data = (0, msgpack_1.decode)(id);
+        const f2m = new Fido2Manager();
+        f2m.version = data.v ?? 0;
+        f2m.capability = "public";
+        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
+        f2m.ckey = data.c;
+        f2m.signer = getSignerFromCkey(data.c);
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.cypher = {
+            publicKey: data.e,
+        };
+        return f2m;
+    }
+    async getSigner() {
+        return {
+            sign: async (data) => {
+                if (!navigator.credentials)
+                    return null;
+                // ugly request userinteraction (needed for Safari and iOS)
+                try {
+                    await window?.CredentialUserInteractionRequest();
+                }
+                catch (error) { }
+                const challenge = (0, crypto_1.hash)("sha256", data);
+                const publicKey = {
+                    challenge,
+                    userVerification: "preferred",
+                    allowCredentials: [
+                        {
+                            type: "public-key",
+                            id: this.fid,
+                            transports: getTransports(this._transports),
+                        },
+                    ],
+                };
+                const { response } = (await this.webAuthn.get(publicKey));
+                const publicKeyResponse = response;
+                const output = {
+                    s: buffer_1.Buffer.from(publicKeyResponse.signature),
+                    c: buffer_1.Buffer.from(publicKeyResponse.clientDataJSON),
+                    a: buffer_1.Buffer.from(publicKeyResponse.authenticatorData),
+                };
+                return buffer_1.Buffer.from((0, msgpack_1.encode)(output));
+            },
+        };
+    }
+    verify(data, signature, userVerification = false) {
+        const signatureBuffer = buffer_1.Buffer.from(signature);
+        const decoded = (0, msgpack_1.decode)(signatureBuffer);
+        const response = {
+            signature: decoded.s,
+            clientDataJSON: decoded.c,
+            authenticatorData: decoded.a,
+            userHandle: buffer_1.Buffer.from([]).buffer,
+        };
+        const challenge = (0, crypto_1.hash)("sha256", data).toString("base64");
+        const extractedChallenge = SoftCredentials_1.default.extractChallenge(response.clientDataJSON);
+        if (challenge !== extractedChallenge) {
+            return false;
+        }
+        return SoftCredentials_1.default.simpleVerify(this.ckey, response, userVerification);
+    }
+    verifyCredentials(credentials, userVerification = false) {
+        if (credentials.id !== this.fid.toString("base64")) {
+            return false;
+        }
+        const response = credentials.response;
+        const rpIdHash = buffer_1.Buffer.from(response.authenticatorData.slice(0, 32)).toString("hex");
+        const myIdHash = sha256(buffer_1.Buffer.from(credentials.id, "base64")).toString("hex");
+        if (rpIdHash !== myIdHash) {
+            return false;
+        }
+        return SoftCredentials_1.default.simpleVerify(this.ckey, response, userVerification);
+    }
+    async createRevocationCertificate() {
+        // TODO use an external id
+        return null;
+    }
+}
+exports["default"] = Fido2Manager;
+
+
+/***/ }),
+
+/***/ "./src/Fido2PRFManager.ts":
+/*!********************************!*\
+  !*** ./src/Fido2PRFManager.ts ***!
+  \********************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./src/Fido2Manager.ts"));
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./src/pqCrypto.ts");
+const lookup = {
+    usb: 1,
+    nfc: 2,
+    ble: 4,
+    internal: 8,
+    hybrid: 16,
+    "smart-card": 32,
+};
+const getTransports = (num) => Object.keys(lookup).filter((i) => num && lookup[i]);
+const fromTransports = (transports) => transports.reduceRight((memo, i) => memo + (lookup[i] ? lookup[i] : 0), 0);
+const getAuthTypeFromCkey = (ckey) => {
+    const decoded = cbor_1.default.decode(ckey, { extendedResults: true });
+    const type = decoded.value.get(1);
+    if (type === 1) {
+        return "Ed25519VerificationKey2020";
+    }
+    else if (type === 2) {
+        return "P256VerificationKey2020";
+    }
+    else
+        return "Unknown";
+};
+const getSignerFromCkey = (ckey) => {
+    const k = cbor_1.default.decode(ckey, { extendedResults: true }).value;
+    //console.log("getSignerFromCkey", k);
+    let publicKey = buffer_1.Buffer.from([]);
+    if (k.get(3) == -7)
+        publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
+    else if (k.get(3) == -8)
+        publicKey = k.get(-2);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
+        publicKey = k.get(-101);
+    return { publicKey };
+};
+class Fido2PRFManager extends Fido2Manager_1.default {
+    constructor() {
+        super();
+        this.prfsalt = buffer_1.Buffer.from("VaultysID salt");
+    }
+    static async createFromAttestation(attestation) {
+        const f2m = new Fido2PRFManager();
+        f2m.ckey = SoftCredentials_1.default.getCOSEPublicKey(attestation);
+        //console.log(attestation, f2m.ckey);
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.fid = buffer_1.Buffer.from(attestation.id, "base64");
+        // fix for firefox, getTransports not available ! https://developer.mozilla.org/en-US/docs/Web/API/AuthenticatorAttestationResponse/getTransports
+        const response = attestation.response;
+        const transports = response.getTransports ? response.getTransports() : ["usb"];
+        f2m._transports = fromTransports(transports);
+        // signing
+        f2m.signer = getSignerFromCkey(f2m.ckey);
+        await f2m.getCypher();
+        delete f2m.cypher.secretKey;
+        return f2m;
+    }
+    getSecret() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            f: this.fid,
+            t: this._transports,
+            c: this.ckey,
+            e: this.cypher.publicKey,
+        }));
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const f2m = new Fido2PRFManager();
+        f2m.version = data.v ?? 0;
+        f2m.capability = "private";
+        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
+        f2m._transports = data.t ? data.t : 15;
+        f2m.ckey = data.c;
+        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
+        f2m.signer = getSignerFromCkey(data.c);
+        f2m.cypher = { publicKey: data.e };
+        return f2m;
+    }
+    cleanSecureData() {
+        if (this.cypher?.secretKey) {
+            (0, crypto_1.secureErase)(this.cypher.secretKey);
+            delete this.cypher.secretKey;
+        }
+    }
+    async getCypher() {
+        if (!this.cypher?.secretKey) {
+            const publicKey = {
+                challenge: buffer_1.Buffer.from([]),
+                userVerification: "preferred",
+                allowCredentials: [
+                    {
+                        type: "public-key",
+                        id: this.fid,
+                        transports: getTransports(this._transports),
+                    },
+                ],
+                extensions: {
+                    prf: {
+                        eval: {
+                            // Input the contextual information
+                            first: this.prfsalt,
+                            // There is a "second" optional field too
+                            // Though it is intended for key rotation.
+                        },
+                    },
+                },
+            };
+            const result = await this.webAuthn.get(publicKey);
+            const { prf } = result.getClientExtensionResults();
+            const first = prf?.results?.first;
+            if (!first)
+                throw new Error("PRF failed");
+            const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(new Uint8Array(first));
+            this.cypher = {
+                publicKey: buffer_1.Buffer.from(cypher.publicKey),
+                secretKey: buffer_1.Buffer.from(cypher.secretKey),
+            };
+        }
+        return super.getCypher();
+    }
+    async createRevocationCertificate() {
+        // impossible
+        return null;
+    }
+}
+exports["default"] = Fido2PRFManager;
+
+
+/***/ }),
+
+/***/ "./src/KeyManager.ts":
+/*!***************************!*\
+  !*** ./src/KeyManager.ts ***!
+  \***************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DHIES = void 0;
+const saltpack_1 = __webpack_require__(/*! @vaultys/saltpack */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta4/node_modules/@vaultys/saltpack/dist/index.js");
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/ed25519.js");
+ed25519_1.ed25519.CURVE = { ...ed25519_1.ed25519.CURVE };
+// @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
+ed25519_1.ed25519.CURVE.adjustScalarBytes = (bytes) => {
+    // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
+    // set the three least significant bits of the first byte
+    bytes[0] &= 248; // 0b1111_1000
+    // and the most significant bit of the last to zero,
+    bytes[31] &= 63; // 0b0001_1111
+    // set the second most significant bit of the last byte to 1
+    bytes[31] |= 64; // 0b0100_0000
+    return bytes;
+};
+////@ts-expect-error fix for wrong way of exporting bip32ed25519
+//const bip32 = bip32fix.default ?? bip32fix;
+const LEVEL_ROOT = 1;
+const LEVEL_DERIVED = 2;
+const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
+const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
+const serializeID_v0 = (km) => {
+    const encodeBinary = (data) => {
+        if (data.length <= 65535) {
+            // bin16: binary data whose length is upto (2^16)-1 bytes
+            return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
+        }
+        else {
+            // bin32: binary data whose length is upto (2^32)-1 bytes
+            return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
+        }
+    };
+    const version = buffer_1.Buffer.from([0x84, 0xa1, 0x76, 0]);
+    const proof = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x70]), encodeBinary(km.proof)]);
+    const sign = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x78]), encodeBinary(km.signer.publicKey)]);
+    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
+    return buffer_1.Buffer.concat([version, proof, sign, cypher]);
+};
+/**
+ * DHIES (Diffie-Hellman Integrated Encryption Scheme) for KeyManager
+ * Provides authenticated encryption using Diffie-Hellman key exchange
+ */
+class DHIES {
+    constructor(keyManager) {
+        this.keyManager = keyManager;
+    }
+    /**
+     * Encrypts a message for a recipient using DHIES
+     *
+     * @param message The plaintext message to encrypt
+     * @param recipientPublicKey The recipient's public key
+     * @returns Encrypted message with ephemeral public key and authentication tag, or null if encryption fails
+     */
+    async encrypt(message, recipientPublicKey) {
+        if (this.keyManager.capability === "public") {
+            console.error("Cannot encrypt with DHIES using a public KeyManager");
+            return null;
+        }
+        const cypher = await this.keyManager.getCypher();
+        // Convert message to Buffer if it's a string
+        const messageBuffer = typeof message === "string" ? buffer_1.Buffer.from(message, "utf8") : message;
+        try {
+            const ephemeralKey = (0, crypto_1.randomBytes)(32); // Generate a random 32-byte key for ephemeral key
+            // Derive shared secret using recipient's public key and sender secret key
+            const dh = await cypher.diffieHellman(recipientPublicKey);
+            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKey, dh));
+            // Key derivation: derive encryption and MAC keys from shared secret
+            const kdfOutput = this.kdf(sharedSecret, this.keyManager.cypher.publicKey, recipientPublicKey);
+            const encryptionKey = kdfOutput.encryptionKey;
+            const macKey = kdfOutput.macKey;
+            // Encrypt the message using XChaCha20-Poly1305
+            const nonce = (0, crypto_1.randomBytes)(24); // 24 bytes nonce for XChaCha20-Poly1305
+            const ciphertext = buffer_1.Buffer.from(tweetnacl_1.default.secretbox(messageBuffer, nonce, encryptionKey));
+            // Compute MAC (Message Authentication Code)
+            const dataToAuthenticate = buffer_1.Buffer.concat([this.keyManager.cypher.publicKey, nonce, ciphertext]);
+            const mac = this.computeMAC(macKey, dataToAuthenticate);
+            // Construct the final encrypted message: nonce + ephemeralKey + ciphertext + MAC
+            const encryptedMessage = buffer_1.Buffer.concat([nonce, ephemeralKey, ciphertext, mac]);
+            // Securely erase sensitive data
+            (0, crypto_1.secureErase)(sharedSecret);
+            (0, crypto_1.secureErase)(dh);
+            (0, crypto_1.secureErase)(encryptionKey);
+            (0, crypto_1.secureErase)(macKey);
+            return encryptedMessage;
+        }
+        catch (error) {
+            console.error("DHIES encryption failed:", error);
+            return null;
+        }
+    }
+    /**
+     * Decrypts a message encrypted with DHIES
+     *
+     * @param encryptedMessage The complete encrypted message from the encrypt method
+     * @returns Decrypted message as a Buffer, or null if decryption fails
+     */
+    async decrypt(encryptedMessage, senderPublicKey) {
+        if (this.keyManager.capability === "public") {
+            console.error("Cannot decrypt with DHIES using a public KeyManager");
+            return null;
+        }
+        try {
+            // Extract components from the encrypted message
+            // Format: nonce (24 bytes) + ephemeralKey (32 bytes) + ciphertext + MAC (32 bytes)
+            const nonce = encryptedMessage.slice(0, 24);
+            const ephemeralKey = encryptedMessage.slice(24, 56);
+            const mac = encryptedMessage.slice(encryptedMessage.length - 32);
+            const ciphertext = encryptedMessage.slice(56, encryptedMessage.length - 32);
+            const cypher = await this.keyManager.getCypher();
+            // Derive shared secret using sender public key and recipient secret key
+            const dh = await cypher.diffieHellman(senderPublicKey);
+            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKey, dh));
+            // Key derivation: derive encryption and MAC keys
+            const kdfOutput = this.kdf(sharedSecret, senderPublicKey, this.keyManager.cypher.publicKey);
+            const encryptionKey = kdfOutput.encryptionKey;
+            const macKey = kdfOutput.macKey;
+            // Verify MAC
+            const dataToAuthenticate = buffer_1.Buffer.concat([senderPublicKey, nonce, ciphertext]);
+            const computedMac = this.computeMAC(macKey, dataToAuthenticate);
+            if (!this.constantTimeEqual(mac, computedMac)) {
+                //console.log(mac, computedMac);
+                console.error("DHIES: MAC verification failed");
+                return null;
+            }
+            // Decrypt the ciphertext
+            const plaintext = tweetnacl_1.default.secretbox.open(ciphertext, nonce, encryptionKey);
+            if (!plaintext) {
+                console.error("DHIES: Decryption failed");
+                return null;
+            }
+            const result = buffer_1.Buffer.from(plaintext);
+            // Securely erase sensitive data
+            (0, crypto_1.secureErase)(sharedSecret);
+            (0, crypto_1.secureErase)(encryptionKey);
+            (0, crypto_1.secureErase)(macKey);
+            return result;
+        }
+        catch (error) {
+            console.error("DHIES decryption failed:", error);
+            return null;
+        }
+    }
+    /**
+     * Key Derivation Function: Derives encryption and MAC keys from the shared secret
+     */
+    kdf(sharedSecret, ephemeralPublicKey, staticPublicKey) {
+        // Create a context for the KDF to ensure different keys for different uses
+        const context = buffer_1.Buffer.concat([buffer_1.Buffer.from("DHIES-KDF"), ephemeralPublicKey, staticPublicKey]);
+        // Derive encryption key: HKDF-like construction
+        const encryptionKeyMaterial = (0, crypto_1.hash)("sha512", buffer_1.Buffer.concat([
+            sharedSecret,
+            context,
+            buffer_1.Buffer.from([0x01]), // Domain separation byte
+        ]));
+        // Derive MAC key (using a different domain separation byte)
+        const macKeyMaterial = (0, crypto_1.hash)("sha512", buffer_1.Buffer.concat([
+            sharedSecret,
+            context,
+            buffer_1.Buffer.from([0x02]), // Domain separation byte
+        ]));
+        // Use first 32 bytes of each as the actual keys (for NaCl's secretbox)
+        return {
+            encryptionKey: encryptionKeyMaterial.slice(0, 32),
+            macKey: macKeyMaterial.slice(0, 32),
+        };
+    }
+    /**
+     * Computes MAC for authenticated encryption
+     */
+    computeMAC(macKey, data) {
+        return (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([macKey, data]));
+    }
+    /**
+     * Constant-time comparison of two buffers to prevent timing attacks
+     */
+    constantTimeEqual(a, b) {
+        if (a.length !== b.length) {
+            return false;
+        }
+        let result = 0;
+        for (let i = 0; i < a.length; i++) {
+            result |= a[i] ^ b[i];
+        }
+        return result === 0;
+    }
+}
+exports.DHIES = DHIES;
+class KeyManager {
+    constructor() {
+        this.level = 1;
+        this.version = 1;
+        this.capability = "private";
+        this.authType = "Ed25519VerificationKey2020";
+        this.encType = "X25519KeyAgreementKey2019";
+    }
+    static async create_Id25519_fromEntropy(entropy, swapIndex = 0) {
+        const km = new KeyManager();
+        km.entropy = entropy;
+        km.level = LEVEL_ROOT;
+        km.capability = "private";
+        const seed = sha512(entropy);
+        // const derivedKey = privateDerivePath(await bip32.Bip32PrivateKey.fromEntropy(seed.slice(0, 32)), `m/1'/0'/${swapIndex}'`);
+        km.proofKey = {
+            publicKey: buffer_1.Buffer.from([]), //deprecated
+        };
+        km.swapIndex = swapIndex;
+        km.proof = (0, crypto_1.hash)("sha256", km.proofKey.publicKey);
+        // const privateKey = privateDerivePath(derivedKey, "/0'");
+        km.signer = {
+            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(seed.slice(0, 32))),
+            secretKey: seed.slice(0, 32),
+        };
+        const swapIndexBuffer = buffer_1.Buffer.alloc(8);
+        swapIndexBuffer.writeBigInt64LE(BigInt(swapIndex), 0);
+        const seed2 = sha256(buffer_1.Buffer.concat([seed.slice(32, 64), swapIndexBuffer]));
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static generate_Id25519() {
+        return KeyManager.create_Id25519_fromEntropy((0, crypto_1.randomBytes)(32));
+    }
+    get id() {
+        if (this.version == 0)
+            return serializeID_v0(this);
+        else
+            return buffer_1.Buffer.from((0, msgpack_1.encode)({
+                v: this.version,
+                p: this.proof,
+                x: this.signer.publicKey,
+                e: this.cypher.publicKey,
+            }));
+    }
+    async getCypher() {
+        // todo fetch secretKey here
+        const cypher = this.cypher;
+        return {
+            hmac: (message) => (cypher.secretKey ? (0, crypto_1.hmac)("sha256", buffer_1.Buffer.from(cypher.secretKey), "VaultysID/" + message + "/end") : undefined),
+            signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
+            decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
+            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
+        };
+    }
+    getSigner() {
+        // todo fetch secretKey here
+        const secretKey = this.signer.secretKey;
+        const sign = (data) => Promise.resolve(buffer_1.Buffer.from(ed25519_1.ed25519.sign(data, secretKey)));
+        //console.log(secretKey.toString("hex"), new bip32.PrivateKey(secretKey).toPublicKey().toBytes().toString("hex"), Buffer.from(ed25519.getPublicKey(secretKey)).toString("hex"));
+        return Promise.resolve({ sign });
+    }
+    getSecret() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            p: this.proof,
+            x: this.signer.secretKey,
+            e: this.cypher.secretKey,
+        }));
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const km = new KeyManager();
+        km.version = data.v ?? 0;
+        km.level = LEVEL_DERIVED;
+        km.capability = "private";
+        km.proof = data.p;
+        km.signer = {
+            secretKey: data.x.slice(0, 32),
+            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(data.x.slice(0, 32))),
+        };
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static instantiate(obj) {
+        const km = new KeyManager();
+        km.version = obj.version ?? 0;
+        km.level = obj.level;
+        km.proof = obj.proof.data ? buffer_1.Buffer.from(obj.proof.data) : buffer_1.Buffer.from(obj.proof);
+        km.signer = {
+            publicKey: obj.signer.publicKey.data ? buffer_1.Buffer.from(obj.signer.publicKey.data) : buffer_1.Buffer.from(obj.signer.publicKey),
+        };
+        km.cypher = {
+            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
+        };
+        return km;
+    }
+    static fromId(id) {
+        const data = (0, msgpack_1.decode)(id);
+        const km = new KeyManager();
+        km.version = data.v ?? 0;
+        km.level = LEVEL_DERIVED;
+        km.capability = "public";
+        km.proof = data.p;
+        km.signer = {
+            publicKey: data.x,
+        };
+        km.cypher = {
+            publicKey: data.e,
+        };
+        // console.log(km)
+        return km;
+    }
+    async sign(data) {
+        if (this.capability == "public")
+            return null;
+        const signer = await this.getSigner();
+        return signer.sign(data);
+    }
+    verify(data, signature, userVerificationIgnored) {
+        return ed25519_1.ed25519.verify(signature, data, this.signer.publicKey);
+    }
+    // async createRevocationCertificate(newId) {
+    //   if (this.level == LEVEL_ROOT) {
+    //     const seed = sha512(this.entropy);
+    //     let node = derivePath(
+    //       await Bip32PrivateKey.fromEntropy(seed.slice(0, 32)),
+    //       "m/1'/0'/1'",
+    //     );
+    //     const proof = hash("sha256", node.toBip32PublicKey().toBytes());
+    //     if (this.proof.toString("hex") == proof.toString("hex")) {
+    //       const revocationCertificate = {
+    //         xpub: node.toBytes(),
+    //         id: this.id,
+    //         newId,
+    //       };
+    //       revocationCertificate.signature = node.toPrivateKey().sign(revocationCertificate);
+    //       return revocationCertificate;
+    //     } else return null;
+    //   } else return null;
+    // }
+    // async createSwapingCertificate() {
+    //   if (this.level === LEVEL_ROOT && this.entropy) {
+    //     const newKey = await KeyManager.create_Id25519_fromEntropy(this.entropy, this.swapIndex + 1);
+    //     const hiscp: HISCP = {
+    //       newId: newKey.id,
+    //       proofKey: this.proofKey.publicKey,
+    //       timestamp: Date.now(),
+    //       signature: Buffer.from([]),
+    //     };
+    //     const timestampBuffer = Buffer.alloc(8);
+    //     timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
+    //     const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
+    //     hiscp.signature = new bip32.Bip32PrivateKey(this.proofKey.secretKey!).toPrivateKey().sign(hiscpBuffer);
+    //     return hiscp;
+    //   }
+    //   return null;
+    // }
+    // async verifySwapingCertificate(hiscp: HISCP) {
+    //   const proof = hash("sha256", hiscp.proofKey).toString("hex");
+    //   if (proof === this.proof.toString("hex")) {
+    //     const timestampBuffer = Buffer.alloc(8);
+    //     timestampBuffer.writeBigUInt64LE(BigInt(hiscp.timestamp) as unknown as number, 0);
+    //     const newKey = KeyManager.fromId(hiscp.newId);
+    //     const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
+    //     const proofVerifier = bip32.Bip32PublicKey.fromBytes(hiscp.proofKey);
+    //     return proofVerifier.toPublicKey().verify(hiscpBuffer, hiscp.signature);
+    //   } else {
+    //     return false;
+    //   }
+    // }
+    cleanSecureData() {
+        if (this.cypher?.secretKey) {
+            (0, crypto_1.secureErase)(this.cypher.secretKey);
+            delete this.cypher.secretKey;
+        }
+        if (this.signer?.secretKey) {
+            (0, crypto_1.secureErase)(this.signer.secretKey);
+            delete this.signer.secretKey;
+        }
+        if (this.entropy) {
+            (0, crypto_1.secureErase)(this.entropy);
+            delete this.entropy;
+        }
+    }
+    /**
+     * Performs a Diffie-Hellman key exchange with another KeyManager instance
+     * @param otherKeyManager The other party's KeyManager instance
+     * @returns A shared secret that can be used for symmetric encryption
+     */
+    async performDiffieHellman(otherKeyManager) {
+        if (this.capability === "public") {
+            console.error("Cannot perform DH key exchange with a public key capability");
+            return null;
+        }
+        const cypher = await this.getCypher();
+        const otherKey = otherKeyManager.cypher.publicKey;
+        // Perform the X25519 scalar multiplication to derive the shared secret
+        const sharedSecret = await cypher.diffieHellman(otherKey);
+        // Hash the shared secret for better security (to derive a symmetric key)
+        const derivedKey = sha256(sharedSecret);
+        // Securely erase the shared secret from memory
+        (0, crypto_1.secureErase)(sharedSecret);
+        return derivedKey;
+    }
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two KeyManager instances
+     * @param keyManager1 First KeyManager instance
+     * @param keyManager2 Second KeyManager instance
+     * @returns A shared secret that both parties can derive
+     */
+    static async diffieHellman(keyManager1, keyManager2) {
+        return keyManager1.performDiffieHellman(keyManager2);
+    }
+    /**
+     * Encrypt a message using DHIES for a recipient
+     * @param message Message to encrypt
+     * @param recipientId Recipient's KeyManager ID
+     * @returns Encrypted message or null if encryption fails
+     */
+    async dhiesEncrypt(message, recipientId) {
+        const recipientKM = KeyManager.fromId(recipientId);
+        //console.log(recipientKM.cypher.publicKey, this.cypher.publicKey);
+        const dhies = new DHIES(this);
+        return dhies.encrypt(message, recipientKM.cypher.publicKey);
+    }
+    /**
+     * Decrypt a message encrypted with DHIES
+     * @param encryptedMessage Encrypted message from dhiesEncrypt
+     * @returns Decrypted message or null if decryption fails
+     */
+    async dhiesDecrypt(encryptedMessage, senderId) {
+        const senderKM = KeyManager.fromId(senderId);
+        //console.log(senderKM.cypher.publicKey, this.cypher.publicKey);
+        const dhies = new DHIES(this);
+        return dhies.decrypt(encryptedMessage, senderKM.cypher.publicKey);
+    }
+    static async encrypt(plaintext, recipientIds) {
+        const publicKeys = recipientIds.map(KeyManager.fromId).map((km) => km.cypher.publicKey);
+        return await (0, saltpack_1.encryptAndArmor)(plaintext, null, publicKeys);
+    }
+    async signcrypt(plaintext, recipientIds) {
+        const publicKeys = recipientIds.map(KeyManager.fromId).map((km) => km.cypher.publicKey);
+        const cypher = await this.getCypher();
+        return await cypher.signcrypt(plaintext, publicKeys);
+    }
+    async decrypt(encryptedMessage, senderId = null) {
+        const cypher = await this.getCypher();
+        const senderKey = senderId ? KeyManager.fromId(senderId).cypher.publicKey : null;
+        const message = await cypher.decrypt(encryptedMessage, senderKey);
+        return message.toString();
+    }
+    // use better hash to prevent attack
+    getSecretHash(data) {
+        const toHash = buffer_1.Buffer.concat([data, buffer_1.Buffer.from("secrethash"), this.cypher.secretKey]);
+        return (0, crypto_1.hash)("sha256", toHash);
+    }
+}
+exports["default"] = KeyManager;
+
+
+/***/ }),
+
 /***/ "./src/MemoryChannel.ts":
 /*!******************************!*\
   !*** ./src/MemoryChannel.ts ***!
@@ -36612,6 +37483,593 @@ const storagify = (object, save, destroy) => {
         },
     };
 };
+
+
+/***/ }),
+
+/***/ "./src/PQManager.ts":
+/*!**************************!*\
+  !*** ./src/PQManager.ts ***!
+  \**************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./src/pqCrypto.ts");
+const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./src/KeyManager.ts"));
+const LEVEL_ROOT = 1;
+const LEVEL_DERIVED = 2;
+const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
+const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
+class PQManager extends KeyManager_1.default {
+    constructor() {
+        super();
+        this.authType = "DilithiumVerificationKey2025";
+    }
+    static async create_PQ_fromEntropy(entropy, swapIndex = 0) {
+        const km = new PQManager();
+        km.entropy = entropy;
+        km.level = LEVEL_ROOT;
+        km.capability = "private";
+        km.seed = sha512(entropy);
+        km.swapIndex = swapIndex;
+        km.proof = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from([]));
+        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
+        const seed2 = sha256(km.seed.slice(32, 64));
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static generate_PQ() {
+        return PQManager.create_PQ_fromEntropy((0, crypto_1.randomBytes)(32));
+    }
+    getSecret() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            p: this.proof,
+            s: this.seed,
+        }));
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const km = new PQManager();
+        km.version = data.v ?? 0;
+        km.level = LEVEL_DERIVED;
+        km.capability = "private";
+        km.proof = data.p;
+        km.seed = buffer_1.Buffer.from(data.s);
+        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
+        const seed2 = sha256(km.seed.slice(32, 64));
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static instantiate(obj) {
+        const km = new PQManager();
+        km.version = obj.version ?? 0;
+        km.level = obj.level;
+        km.proof = obj.proof.data ? buffer_1.Buffer.from(obj.proof.data) : buffer_1.Buffer.from(obj.proof);
+        km.signer = {
+            publicKey: obj.signer.publicKey.data ? buffer_1.Buffer.from(obj.signer.publicKey.data) : buffer_1.Buffer.from(obj.signer.publicKey),
+        };
+        km.cypher = {
+            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
+        };
+        return km;
+    }
+    static fromId(id) {
+        const data = (0, msgpack_1.decode)(id);
+        const km = new PQManager();
+        km.version = data.v ?? 0;
+        km.level = LEVEL_DERIVED;
+        km.capability = "public";
+        km.proof = data.p;
+        km.signer = {
+            publicKey: data.x,
+        };
+        km.cypher = {
+            publicKey: data.e,
+        };
+        // console.log(km)
+        return km;
+    }
+    async sign(data) {
+        if (this.capability == "public")
+            return null;
+        return (0, pqCrypto_1.signDilithium)(data, this.signer.secretKey);
+    }
+    verify(data, signature, userVerificationIgnored) {
+        return (0, pqCrypto_1.verifyDilithium)(data, signature, this.signer.publicKey);
+    }
+}
+exports["default"] = PQManager;
+
+
+/***/ }),
+
+/***/ "./src/VaultysId.ts":
+/*!**************************!*\
+  !*** ./src/VaultysId.ts ***!
+  \**************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./src/Fido2Manager.ts"));
+const Fido2PRFManager_1 = __importDefault(__webpack_require__(/*! ./Fido2PRFManager */ "./src/Fido2PRFManager.ts"));
+const KeyManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager */ "./src/KeyManager.ts"));
+const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+const webauthn_1 = __webpack_require__(/*! ./platform/webauthn */ "./src/platform/webauthn.ts");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const PQManager_1 = __importDefault(__webpack_require__(/*! ./PQManager */ "./src/PQManager.ts"));
+const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./src/pqCrypto.ts");
+const TYPE_MACHINE = 0;
+const TYPE_PERSON = 1;
+const TYPE_ORGANIZATION = 2;
+const TYPE_FIDO2 = 3;
+const TYPE_FIDO2PRF = 4;
+class VaultysId {
+    constructor(keyManager, certificate, type = TYPE_MACHINE) {
+        this.encrypt = VaultysId.encrypt;
+        this.type = type;
+        this.keyManager = keyManager;
+        this.certificate = certificate;
+    }
+    // // Set the index of the proof in case of previous key for this protocol/service have been compromised
+    // setProofIndex(protocol, service, index) {
+    //   this.proofIndices[`${protocol}-${service}`] = index;
+    // }
+    // createSwapingCertificate(protocol, service) {
+    //   let proofIndex = this.proofIndices[`${protocol}-${service}`]
+    //     ? this.proofIndices[`${protocol}-${service}`]
+    //     : 0;
+    //   const pk = this.getKey({
+    //     protocol,
+    //     service,
+    //     proofIndex,
+    //   });
+    //   const newPk = this.getKey({
+    //     protocol,
+    //     service,
+    //     proofIndex: proofIndex + 1,
+    //   });
+    //   const xPub = this.device.getProofXPub({
+    //     protocol,
+    //     service,
+    //     index,
+    //   });
+    //   const derivation = PDM.getProofDerivation(protocol, service, index);
+    //   const revocationCertificate = `vaultys://p2p/revocation?pk=${pk}&npk=${newPk}&xpub=${xpub}&index=${derivation}`;
+    // }
+    static fromId(id, certificate, encoding = "hex") {
+        let cleanId = id;
+        if (id.data) {
+            // Buffer thing
+            cleanId = buffer_1.Buffer.from(id.data);
+        }
+        if (id instanceof Uint8Array) {
+            // Buffer thing
+            cleanId = buffer_1.Buffer.from(id);
+        }
+        if (typeof id === "string") {
+            cleanId = buffer_1.Buffer.from(id, encoding);
+        }
+        const type = cleanId[0];
+        if (type === TYPE_FIDO2) {
+            const f2m = Fido2Manager_1.default.fromId(cleanId.slice(1));
+            return new VaultysId(f2m, certificate, type);
+        }
+        else if (type === TYPE_FIDO2PRF) {
+            const f2m = Fido2PRFManager_1.default.fromId(cleanId.slice(1));
+            return new VaultysId(f2m, certificate, type);
+        }
+        else {
+            if (cleanId.length > 1952) {
+                const pqm = PQManager_1.default.fromId(cleanId.slice(1));
+                return new VaultysId(pqm, certificate, type);
+            }
+            else {
+                const km = KeyManager_1.default.fromId(cleanId.slice(1));
+                return new VaultysId(km, certificate, type);
+            }
+        }
+    }
+    static async fromEntropy(entropy, type, pqc = false) {
+        const cleanedEntropy = entropy;
+        if (pqc) {
+            const km = await PQManager_1.default.create_PQ_fromEntropy(cleanedEntropy);
+            return new VaultysId(km, undefined, type);
+        }
+        else {
+            const km = await KeyManager_1.default.create_Id25519_fromEntropy(cleanedEntropy);
+            return new VaultysId(km, undefined, type);
+        }
+    }
+    static async createWebauthn(passkey = true, onPRFEnabled) {
+        const options = VaultysId.createPublicKeyCredentialCreationOptions(passkey);
+        const webAuthn = (0, webauthn_1.getWebAuthnProvider)();
+        const attestation = await webAuthn.create(options);
+        if (!attestation)
+            return null;
+        else
+            return VaultysId.fido2FromAttestation(attestation, onPRFEnabled);
+    }
+    static async createPQC() {
+        const options = VaultysId.createPublicKeyCredentialOptionsPQC();
+        const webAuthn = (0, webauthn_1.getWebAuthnProvider)();
+        const attestation = await webAuthn.create(options);
+        //console.log(attestation);
+        if (!attestation)
+            return null;
+        else
+            return VaultysId.fido2FromAttestation(attestation);
+    }
+    static async fido2FromAttestation(attestation, onPRFEnabled) {
+        // should be somehow valid.
+        SoftCredentials_1.default.verifyPackedAttestation(attestation.response, true);
+        //console.log(SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true));
+        if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
+            const f2m = await Fido2PRFManager_1.default.createFromAttestation(attestation);
+            return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
+        }
+        else {
+            const f2m = await Fido2Manager_1.default.createFromAttestation(attestation);
+            return new VaultysId(f2m, undefined, TYPE_FIDO2);
+        }
+    }
+    static async machineFromEntropy(entropy) {
+        return VaultysId.fromEntropy(entropy, TYPE_MACHINE);
+    }
+    static async organizationFromEntropy(entropy) {
+        return VaultysId.fromEntropy(entropy, TYPE_ORGANIZATION);
+    }
+    static async personFromEntropy(entropy) {
+        return VaultysId.fromEntropy(entropy, TYPE_PERSON);
+    }
+    static fromSecret(secret, encoding = "hex") {
+        const secretBuffer = buffer_1.Buffer.from(secret, encoding);
+        const type = secretBuffer[0];
+        if (type == TYPE_FIDO2) {
+            const f2m = Fido2Manager_1.default.fromSecret(secretBuffer.slice(1));
+            return new VaultysId(f2m, undefined, type);
+        }
+        else if (type == TYPE_FIDO2PRF) {
+            const f2m = Fido2PRFManager_1.default.fromSecret(secretBuffer.slice(1));
+            return new VaultysId(f2m, undefined, type);
+        }
+        else {
+            //console.log(secretBuffer.length);
+            if (secretBuffer.length === 109) {
+                const pqm = PQManager_1.default.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(pqm, undefined, type);
+            }
+            else {
+                const km = KeyManager_1.default.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(km, undefined, type);
+            }
+        }
+    }
+    static async generatePerson(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
+    }
+    static async generateOrganization(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
+    }
+    static async generateMachine(pqc = false) {
+        if (pqc) {
+            const km = await PQManager_1.default.generate_PQ();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
+        else {
+            const km = await KeyManager_1.default.generate_Id25519();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
+    }
+    get relationshipCertificate() {
+        return this.certificate;
+    }
+    getSecret(encoding = "hex") {
+        return buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), this.keyManager.getSecret()]).toString(encoding);
+    }
+    get fingerprint() {
+        const t = buffer_1.Buffer.from([this.type]).toString("hex");
+        const fp = t + (0, crypto_1.hash)("SHA224", this.keyManager.id).toString("hex");
+        return fp
+            .slice(0, 40)
+            .toUpperCase()
+            .match(/.{1,4}/g)
+            .join(" ");
+    }
+    get did() {
+        const t = buffer_1.Buffer.from([this.type]).toString("hex");
+        const fp = t + (0, crypto_1.hash)("SHA224", this.keyManager.id).toString("hex");
+        return `did:vaultys:${fp.slice(0, 40)}`;
+    }
+    get didDocument() {
+        return {
+            "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
+            id: this.did,
+            authentication: [
+                {
+                    id: `${this.did}#keys-1`,
+                    type: this.keyManager.authType,
+                    controller: this.did,
+                    publicKeyMultibase: "m" + buffer_1.Buffer.from(this.keyManager.signer.publicKey).toString("base64"),
+                },
+            ],
+            keyAgreement: [
+                {
+                    id: `${this.did}#keys-2`,
+                    type: this.keyManager.encType,
+                    controller: this.did,
+                    publicKeyMultibase: "m" + buffer_1.Buffer.from(this.keyManager.cypher.publicKey).toString("base64"),
+                },
+            ],
+        };
+    }
+    get id() {
+        return buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), this.keyManager.id]);
+    }
+    toVersion(v) {
+        this.keyManager.version = v;
+        return this;
+    }
+    get version() {
+        return this.keyManager.version;
+    }
+    isHardware() {
+        return this.type === TYPE_FIDO2 || this.type === TYPE_FIDO2PRF;
+    }
+    isMachine() {
+        return this.type === TYPE_MACHINE;
+    }
+    isPerson() {
+        return this.type === TYPE_PERSON;
+    }
+    getOTPHmac(timelock = 1 * 3600000) {
+        const otp = Math.floor(new Date().getTime() / timelock);
+        return this.keyManager.getSecretHash(buffer_1.Buffer.from(`OTP-${otp}`)).toString("hex");
+    }
+    // Need to think about insecure use of this function
+    getOTP(prefix = "password", timelock = 24 * 3600000) {
+        if (this.certificate) {
+            const otp = Math.floor(new Date().getTime() / timelock);
+            const toHash = buffer_1.Buffer.concat([buffer_1.Buffer.from(prefix, "utf-8"), buffer_1.Buffer.from(this.certificate), buffer_1.Buffer.from([otp])]);
+            return (0, crypto_1.hash)("SHA256", toHash).toString("hex");
+        }
+        throw new Error("no certificate, cannot derive OTP");
+    }
+    async performDiffieHellman(otherVaultysId) {
+        return this.keyManager.performDiffieHellman(otherVaultysId.keyManager);
+    }
+    /**
+     * Static method to perform a Diffie-Hellman key exchange between two VaultysId instances
+     * @param vaultysId1 First VaultysId instance
+     * @param vaultysId2 Second VaultysId instance
+     * @returns A shared secret that both parties can derive
+     */
+    static async diffieHellman(vaultysId1, vaultysId2) {
+        return vaultysId1.performDiffieHellman(vaultysId2);
+    }
+    /**
+     * Encrypt a message using DHIES for a recipient
+     * @param message Message to encrypt
+     * @param recipientId Recipient's VaultysId ID
+     * @returns Encrypted message or null if encryption fails
+     */
+    async dhiesEncrypt(message, recipientId) {
+        let cleanId;
+        if (typeof recipientId === "string") {
+            cleanId = buffer_1.Buffer.from(recipientId.slice(2), "hex");
+        }
+        else {
+            cleanId = recipientId.slice(1);
+        }
+        return this.keyManager.dhiesEncrypt(message, cleanId);
+    }
+    /**
+     * Decrypt a message encrypted with DHIES
+     * @param encryptedMessage Encrypted message from dhiesEncrypt
+     * @returns Decrypted message as Buffer or null if decryption fails
+     */
+    async dhiesDecrypt(encryptedMessage, senderId) {
+        let cleanId;
+        if (typeof senderId === "string") {
+            cleanId = buffer_1.Buffer.from(senderId.slice(2), "hex");
+        }
+        else {
+            cleanId = senderId.slice(1);
+        }
+        return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
+    }
+    async signChallenge(challenge) {
+        if (typeof challenge == "string") {
+            challenge = buffer_1.Buffer.from(challenge, "hex");
+        }
+        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([this.id, challenge]));
+        const signature = await this.keyManager.sign(result);
+        if (!signature)
+            throw new Error("Could not sign challenge");
+        else
+            return signature;
+    }
+    verifyChallenge(challenge, signature, userVerification) {
+        if (typeof challenge == "string") {
+            challenge = buffer_1.Buffer.from(challenge, "hex");
+        }
+        if (typeof signature == "string") {
+            signature = buffer_1.Buffer.from(signature, "hex");
+        }
+        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([this.id, challenge]));
+        return this.keyManager.verify(result, signature, userVerification);
+    }
+    async signcrypt(plaintext, recipientIds) {
+        return this.keyManager.signcrypt(plaintext, recipientIds.map((id) => {
+            if (typeof id === "string")
+                return buffer_1.Buffer.from(id.slice(2), "hex");
+            else
+                return id.slice(1);
+        }));
+    }
+    static async encrypt(plaintext, recipientIds) {
+        return KeyManager_1.default.encrypt(plaintext, recipientIds.map((id) => {
+            if (typeof id === "string")
+                return buffer_1.Buffer.from(id.slice(2), "hex");
+            else
+                return id.slice(1);
+        }));
+    }
+    async decrypt(encryptedMessage, senderId) {
+        let cleanId;
+        if (senderId) {
+            if (typeof senderId === "string")
+                cleanId = buffer_1.Buffer.from(senderId.slice(2));
+            // @ts-ignore
+            else
+                cleanId = senderId.subarray(1);
+        }
+        return this.keyManager.decrypt(encryptedMessage, cleanId);
+    }
+    async hmac(message) {
+        const cypher = await this.keyManager.getCypher();
+        return cypher.hmac(message);
+    }
+}
+VaultysId.createPublicKeyCredentialOptionsPQC = () => {
+    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
+    const hint = "security-key";
+    const options = {
+        challenge: (0, crypto_1.randomBytes)(32),
+        rp: {
+            name: "Vaultys ID",
+        },
+        user: {
+            id: (0, crypto_1.randomBytes)(16),
+            name: "Vaultys ID",
+            displayName: "Vaultys Wallet ID",
+        },
+        attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
+        authenticatorSelection: {
+            authenticatorAttachment: "cross-platform",
+            residentKey: "discouraged",
+            userVerification: "preferred",
+        },
+        // @ts-ignore not yet in dom types
+        hints: [hint],
+        extensions: {
+            prf: {
+                eval: {
+                    first: buffer_1.Buffer.from("VaultysID salt", "utf-8"),
+                },
+            },
+        },
+        pubKeyCredParams: [{ type: "public-key", alg: pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 }],
+    };
+    return options;
+};
+VaultysId.createPublicKeyCredentialCreationOptions = (passkey) => {
+    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
+    const hint = passkey ? "client-device" : "security-key";
+    const options = {
+        challenge: (0, crypto_1.randomBytes)(32),
+        rp: {
+            name: "Vaultys ID",
+        },
+        user: {
+            id: (0, crypto_1.randomBytes)(16),
+            name: "Vaultys ID",
+            displayName: "Vaultys Wallet ID",
+        },
+        attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
+        authenticatorSelection: {
+            authenticatorAttachment: passkey ? "platform" : "cross-platform",
+            residentKey: passkey ? "required" : "discouraged",
+            userVerification: "preferred",
+        },
+        // @ts-ignore not yet in dom types
+        hints: [hint],
+        extensions: {
+            prf: {
+                eval: {
+                    first: buffer_1.Buffer.from("VaultysID salt", "utf-8"),
+                },
+            },
+        },
+        pubKeyCredParams: [
+            {
+                type: "public-key",
+                alg: -7, // SECP256/ECDSA, Ed25519/EdDSA (-8) not supported natively on mobile or yubikey (crying)
+            },
+            {
+                type: "public-key",
+                alg: -8, // Ed25519/EdDSA prefered
+            },
+            {
+                type: "public-key",
+                alg: -257, // RS256
+            },
+            // {
+            //   "type": "public-key",
+            //   "alg": -36
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -37
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -38
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -39
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -258
+            // },
+            // {
+            //   "type": "public-key",
+            //   "alg": -259
+            // }
+        ],
+    };
+    return options;
+};
+exports["default"] = VaultysId;
 
 
 /***/ }),
@@ -37294,6 +38752,76 @@ class SoftCredentials {
     }
 }
 exports["default"] = SoftCredentials;
+
+
+/***/ }),
+
+/***/ "./src/platform/webauthn.ts":
+/*!**********************************!*\
+  !*** ./src/platform/webauthn.ts ***!
+  \**********************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NodeWebAuthn = exports.BrowserWebAuthn = void 0;
+exports.getWebAuthnProvider = getWebAuthnProvider;
+exports.createCredentialRequest = createCredentialRequest;
+const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./SoftCredentials */ "./src/platform/SoftCredentials.ts"));
+// Browser implementation
+class BrowserWebAuthn {
+    isAvailable() {
+        return typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
+    }
+    async create(options) {
+        if (!this.isAvailable()) {
+            throw new Error("WebAuthn is not available in this environment");
+        }
+        return (await navigator.credentials.create({ publicKey: options }));
+    }
+    async get(options) {
+        if (!this.isAvailable()) {
+            throw new Error("WebAuthn is not available in this environment");
+        }
+        return (await navigator.credentials.get({ publicKey: options }));
+    }
+}
+exports.BrowserWebAuthn = BrowserWebAuthn;
+// Node.js implementation using SoftCredentials
+class NodeWebAuthn {
+    constructor(origin = "test") {
+        this.origin = origin;
+    }
+    isAvailable() {
+        return true; // Always available in mock mode
+    }
+    async create(options) {
+        return await SoftCredentials_1.default.create({
+            publicKey: options,
+        }, this.origin);
+    }
+    async get(options) {
+        return await SoftCredentials_1.default.get({
+            publicKey: options,
+        }, this.origin);
+    }
+}
+exports.NodeWebAuthn = NodeWebAuthn;
+// Factory function
+function getWebAuthnProvider(options) {
+    if (typeof window !== "undefined") {
+        return new BrowserWebAuthn();
+    }
+    return new NodeWebAuthn(options?.origin);
+}
+// Helper to create credential request
+function createCredentialRequest(alg, prf = false) {
+    return SoftCredentials_1.default.createRequest(alg, prf);
+}
 
 
 /***/ }),
@@ -38248,6 +39776,12 @@ describe("Symetric Proof of Relationship - SRG - v0", () => {
         assert_1.default.equal(result.error, "");
         assert_1.default.equal(result.state, 0);
     });
+    // it("should deserialize old certificate", () => {
+    //   const oldCert = "X2J4X2lhaHdjbTkwYjJOdmJLTndNbkNuYzJWeWRtbGpaYVJoZFhSb3FYUnBiV1Z6ZEdGdGNNOEFBQUdXa2RIeHQ2TndhekhFZkFPRG9YWUFvV1BGQUUybEFRSURKaUFCSVZnZ0hBMUZiazh3QXJvZUczQkNOUWFHYXZ4bWpPRWwvRUREWkNXZkFGS05GTjBpV0NCcjUza3p6U0t6TUdER1BpUGRvcUxzTDF1b2Z2SllBbkF5Z3I3dDI3REJHcUZseFFBZ2RoMTRaMDlyWndrNjl6blVxU3lLZENJdnk1N0tGL25PdGFDdndKa2Jkd3lqY0dzeXhIUUJoS0YyQUtGd3hRQWdPck13SmNDNHpYemFzWWtTd2FFU2VmM1JRdC9DL3NPK2JSQmd2WFd1a095aGVNVUFJRWpEcWd3N3Z5SXRETzNGS0l0NFpVRHo5QTBSWW00NGNISk5lbW1CNkxKMW9XWEZBQ0R6bUsrUDBCbGZIMVBDTzduRStLQ1FOQ0FoSnJ5cXB5aCtNRlpuMlZOREthVnViMjVqWmNRZ1NPWE9NbkNwOHZIYlFoNmtGa0UrM2VnZEwrYTNMa2tndFBZa2VaZEMwWG1sYzJsbmJqSEUvNE9oYzhSSE1FVUNJUUNCcERKenpIRVpHdExxV0IxRVJlK3E4dW56RXJHNmlrU2hNbnBkcVRZc05BSWdBcnpNbHNtZjlqOGNjQWZsdG1Tb1dhWjRNeGtjOXJPbHI4aXQzemRHejhXaFk4U0dleUowZVhCbElqb2lkMlZpWVhWMGFHNHVaMlYwSWl3aVkyaGhiR3hsYm1kbElqb2lUMmd0T0dsd1l6TkpiR0puVUZGVE5FbEZTazlGWjNrNE56Vk1jVlJNZGxOV1FrMVhiRXBhY1VJelp5SXNJbTl5YVdkcGJpSTZJbWgwZEhBNkx5OXNiMk5oYkdodmMzUTZNekF3TUNJc0ltTnliM056VDNKcFoybHVJanBtWVd4elpYMmhZY1FsU1pZTjVZZ09qR2gwTkJjUFpIWmdXNC9rcnJtaWhqTEhtVnp6dW9NZGwyTWRBQUFBQUtWemFXZHVNc1JBVjJvL0hSdS9PSjBCMllVdXoyN0o3OThkWE5aTmV5VmlVclVLclBNeHpzd0dNeVloRy9Bc1QxWjJ3WWVHaUhlbVNyQ1NNeDRrSVpIcjNHdHhtVERvQnFodFpYUmhaR0YwWVlBPQ==";
+    //   console.log(Buffer.from(oldCert, "base64").toString("utf-8"));
+    //   const result = Challenger.deserializeCertificate(Buffer.from(oldCert, "base64"));
+    //   assert.equal(result.state, 2);
+    // });
     /*
     it("Fail with tampered certificate (FIDO2)", async () => {
       const attestation1 = await navigator.credentials.create(
@@ -38731,8 +40265,7 @@ describe("IdManager", () => {
 });
 describe("SRG v0 challenge with IdManager", () => {
     it("pass a challenge", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const channel = __2.MemoryChannel.createBidirectionnal();
             if (!channel.otherend)
                 assert_1.default.fail();
@@ -38760,13 +40293,19 @@ describe("SRG v0 challenge with IdManager", () => {
             assert_1.default.equal(s2.substore("wot").list().length, 1);
             if (manager1.vaultysId.type === 0) {
                 assert_1.default.equal(manager2.apps.length, 1);
-                assert_1.default.equal(manager2.getApp(manager1.vaultysId.did)?.fingerprint, manager1.vaultysId.fingerprint);
+                const app1 = manager2.getApp(manager1.vaultysId.did);
+                assert_1.default.equal(app1?.fingerprint, manager1.vaultysId.fingerprint);
+                assert_1.default.equal(app1?.keyManager.authType, manager1.vaultysId.keyManager.authType);
+                assert_1.default.equal(app1?.keyManager.encType, manager1.vaultysId.keyManager.encType);
                 assert_1.default.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
                 assert_1.default.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
             }
             else {
                 assert_1.default.equal(manager2.contacts.length, 1);
-                assert_1.default.equal(manager2.getContact(manager1.vaultysId.did)?.fingerprint, manager1.vaultysId.fingerprint);
+                const contact1 = manager2.getContact(manager1.vaultysId.did);
+                assert_1.default.equal(contact1?.fingerprint, manager1.vaultysId.fingerprint);
+                assert_1.default.equal(contact1?.keyManager.authType, manager1.vaultysId.keyManager.authType);
+                assert_1.default.equal(contact1?.keyManager.encType, manager1.vaultysId.keyManager.encType);
                 manager2.setContactMetadata(manager1.vaultysId.did, "name", "salut");
                 manager2.setContactMetadata(manager1.vaultysId.did, "group", "pro");
                 assert_1.default.equal(manager2.getContactMetadata(manager1.vaultysId.did, "name"), "salut");
@@ -39913,12 +41452,41 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
 __webpack_require__(/*! ./shims */ "./test/shims.ts");
+const VaultysId_1 = __importDefault(__webpack_require__(/*! ../src/VaultysId */ "./src/VaultysId.ts"));
+const crypto_1 = __webpack_require__(/*! ../src/crypto */ "./src/crypto.ts");
+const PQManager_1 = __importDefault(__webpack_require__(/*! ../src/PQManager */ "./src/PQManager.ts"));
 describe("PQC", () => {
-    it("should run test", () => {
-        assert_1.default.equal(0, 0);
-    });
     it("serder a VaultytsID secret - software", async () => {
-        assert_1.default.equal(0, 0);
+        const vaultysId = await VaultysId_1.default.generatePerson(true);
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
+        assert_1.default.equal(vaultysId.id.length, 2034);
+        assert_1.default.equal(vaultysId.id.toString("hex").length, 4068);
+        assert_1.default.equal(vaultysId.id.toString("base64").length, 2712);
+        assert_1.default.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
+        const id2 = VaultysId_1.default.fromSecret(vaultysId.getSecret());
+        assert_1.default.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
+        assert_1.default.equal(vaultysId.keyManager instanceof PQManager_1.default, true);
+        assert_1.default.equal(id2.keyManager instanceof PQManager_1.default, true);
+    });
+    it("serder a VaultytsID - software", async () => {
+        const vaultysId = await VaultysId_1.default.generateOrganization(true);
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
+        assert_1.default.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
+        assert_1.default.equal(vaultysId.id.length, 2034);
+        const id2 = VaultysId_1.default.fromId(vaultysId.id);
+        assert_1.default.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
+        assert_1.default.equal(vaultysId.keyManager instanceof PQManager_1.default, true);
+        assert_1.default.equal(id2.keyManager instanceof PQManager_1.default, true);
+    });
+    it("sign/verify with VaultytsID - software", async () => {
+        const vaultysId = await VaultysId_1.default.generateMachine(true);
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
+        const challenge = (0, crypto_1.randomBytes)(32);
+        const signature = await vaultysId.signChallenge(challenge);
+        assert_1.default.equal(vaultysId.verifyChallenge(challenge, signature, false), true);
     });
 });
 
@@ -40185,7 +41753,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.createRandomVaultysId = void 0;
+exports.allVaultysIdType = exports.createRandomVaultysId = void 0;
 const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
 const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ../src/platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
 const pqCrypto_1 = __webpack_require__(/*! ../src/pqCrypto */ "./src/pqCrypto.ts");
@@ -40217,6 +41785,22 @@ const createRandomVaultysId = async () => {
     }
 };
 exports.createRandomVaultysId = createRandomVaultysId;
+const allVaultysIdType = async () => {
+    const result = [await __1.VaultysId.generateMachine(), await __1.VaultysId.generateMachine(true), await __1.VaultysId.generatePerson(), await __1.VaultysId.generatePerson(true)];
+    if (typeof window === "undefined") {
+        let attestation = await navigator.credentials.create(SoftCredentials_1.default.createRequest(pqCrypto_1.PQ_COSE_ALG.DILITHIUM2));
+        // @ts-expect-error mockup
+        result.push(await __1.VaultysId.fido2FromAttestation(attestation));
+        attestation = await navigator.credentials.create(SoftCredentials_1.default.createRequest(-7));
+        // @ts-expect-error mockup
+        result.push(await __1.VaultysId.fido2FromAttestation(attestation));
+        attestation = await navigator.credentials.create(SoftCredentials_1.default.createRequest(-8));
+        // @ts-expect-error mockup
+        result.push(await __1.VaultysId.fido2FromAttestation(attestation));
+    }
+    return result;
+};
+exports.allVaultysIdType = allVaultysIdType;
 
 
 /***/ }),
