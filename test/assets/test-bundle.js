@@ -40147,8 +40147,7 @@ const crypto_1 = __webpack_require__(/*! ../src/crypto */ "./src/crypto.ts");
 const utils_1 = __webpack_require__(/*! ./utils */ "./test/utils.ts");
 describe("IdManager", () => {
     it("serder a vaultys secret", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const secret = id1.getSecret();
             const id2 = __2.VaultysId.fromSecret(secret);
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
@@ -40161,8 +40160,7 @@ describe("IdManager", () => {
         }
     });
     it("serder a vaultys secret in base64", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const secret = id1.getSecret("base64");
             const id2 = __2.VaultysId.fromSecret(secret, "base64");
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
@@ -40175,8 +40173,7 @@ describe("IdManager", () => {
         }
     });
     it("serder to public Idmanager", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const id2 = __2.VaultysId.fromId(id1.id);
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
             assert_1.default.equal(id2.id.toString("base64"), id1.id.toString("base64"));
@@ -40188,8 +40185,7 @@ describe("IdManager", () => {
         }
     });
     it("serder to public Idmanager stringified", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const id = JSON.stringify(id1.id);
             const id2 = __2.VaultysId.fromId(JSON.parse(id));
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
@@ -40198,15 +40194,13 @@ describe("IdManager", () => {
         }
     });
     it("serder to public Idmanager as hex string", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const id2 = __2.VaultysId.fromId(id1.id.toString("hex"));
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
         }
     });
     it("serder to public Idmanager as base64 string", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const id2 = __2.VaultysId.fromId(id1.id.toString("base64"), undefined, "base64");
             assert_1.default.equal(id2.fingerprint, id1.fingerprint);
             assert_1.default.equal(id2.id.toString("base64"), id1.id.toString("base64"));
@@ -40214,8 +40208,7 @@ describe("IdManager", () => {
         }
     });
     it("sign unspecified data and log it in the store", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const s = (0, __2.MemoryStorage)(() => "");
             const manager = new __2.IdManager(id1, s);
             const signature = await manager.signChallenge(manager.vaultysId.id);
@@ -40229,8 +40222,7 @@ describe("IdManager", () => {
         }
     });
     it("sign random document hash and log it in the store", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const s = (0, __2.MemoryStorage)(() => "");
             const file = { arrayBuffer: __1.Buffer.from((0, crypto_1.randomBytes)(1024)), type: "random" };
             const h = (0, crypto_1.hash)("sha256", file.arrayBuffer);
@@ -40316,8 +40308,7 @@ describe("SRG v0 challenge with IdManager", () => {
         }
     });
     it("fail a challenge if user1 refuse", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const channel = __2.MemoryChannel.createBidirectionnal();
             if (!channel.otherend)
                 assert_1.default.fail();
@@ -40344,8 +40335,7 @@ describe("SRG v0 challenge with IdManager", () => {
         }
     });
     it("fail a challenge if user2 refuse", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const channel = __2.MemoryChannel.createBidirectionnal();
             if (!channel.otherend)
                 assert_1.default.fail();
@@ -40372,8 +40362,7 @@ describe("SRG v0 challenge with IdManager", () => {
         }
     });
     it("pass a challenge over encrypted Channel", async () => {
-        for (let i = 0; i < 5; i++) {
-            const id1 = await (0, utils_1.createRandomVaultysId)();
+        for (const id1 of await (0, utils_1.allVaultysIdType)()) {
             const channel = __2.MemoryChannel.createBidirectionnal();
             if (!channel.otherend)
                 assert_1.default.fail();
@@ -41455,6 +41444,7 @@ __webpack_require__(/*! ./shims */ "./test/shims.ts");
 const VaultysId_1 = __importDefault(__webpack_require__(/*! ../src/VaultysId */ "./src/VaultysId.ts"));
 const crypto_1 = __webpack_require__(/*! ../src/crypto */ "./src/crypto.ts");
 const PQManager_1 = __importDefault(__webpack_require__(/*! ../src/PQManager */ "./src/PQManager.ts"));
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 describe("PQC", () => {
     it("serder a VaultytsID secret - software", async () => {
         const vaultysId = await VaultysId_1.default.generatePerson(true);
@@ -41487,6 +41477,17 @@ describe("PQC", () => {
         const challenge = (0, crypto_1.randomBytes)(32);
         const signature = await vaultysId.signChallenge(challenge);
         assert_1.default.equal(vaultysId.verifyChallenge(challenge, signature, false), true);
+    });
+    it("sign and verify a message", async () => {
+        const signer = await PQManager_1.default.generate_PQ();
+        const id = signer.id;
+        const verifier = PQManager_1.default.fromId(id);
+        const message = buffer_1.Buffer.from("this is a message to be verified man", "utf-8");
+        const signature = await signer.sign(message);
+        if (!signature)
+            assert_1.default.fail();
+        assert_1.default.notEqual(signature, null);
+        assert_1.default.ok(verifier.verify(message, signature));
     });
 });
 

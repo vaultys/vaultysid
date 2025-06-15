@@ -8,8 +8,7 @@ import { allVaultysIdType, createRandomVaultysId } from "./utils";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const secret = id1.getSecret();
       const id2 = VaultysId.fromSecret(secret);
       assert.equal(id2.fingerprint, id1.fingerprint);
@@ -23,8 +22,7 @@ describe("IdManager", () => {
   });
 
   it("serder a vaultys secret in base64", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const secret = id1.getSecret("base64");
       const id2 = VaultysId.fromSecret(secret, "base64");
       assert.equal(id2.fingerprint, id1.fingerprint);
@@ -38,8 +36,7 @@ describe("IdManager", () => {
   });
 
   it("serder to public Idmanager", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const id2 = VaultysId.fromId(id1.id);
       assert.equal(id2.fingerprint, id1.fingerprint);
       assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
@@ -53,8 +50,7 @@ describe("IdManager", () => {
   });
 
   it("serder to public Idmanager stringified", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const id = JSON.stringify(id1.id);
       const id2 = VaultysId.fromId(JSON.parse(id));
       assert.equal(id2.fingerprint, id1.fingerprint);
@@ -64,16 +60,14 @@ describe("IdManager", () => {
   });
 
   it("serder to public Idmanager as hex string", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const id2 = VaultysId.fromId(id1.id.toString("hex"));
       assert.equal(id2.fingerprint, id1.fingerprint);
     }
   });
 
   it("serder to public Idmanager as base64 string", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const id2 = VaultysId.fromId(id1.id.toString("base64"), undefined, "base64");
       assert.equal(id2.fingerprint, id1.fingerprint);
       assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
@@ -82,8 +76,7 @@ describe("IdManager", () => {
   });
 
   it("sign unspecified data and log it in the store", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const s = MemoryStorage(() => "");
       const manager = new IdManager(id1, s);
       const signature = await manager.signChallenge(manager.vaultysId.id);
@@ -97,8 +90,7 @@ describe("IdManager", () => {
   });
 
   it("sign random document hash and log it in the store", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const s = MemoryStorage(() => "");
       const file = { arrayBuffer: Buffer.from(randomBytes(1024)), type: "random" } as File;
       const h = hash("sha256", file.arrayBuffer);
@@ -189,8 +181,7 @@ describe("SRG v0 challenge with IdManager", () => {
   });
 
   it("fail a challenge if user1 refuse", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const channel = MemoryChannel.createBidirectionnal();
       if (!channel.otherend) assert.fail();
       const s1 = MemoryStorage(() => "");
@@ -217,8 +208,7 @@ describe("SRG v0 challenge with IdManager", () => {
   });
 
   it("fail a challenge if user2 refuse", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const channel = MemoryChannel.createBidirectionnal();
       if (!channel.otherend) assert.fail();
       const s1 = MemoryStorage(() => "");
@@ -245,8 +235,7 @@ describe("SRG v0 challenge with IdManager", () => {
   });
 
   it("pass a challenge over encrypted Channel", async () => {
-    for (let i = 0; i < 5; i++) {
-      const id1 = await createRandomVaultysId();
+    for (const id1 of await allVaultysIdType()) {
       const channel = MemoryChannel.createBidirectionnal();
       if (!channel.otherend) assert.fail();
       const s1 = MemoryStorage(() => "");

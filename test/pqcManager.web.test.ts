@@ -3,7 +3,7 @@ import "./shims";
 import VaultysId from "../src/VaultysId";
 import { randomBytes } from "../src/crypto";
 import PQManager from "../src/PQManager";
-import Fido2Manager from "../src/Fido2Manager";
+import { Buffer } from "buffer/";
 
 describe("PQC", () => {
   it("serder a VaultytsID secret - software", async () => {
@@ -38,5 +38,16 @@ describe("PQC", () => {
     const challenge = randomBytes(32);
     const signature = await vaultysId.signChallenge(challenge);
     assert.equal(vaultysId.verifyChallenge(challenge, signature, false), true);
+  });
+
+  it("sign and verify a message", async () => {
+    const signer = await PQManager.generate_PQ();
+    const id = signer.id;
+    const verifier = PQManager.fromId(id);
+    const message = Buffer.from("this is a message to be verified man", "utf-8");
+    const signature = await signer.sign(message);
+    if (!signature) assert.fail();
+    assert.notEqual(signature, null);
+    assert.ok(verifier.verify(message, signature));
   });
 });
