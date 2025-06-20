@@ -4,6 +4,8 @@ const replacer = (key: string, value: any) => {
   //if(key=="1686045792046") console.log(value);
   if (!value) return value;
   if (key === "certificate") return "__C__" + Buffer.from(value).toString("base64");
+  if (key === "publicKey") return "__C__" + Buffer.from(value).toString("base64");
+  if (key === "secretKey") return "__C__" + Buffer.from(value).toString("base64");
   if (value.type === "Buffer") {
     return "_bx_" + Buffer.from(value.data).toString("base64");
   }
@@ -14,7 +16,7 @@ const replacer = (key: string, value: any) => {
 };
 
 const reviver = (key: string, value: any) => {
-  if (value && key === "certificate") {
+  if (value && (key === "certificate" || key === "publicKey" || key === "secretKey")) {
     if (typeof value === "string" && value.startsWith("__C__")) {
       return Buffer.from(value.slice(5), "base64");
     } else return Buffer.from(value);
@@ -51,12 +53,13 @@ export const LocalStorage = (key = "vaultysStorage"): Store => {
 };
 
 const storagify = (object: Record<string, any>, save: () => void, destroy: () => void): Store => {
+  const result = { _raw: object };
   return {
+    ...result,
     destroy,
     save,
-    toString: () => serialize(object),
+    toString: () => serialize(result._raw),
     fromString: (string: string, s: () => void, d: () => void) => storagify(deserialize(string), s, d),
-    _raw: object,
     set: (key: string, value: any) => (object[key] = value),
     delete: (key: string) => delete object[key],
     get: (key: string) => object[key],
