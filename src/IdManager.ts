@@ -145,6 +145,26 @@ export default class IdManager {
     this.store.save();
   }
 
+  async verifyWebOfTrust() {
+    let verified = true;
+    for (const certid of this.store.substore("wot").list()) {
+      const cert = this.store.substore("wot").get(certid);
+      verified = verified && (await Challenger.verifyCertificate(cert));
+    }
+    for (const appid of this.store.substore("registrations").list()) {
+      const app = this.store.substore("registrations").get(appid);
+      verified = verified && appid === VaultysId.fromId(app.serverId, undefined, "base64").did;
+    }
+    for (const contact of this.contacts) {
+      verified = verified && (await Challenger.verifyCertificate(contact!.certificate!));
+    }
+    for (const app of this.apps) {
+      verified = verified && (await Challenger.verifyCertificate(app!.certificate!));
+    }
+
+    return verified;
+  }
+
   isHardware() {
     return this.vaultysId.isHardware();
   }
