@@ -50,7 +50,7 @@ export type File = {
   name?: string;
 };
 
-const instanciateContact = (c: StoredContact) => {
+export const instanciateContact = (c: StoredContact) => {
   let vaultysId: VaultysId;
   if (c.type === 3) {
     vaultysId = new VaultysId(Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
@@ -66,7 +66,7 @@ const instanciateContact = (c: StoredContact) => {
   return vaultysId;
 };
 
-const instanciateApp = (a: StoredApp) => {
+export const instanciateApp = (a: StoredApp) => {
   return VaultysId.fromId(Buffer.from(a.serverId, "base64"), a.certificate);
 };
 

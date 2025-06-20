@@ -23891,7 +23891,7 @@ module.exports = desc && typeof desc.get === 'function'
 /* provided dependency */ var Buffer = __webpack_require__(/*! buffer */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js")["Buffer"];
 /* provided dependency */ var process = __webpack_require__(/*! process/browser */ "./node_modules/.pnpm/process@0.11.10/node_modules/process/browser.js");
 var stream = __webpack_require__(/*! readable-stream */ "./node_modules/.pnpm/readable-stream@3.6.2/node_modules/readable-stream/readable-browser.js")
-var eos = __webpack_require__(/*! end-of-stream */ "./node_modules/.pnpm/end-of-stream@1.4.4/node_modules/end-of-stream/index.js")
+var eos = __webpack_require__(/*! end-of-stream */ "./node_modules/.pnpm/end-of-stream@1.4.5/node_modules/end-of-stream/index.js")
 var inherits = __webpack_require__(/*! inherits */ "./node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits_browser.js")
 var shift = __webpack_require__(/*! stream-shift */ "./node_modules/.pnpm/stream-shift@1.0.3/node_modules/stream-shift/index.js")
 
@@ -24132,9 +24132,9 @@ module.exports = Duplexify
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/end-of-stream@1.4.4/node_modules/end-of-stream/index.js":
+/***/ "./node_modules/.pnpm/end-of-stream@1.4.5/node_modules/end-of-stream/index.js":
 /*!************************************************************************************!*\
-  !*** ./node_modules/.pnpm/end-of-stream@1.4.4/node_modules/end-of-stream/index.js ***!
+  !*** ./node_modules/.pnpm/end-of-stream@1.4.5/node_modules/end-of-stream/index.js ***!
   \************************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
@@ -24142,6 +24142,8 @@ module.exports = Duplexify
 var once = __webpack_require__(/*! once */ "./node_modules/.pnpm/once@1.4.0/node_modules/once/once.js");
 
 var noop = function() {};
+
+var qnt = __webpack_require__.g.Bare ? queueMicrotask : process.nextTick.bind(process);
 
 var isRequest = function(stream) {
 	return stream.setHeader && typeof stream.abort === 'function';
@@ -24186,7 +24188,7 @@ var eos = function(stream, opts, callback) {
 	};
 
 	var onclose = function() {
-		process.nextTick(onclosenexttick);
+		qnt(onclosenexttick);
 	};
 
 	var onclosenexttick = function() {
@@ -28669,23 +28671,23 @@ process.umask = function() { return 0; };
 
 /***/ }),
 
-/***/ "./node_modules/.pnpm/pump@3.0.2/node_modules/pump/index.js":
+/***/ "./node_modules/.pnpm/pump@3.0.3/node_modules/pump/index.js":
 /*!******************************************************************!*\
-  !*** ./node_modules/.pnpm/pump@3.0.2/node_modules/pump/index.js ***!
+  !*** ./node_modules/.pnpm/pump@3.0.3/node_modules/pump/index.js ***!
   \******************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
 /* provided dependency */ var process = __webpack_require__(/*! process/browser */ "./node_modules/.pnpm/process@0.11.10/node_modules/process/browser.js");
 var once = __webpack_require__(/*! once */ "./node_modules/.pnpm/once@1.4.0/node_modules/once/once.js")
-var eos = __webpack_require__(/*! end-of-stream */ "./node_modules/.pnpm/end-of-stream@1.4.4/node_modules/end-of-stream/index.js")
+var eos = __webpack_require__(/*! end-of-stream */ "./node_modules/.pnpm/end-of-stream@1.4.5/node_modules/end-of-stream/index.js")
 var fs
 
 try {
-  fs = __webpack_require__(/*! fs */ "?bfdd") // we only need fs to get the ReadStream and WriteStream prototypes
+  fs = __webpack_require__(/*! fs */ "?25c9") // we only need fs to get the ReadStream and WriteStream prototypes
 } catch (e) {}
 
 var noop = function () {}
-var ancient = /^v?\.0/.test(process.version)
+var ancient = typeof process === 'undefined' ? false : /^v?\.0/.test(process.version)
 
 var isFn = function (fn) {
   return typeof fn === 'function'
@@ -28772,7 +28774,7 @@ module.exports = pump
   \************************************************************************/
 /***/ ((module, __unused_webpack_exports, __webpack_require__) => {
 
-var pump = __webpack_require__(/*! pump */ "./node_modules/.pnpm/pump@3.0.2/node_modules/pump/index.js")
+var pump = __webpack_require__(/*! pump */ "./node_modules/.pnpm/pump@3.0.3/node_modules/pump/index.js")
 var inherits = __webpack_require__(/*! inherits */ "./node_modules/.pnpm/inherits@2.0.4/node_modules/inherits/inherits_browser.js")
 var Duplexify = __webpack_require__(/*! duplexify */ "./node_modules/.pnpm/duplexify@4.1.3/node_modules/duplexify/index.js")
 
@@ -41953,6 +41955,16 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 
 /***/ }),
 
+/***/ "?25c9":
+/*!********************!*\
+  !*** fs (ignored) ***!
+  \********************/
+/***/ (() => {
+
+/* (ignored) */
+
+/***/ }),
+
 /***/ "?78b1":
 /*!************************!*\
   !*** crypto (ignored) ***!
@@ -41977,16 +41989,6 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
 /*!**********************!*\
   !*** util (ignored) ***!
   \**********************/
-/***/ (() => {
-
-/* (ignored) */
-
-/***/ }),
-
-/***/ "?bfdd":
-/*!********************!*\
-  !*** fs (ignored) ***!
-  \********************/
 /***/ (() => {
 
 /* (ignored) */
