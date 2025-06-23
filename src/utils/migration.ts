@@ -1,6 +1,7 @@
 import { decode, encode } from "@msgpack/msgpack";
 import { Buffer } from "../crypto";
 import IdManager, { instanciateApp, instanciateContact } from "../IdManager";
+import VaultysId from "../VaultysId";
 
 export function migrateVaultysId(oldVid: Buffer) {
   const data = decode(oldVid.slice(1)) as { p: Buffer; x?: Buffer };
@@ -27,7 +28,7 @@ export function migrateIdManager(idManager: IdManager) {
     const site = instanciateApp(data);
     if (site) {
       if (site.did !== did) {
-        apps.set(site.did, { ...site, oldDid: did });
+        apps.set(site.did, { ...data, site: site.did, oldDid: did });
         apps.delete(did);
         // console.log(did, "->", site.did);
       }

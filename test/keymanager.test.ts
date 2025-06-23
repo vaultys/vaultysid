@@ -5,6 +5,8 @@ import { Buffer } from "buffer/";
 import { VaultysId, KeyManager } from "../";
 import { createRandomVaultysId } from "./utils";
 import nacl from "tweetnacl";
+import { Ed25519Manager } from "../src/KeyManager";
+import CypherManager from "../src/KeyManager/CypherManager";
 
 //// @ts-expect-error weird import for @stricahq/bip32ed25519
 // const bip32fix = bip32.default ?? bip32;
@@ -53,23 +55,23 @@ describe("KeyManager tests", () => {
   // });
 
   it("serder a KeyManager losing entropy", async () => {
-    const km = await KeyManager.generate_Id25519();
+    const km = await Ed25519Manager.generate();
     const secret = km.getSecret();
-    const km2 = KeyManager.fromSecret(secret);
+    const km2 = Ed25519Manager.fromSecret(secret);
     assert.equal(km.id.toString("hex"), km2.id.toString("hex"));
   });
 
   it("serder a private KeyManager to a public KeyManager", async () => {
-    const km = await KeyManager.generate_Id25519();
+    const km = await Ed25519Manager.generate();
     const id = km.id;
-    const publicKM = KeyManager.fromId(id);
+    const publicKM = Ed25519Manager.fromId(id);
     assert.equal(id.toString("hex"), publicKM.id.toString("hex"));
   });
 
   it("sign and verify a message", async () => {
-    const signer = await KeyManager.generate_Id25519();
+    const signer = await Ed25519Manager.generate();
     const id = signer.id;
-    const verifier = KeyManager.fromId(id);
+    const verifier = Ed25519Manager.fromId(id);
     const message = Buffer.from("this is a message to be verified man", "utf-8");
     const signature = await signer.sign(message);
     if (!signature) assert.fail();
@@ -78,7 +80,7 @@ describe("KeyManager tests", () => {
   });
 
   // it("create and verify a HISCP Certificate", async () => {
-  //   const km = await KeyManager.generate_Id25519();
+  //   const km = await Ed25519Manager.generate();
   //   const hiscp = await km.createSwapingCertificate();
   //   if (!hiscp) assert.fail();
   //   const publicKM = KeyManager.fromId(km.id);
@@ -87,7 +89,7 @@ describe("KeyManager tests", () => {
   // });
 
   // it("create vector for HISCP", async () => {
-  //   const km = await KeyManager.generate_Id25519();
+  //   const km = await Ed25519Manager.generate();
   //   writeVector(km);
   //   const hiscp = await km.createSwapingCertificate();
   //   if (!hiscp) assert.fail();
@@ -98,7 +100,7 @@ describe("KeyManager tests", () => {
   // });
 
   // it("create vector for HISCP Certificate Chaining", async () => {
-  //   const km = await KeyManager.generate_Id25519();
+  //   const km = await Ed25519Manager.generate();
   //   writeVector(km);
   //   const hiscp = await km.createSwapingCertificate();
   //   if (!hiscp) assert.fail();
@@ -114,9 +116,9 @@ describe("KeyManager tests", () => {
   // });
 
   it("signcrypt and decrypt messages", async () => {
-    const alice = await KeyManager.generate_Id25519();
-    const bob = await KeyManager.generate_Id25519();
-    const eve = await KeyManager.generate_Id25519();
+    const alice = await Ed25519Manager.generate();
+    const bob = await Ed25519Manager.generate();
+    const eve = await Ed25519Manager.generate();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
     const ENCRYPTED = await alice.signcrypt(plaintext, recipients);
@@ -132,12 +134,12 @@ describe("KeyManager tests", () => {
   });
 
   it("encrypt and decrypt messages", async () => {
-    const alice = await KeyManager.generate_Id25519();
-    const bob = await KeyManager.generate_Id25519();
-    const eve = await KeyManager.generate_Id25519();
+    const alice = await Ed25519Manager.generate();
+    const bob = await Ed25519Manager.generate();
+    const eve = await Ed25519Manager.generate();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
-    const ENCRYPTED = await KeyManager.encrypt(plaintext, recipients);
+    const ENCRYPTED = await CypherManager.encrypt(plaintext, recipients);
     if (!ENCRYPTED) assert.fail();
     assert.equal(ENCRYPTED.substring(0, 33), "BEGIN SALTPACK ENCRYPTED MESSAGE.");
     if (!ENCRYPTED) assert.fail();
@@ -150,9 +152,9 @@ describe("KeyManager tests", () => {
   });
 
   it("signcrypt and blind decrypt messages", async () => {
-    const alice = await KeyManager.generate_Id25519();
-    const bob = await KeyManager.generate_Id25519();
-    const eve = await KeyManager.generate_Id25519();
+    const alice = await Ed25519Manager.generate();
+    const bob = await Ed25519Manager.generate();
+    const eve = await Ed25519Manager.generate();
     const plaintext = "This message is authentic!";
     const recipients = [bob.id, eve.id, alice.id];
     const ENCRYPTED = await alice.signcrypt(plaintext, recipients);
@@ -231,8 +233,8 @@ describe("KeyManager tests", () => {
 
   it("should perform Diffie-Hellman key exchange between two KeyManager instances", async () => {
     // Create two key managers
-    const alice = await KeyManager.generate_Id25519();
-    const bob = await KeyManager.generate_Id25519();
+    const alice = await Ed25519Manager.generate();
+    const bob = await Ed25519Manager.generate();
 
     // Alice performs DH with Bob
     const aliceSharedSecret = await alice.performDiffieHellman(bob);
@@ -248,12 +250,12 @@ describe("KeyManager tests", () => {
 
   it("should perform Diffie-Hellman key exchange using static method", async () => {
     // Create two key managers
-    const alice = await KeyManager.generate_Id25519();
-    const bob = await KeyManager.generate_Id25519();
+    const alice = await Ed25519Manager.generate();
+    const bob = await Ed25519Manager.generate();
 
     // Perform DH using static method
-    const sharedSecret1 = await KeyManager.diffieHellman(alice, bob);
-    const sharedSecret2 = await KeyManager.diffieHellman(bob, alice);
+    const sharedSecret1 = await CypherManager.diffieHellman(alice, bob);
+    const sharedSecret2 = await CypherManager.diffieHellman(bob, alice);
 
     // Verify that the static method derives the same shared secret regardless of order
     assert.notEqual(sharedSecret1, null);
@@ -263,11 +265,11 @@ describe("KeyManager tests", () => {
 
   it("should fail Diffie-Hellman key exchange with a public KeyManager", async () => {
     // Create two key managers
-    const alice = await KeyManager.generate_Id25519();
-    const bobPrivate = await KeyManager.generate_Id25519();
+    const alice = await Ed25519Manager.generate();
+    const bobPrivate = await Ed25519Manager.generate();
 
     // Create a public-only version of Bob's KeyManager
-    const bobPublic = KeyManager.fromId(bobPrivate.id);
+    const bobPublic = Ed25519Manager.fromId(bobPrivate.id);
 
     // Alice attempts DH with Bob's public KeyManager (should fail)
     const aliceSharedSecret = await alice.performDiffieHellman(bobPublic);
@@ -282,8 +284,8 @@ describe("KeyManager tests", () => {
 
   it("should be able to use DH shared secret for encryption and decryption", async () => {
     // Create two key managers
-    const alice = await KeyManager.generate_Id25519();
-    const bob = await KeyManager.generate_Id25519();
+    const alice = await Ed25519Manager.generate();
+    const bob = await Ed25519Manager.generate();
 
     // Perform DH to get shared secret
     const aliceSharedSecret = await alice.performDiffieHellman(bob);
@@ -308,9 +310,9 @@ describe("KeyManager tests", () => {
 
   it("should generate different shared secrets with different key pairs", async () => {
     // Create three key managers
-    const alice = await KeyManager.generate_Id25519();
-    const bob = await KeyManager.generate_Id25519();
-    const charlie = await KeyManager.generate_Id25519();
+    const alice = await Ed25519Manager.generate();
+    const bob = await Ed25519Manager.generate();
+    const charlie = await Ed25519Manager.generate();
 
     // Alice-Bob shared secret
     const secretAB = await alice.performDiffieHellman(bob);

@@ -24,9 +24,7 @@ const IDs = {
   "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=": {
     type: 1,
     keyManager: {
-      level: 2,
       version: 1,
-      proof: "AkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv0=",
       capability: "public",
       signer: {
         publicKey: "087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayo=",
@@ -41,7 +39,6 @@ const IDs = {
   "BIOhdgGhY8RNpQECAyYgASFYIAahPdTq/F42/PU9WcYGaF4k7BQ1gnD9QIwX2wAcfjKoIlggO56gS5dUKbQZSeBrcYZcOZHZF5F568tgRiDLO2mv5/KhZcQgQ136sOFkQ6Ywe3GbYeGF8bZkLxM0D3Ym7JmdZAubAxE=": {
     type: 4,
     keyManager: {
-      level: 1,
       version: 1,
       capability: "public",
       signer: {
@@ -75,7 +72,7 @@ describe("Test Vectors", () => {
 
     const id1 = VaultysId.fromId(vid, undefined, "base64");
     const id2 = VaultysId.fromId(newvid, undefined, "base64");
-    id1.keyManager.proof = Buffer.from([]);
+    //id1.keyManager.proof = Buffer.from([]);
     assert.equal(serializer(id1), serializer(id2));
   });
 });

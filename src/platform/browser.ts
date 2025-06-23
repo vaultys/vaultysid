@@ -1,7 +1,11 @@
 import { IPlatformCrypto } from "./abstract";
+import { decrypt, encrypt } from "./pbkdf2.web";
+import { BrowserWebAuthn } from "./webauthn";
 
-export class BrowserCrypto implements IPlatformCrypto {
-  async getRandomValues(buffer: Uint8Array): Promise<Uint8Array> {
-    return crypto.getRandomValues(buffer);
-  }
-}
+export const BrowserCrypto: IPlatformCrypto = {
+  webauthn: new BrowserWebAuthn(),
+  pbkdf2: {
+    encrypt: encrypt,
+    decrypt: decrypt,
+  },
+};

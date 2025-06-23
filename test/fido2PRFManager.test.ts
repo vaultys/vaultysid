@@ -1,10 +1,10 @@
 import { Buffer } from "buffer/";
 import assert from "assert";
-import Fido2PRFManager from "../src/Fido2PRFManager";
 import SoftCredentials from "../src/platform/SoftCredentials";
 import { VaultysId } from "../";
 import "./shims";
 import nacl from "tweetnacl";
+import { Fido2PRFManager } from "../src/KeyManager";
 
 describe("Fido2PRFManager", () => {
   it("serder a Fido2PRFManager (ECDSA)", async () => {

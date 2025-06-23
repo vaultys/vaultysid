@@ -52,7 +52,7 @@ export const LocalStorage = (key = "vaultysStorage"): Store => {
   );
 };
 
-const storagify = (object: Record<string, any>, save: () => void, destroy: () => void): Store => {
+export const storagify = (object: Record<string, any>, save: () => void, destroy: () => void): Store => {
   const result = { _raw: object };
   return {
     ...result,

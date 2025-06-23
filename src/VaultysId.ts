@@ -1,18 +1,18 @@
 import { hash, randomBytes } from "./crypto";
-import Fido2Manager from "./Fido2Manager";
-import Fido2PRFManager from "./Fido2PRFManager";
-import KeyManager from "./KeyManager";
+import KeyManager, { Ed25519Manager, Fido2Manager, Fido2PRFManager, PQManager } from "./KeyManager";
 import SoftCredentials from "./platform/SoftCredentials";
 import { getWebAuthnProvider } from "./platform/webauthn";
 import { Buffer } from "buffer/";
-import PQManager from "./PQManager";
 import { PQ_COSE_ALG } from "./pqCrypto";
+import CypherManager from "./KeyManager/CypherManager";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
 const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
 const TYPE_FIDO2PRF = 4;
+
+const SIGN_INCIPIT = Buffer.from("VAULTYS_SIGN", "utf8");
 
 type StringifiedBuffer = {
   data: number[];
@@ -83,7 +83,7 @@ export default class VaultysId {
         const pqm = PQManager.fromId(cleanId.slice(1));
         return new VaultysId(pqm, certificate, type);
       } else {
-        const km = KeyManager.fromId(cleanId.slice(1));
+        const km = Ed25519Manager.fromId(cleanId.slice(1));
         return new VaultysId(km, certificate, type);
       }
     }
@@ -199,10 +199,10 @@ export default class VaultysId {
   static async fromEntropy(entropy: Buffer, type: number, pqc = false) {
     const cleanedEntropy = entropy as Buffer;
     if (pqc) {
-      const km = await PQManager.create_PQ_fromEntropy(cleanedEntropy);
+      const km = await PQManager.createFromEntropy(cleanedEntropy);
       return new VaultysId(km, undefined, type);
     } else {
-      const km = await KeyManager.create_Id25519_fromEntropy(cleanedEntropy);
+      const km = await Ed25519Manager.createFromEntropy(cleanedEntropy);
       return new VaultysId(km, undefined, type);
     }
   }
@@ -260,11 +260,11 @@ export default class VaultysId {
       return new VaultysId(f2m, undefined, type);
     } else {
       //console.log(secretBuffer.length);
-      if (secretBuffer.length === 109) {
+      if (secretBuffer.length === 73) {
         const pqm = PQManager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(pqm, undefined, type);
       } else {
-        const km = KeyManager.fromSecret(secretBuffer.slice(1));
+        const km = Ed25519Manager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(km, undefined, type);
       }
     }
@@ -272,30 +272,30 @@ export default class VaultysId {
 
   static async generatePerson(pqc = false) {
     if (pqc) {
-      const km = await PQManager.generate_PQ();
+      const km = await PQManager.generate();
       return new VaultysId(km, undefined, TYPE_PERSON);
     } else {
-      const km = await KeyManager.generate_Id25519();
+      const km = await Ed25519Manager.generate();
       return new VaultysId(km, undefined, TYPE_PERSON);
     }
   }
 
   static async generateOrganization(pqc = false) {
     if (pqc) {
-      const km = await PQManager.generate_PQ();
+      const km = await PQManager.generate();
       return new VaultysId(km, undefined, TYPE_ORGANIZATION);
     } else {
-      const km = await KeyManager.generate_Id25519();
+      const km = await Ed25519Manager.generate();
       return new VaultysId(km, undefined, TYPE_ORGANIZATION);
     }
   }
 
   static async generateMachine(pqc = false) {
     if (pqc) {
-      const km = await PQManager.generate_PQ();
+      const km = await PQManager.generate();
       return new VaultysId(km, undefined, TYPE_MACHINE);
     } else {
-      const km = await KeyManager.generate_Id25519();
+      const km = await Ed25519Manager.generate();
       return new VaultysId(km, undefined, TYPE_MACHINE);
     }
   }
@@ -309,8 +309,7 @@ export default class VaultysId {
   }
 
   get fingerprint() {
-    const t = Buffer.from([this.type]).toString("hex");
-    const fp = t + hash("SHA224", this.keyManager.id).toString("hex");
+    const fp = Buffer.concat([Buffer.from([this.type]), hash("SHA224", this.keyManager.id)]).toString("hex");
     return fp
       .slice(0, 40)
       .toUpperCase()
@@ -319,8 +318,7 @@ export default class VaultysId {
   }
 
   get did() {
-    const t = Buffer.from([this.type]).toString("hex");
-    const fp = t + hash("SHA224", this.keyManager.id).toString("hex");
+    const fp = Buffer.concat([Buffer.from([this.type]), hash("SHA224", this.keyManager.id)]).toString("hex");
     return `did:vaultys:${fp.slice(0, 40)}`;
   }
 
@@ -432,11 +430,32 @@ export default class VaultysId {
     return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
   }
 
+  async signChallenge_v0(challenge: Buffer | string, oldId: Buffer): Promise<Buffer> {
+    if (typeof challenge == "string") {
+      challenge = Buffer.from(challenge, "hex");
+    }
+    const result = hash("sha256", Buffer.concat([oldId, challenge as Buffer]));
+    const signature = await this.keyManager.sign(result);
+    if (!signature) throw new Error("Could not sign challenge");
+    else return signature;
+  }
+
+  verifyChallenge_v0(challenge: Buffer | string, signature: Buffer | string, userVerification: boolean, oldId: Buffer) {
+    if (typeof challenge == "string") {
+      challenge = Buffer.from(challenge, "hex");
+    }
+    if (typeof signature == "string") {
+      signature = Buffer.from(signature, "hex");
+    }
+    const result = hash("sha256", Buffer.concat([oldId, challenge as Buffer]));
+    return this.keyManager.verify(result, signature as Buffer, userVerification);
+  }
+
   async signChallenge(challenge: Buffer | string): Promise<Buffer> {
     if (typeof challenge == "string") {
       challenge = Buffer.from(challenge, "hex");
     }
-    const result = hash("sha256", Buffer.concat([this.id, challenge as Buffer]));
+    const result = hash("sha256", Buffer.concat([SIGN_INCIPIT, challenge as Buffer]));
     const signature = await this.keyManager.sign(result);
     if (!signature) throw new Error("Could not sign challenge");
     else return signature;
@@ -449,7 +468,7 @@ export default class VaultysId {
     if (typeof signature == "string") {
       signature = Buffer.from(signature, "hex");
     }
-    const result = hash("sha256", Buffer.concat([this.id, challenge as Buffer]));
+    const result = hash("sha256", Buffer.concat([SIGN_INCIPIT, challenge as Buffer]));
     return this.keyManager.verify(result, signature as Buffer, userVerification);
   }
 
@@ -464,7 +483,7 @@ export default class VaultysId {
   }
 
   static async encrypt(plaintext: string, recipientIds: (Buffer | string)[]) {
-    return KeyManager.encrypt(
+    return CypherManager.encrypt(
       plaintext,
       recipientIds.map((id) => {
         if (typeof id === "string") return Buffer.from(id.slice(2), "hex");

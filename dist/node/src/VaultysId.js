@@ -4,19 +4,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const crypto_1 = require("./crypto");
-const Fido2Manager_1 = __importDefault(require("./Fido2Manager"));
-const Fido2PRFManager_1 = __importDefault(require("./Fido2PRFManager"));
-const KeyManager_1 = __importDefault(require("./KeyManager"));
+const KeyManager_1 = require("./KeyManager");
 const SoftCredentials_1 = __importDefault(require("./platform/SoftCredentials"));
 const webauthn_1 = require("./platform/webauthn");
 const buffer_1 = require("buffer/");
-const PQManager_1 = __importDefault(require("./PQManager"));
 const pqCrypto_1 = require("./pqCrypto");
+const CypherManager_1 = __importDefault(require("./KeyManager/CypherManager"));
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
 const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
 const TYPE_FIDO2PRF = 4;
+const SIGN_INCIPIT = buffer_1.Buffer.from("VAULTYS_SIGN", "utf8");
 class VaultysId {
     constructor(keyManager, certificate, type = TYPE_MACHINE) {
         this.encrypt = VaultysId.encrypt;
@@ -65,20 +64,20 @@ class VaultysId {
         }
         const type = cleanId[0];
         if (type === TYPE_FIDO2) {
-            const f2m = Fido2Manager_1.default.fromId(cleanId.slice(1));
+            const f2m = KeyManager_1.Fido2Manager.fromId(cleanId.slice(1));
             return new VaultysId(f2m, certificate, type);
         }
         else if (type === TYPE_FIDO2PRF) {
-            const f2m = Fido2PRFManager_1.default.fromId(cleanId.slice(1));
+            const f2m = KeyManager_1.Fido2PRFManager.fromId(cleanId.slice(1));
             return new VaultysId(f2m, certificate, type);
         }
         else {
             if (cleanId.length > 1952) {
-                const pqm = PQManager_1.default.fromId(cleanId.slice(1));
+                const pqm = KeyManager_1.PQManager.fromId(cleanId.slice(1));
                 return new VaultysId(pqm, certificate, type);
             }
             else {
-                const km = KeyManager_1.default.fromId(cleanId.slice(1));
+                const km = KeyManager_1.Ed25519Manager.fromId(cleanId.slice(1));
                 return new VaultysId(km, certificate, type);
             }
         }
@@ -86,11 +85,11 @@ class VaultysId {
     static async fromEntropy(entropy, type, pqc = false) {
         const cleanedEntropy = entropy;
         if (pqc) {
-            const km = await PQManager_1.default.create_PQ_fromEntropy(cleanedEntropy);
+            const km = await KeyManager_1.PQManager.createFromEntropy(cleanedEntropy);
             return new VaultysId(km, undefined, type);
         }
         else {
-            const km = await KeyManager_1.default.create_Id25519_fromEntropy(cleanedEntropy);
+            const km = await KeyManager_1.Ed25519Manager.createFromEntropy(cleanedEntropy);
             return new VaultysId(km, undefined, type);
         }
     }
@@ -118,11 +117,11 @@ class VaultysId {
         SoftCredentials_1.default.verifyPackedAttestation(attestation.response, true);
         //console.log(SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true));
         if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
-            const f2m = await Fido2PRFManager_1.default.createFromAttestation(attestation);
+            const f2m = await KeyManager_1.Fido2PRFManager.createFromAttestation(attestation);
             return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
         }
         else {
-            const f2m = await Fido2Manager_1.default.createFromAttestation(attestation);
+            const f2m = await KeyManager_1.Fido2Manager.createFromAttestation(attestation);
             return new VaultysId(f2m, undefined, TYPE_FIDO2);
         }
     }
@@ -139,52 +138,52 @@ class VaultysId {
         const secretBuffer = buffer_1.Buffer.from(secret, encoding);
         const type = secretBuffer[0];
         if (type == TYPE_FIDO2) {
-            const f2m = Fido2Manager_1.default.fromSecret(secretBuffer.slice(1));
+            const f2m = KeyManager_1.Fido2Manager.fromSecret(secretBuffer.slice(1));
             return new VaultysId(f2m, undefined, type);
         }
         else if (type == TYPE_FIDO2PRF) {
-            const f2m = Fido2PRFManager_1.default.fromSecret(secretBuffer.slice(1));
+            const f2m = KeyManager_1.Fido2PRFManager.fromSecret(secretBuffer.slice(1));
             return new VaultysId(f2m, undefined, type);
         }
         else {
             //console.log(secretBuffer.length);
-            if (secretBuffer.length === 109) {
-                const pqm = PQManager_1.default.fromSecret(secretBuffer.slice(1));
+            if (secretBuffer.length === 73) {
+                const pqm = KeyManager_1.PQManager.fromSecret(secretBuffer.slice(1));
                 return new VaultysId(pqm, undefined, type);
             }
             else {
-                const km = KeyManager_1.default.fromSecret(secretBuffer.slice(1));
+                const km = KeyManager_1.Ed25519Manager.fromSecret(secretBuffer.slice(1));
                 return new VaultysId(km, undefined, type);
             }
         }
     }
     static async generatePerson(pqc = false) {
         if (pqc) {
-            const km = await PQManager_1.default.generate_PQ();
+            const km = await KeyManager_1.PQManager.generate();
             return new VaultysId(km, undefined, TYPE_PERSON);
         }
         else {
-            const km = await KeyManager_1.default.generate_Id25519();
+            const km = await KeyManager_1.Ed25519Manager.generate();
             return new VaultysId(km, undefined, TYPE_PERSON);
         }
     }
     static async generateOrganization(pqc = false) {
         if (pqc) {
-            const km = await PQManager_1.default.generate_PQ();
+            const km = await KeyManager_1.PQManager.generate();
             return new VaultysId(km, undefined, TYPE_ORGANIZATION);
         }
         else {
-            const km = await KeyManager_1.default.generate_Id25519();
+            const km = await KeyManager_1.Ed25519Manager.generate();
             return new VaultysId(km, undefined, TYPE_ORGANIZATION);
         }
     }
     static async generateMachine(pqc = false) {
         if (pqc) {
-            const km = await PQManager_1.default.generate_PQ();
+            const km = await KeyManager_1.PQManager.generate();
             return new VaultysId(km, undefined, TYPE_MACHINE);
         }
         else {
-            const km = await KeyManager_1.default.generate_Id25519();
+            const km = await KeyManager_1.Ed25519Manager.generate();
             return new VaultysId(km, undefined, TYPE_MACHINE);
         }
     }
@@ -195,8 +194,7 @@ class VaultysId {
         return buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), this.keyManager.getSecret()]).toString(encoding);
     }
     get fingerprint() {
-        const t = buffer_1.Buffer.from([this.type]).toString("hex");
-        const fp = t + (0, crypto_1.hash)("SHA224", this.keyManager.id).toString("hex");
+        const fp = buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), (0, crypto_1.hash)("SHA224", this.keyManager.id)]).toString("hex");
         return fp
             .slice(0, 40)
             .toUpperCase()
@@ -204,8 +202,7 @@ class VaultysId {
             .join(" ");
     }
     get did() {
-        const t = buffer_1.Buffer.from([this.type]).toString("hex");
-        const fp = t + (0, crypto_1.hash)("SHA224", this.keyManager.id).toString("hex");
+        const fp = buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), (0, crypto_1.hash)("SHA224", this.keyManager.id)]).toString("hex");
         return `did:vaultys:${fp.slice(0, 40)}`;
     }
     get didDocument() {
@@ -305,11 +302,32 @@ class VaultysId {
         }
         return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
     }
+    async signChallenge_v0(challenge, oldId) {
+        if (typeof challenge == "string") {
+            challenge = buffer_1.Buffer.from(challenge, "hex");
+        }
+        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([oldId, challenge]));
+        const signature = await this.keyManager.sign(result);
+        if (!signature)
+            throw new Error("Could not sign challenge");
+        else
+            return signature;
+    }
+    verifyChallenge_v0(challenge, signature, userVerification, oldId) {
+        if (typeof challenge == "string") {
+            challenge = buffer_1.Buffer.from(challenge, "hex");
+        }
+        if (typeof signature == "string") {
+            signature = buffer_1.Buffer.from(signature, "hex");
+        }
+        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([oldId, challenge]));
+        return this.keyManager.verify(result, signature, userVerification);
+    }
     async signChallenge(challenge) {
         if (typeof challenge == "string") {
             challenge = buffer_1.Buffer.from(challenge, "hex");
         }
-        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([this.id, challenge]));
+        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([SIGN_INCIPIT, challenge]));
         const signature = await this.keyManager.sign(result);
         if (!signature)
             throw new Error("Could not sign challenge");
@@ -323,7 +341,7 @@ class VaultysId {
         if (typeof signature == "string") {
             signature = buffer_1.Buffer.from(signature, "hex");
         }
-        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([this.id, challenge]));
+        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([SIGN_INCIPIT, challenge]));
         return this.keyManager.verify(result, signature, userVerification);
     }
     async signcrypt(plaintext, recipientIds) {
@@ -335,7 +353,7 @@ class VaultysId {
         }));
     }
     static async encrypt(plaintext, recipientIds) {
-        return KeyManager_1.default.encrypt(plaintext, recipientIds.map((id) => {
+        return CypherManager_1.default.encrypt(plaintext, recipientIds.map((id) => {
             if (typeof id === "string")
                 return buffer_1.Buffer.from(id.slice(2), "hex");
             else

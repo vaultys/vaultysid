@@ -1,13 +1,15 @@
 import assert from "assert";
 import { Buffer } from "..";
 import { FileSignature } from "../src/IdManager";
-import { IdManager, VaultysId, MemoryChannel, MemoryStorage, File, crypto } from "..";
+import { IdManager, Challenger, KeyManager, VaultysId, MemoryChannel, MemoryStorage, File } from "..";
 import "./shims";
 import { hash, randomBytes } from "../src/crypto";
 import { allVaultysIdType, createApp, createContact, createRandomVaultysId } from "./utils";
-import { readFileSync, writeFileSync } from "fs";
-import Challenger from "../src/Challenger";
-import KeyManager from "../src/KeyManager";
+import wot_v0 from "./assets/wot_v0.json";
+import wot_v1 from "./assets/wot_v1.json";
+import { migrateIdManager } from "../src/utils/migration";
+import { Ed25519Manager } from "../src/KeyManager";
+import { deserialize, storagify } from "../src/MemoryStorage";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
@@ -178,14 +180,15 @@ describe("backup WoT", () => {
       assert.equal(contacts[0].did, manager2.vaultysId.did);
       assert.equal(contacts[1].did, manager1.vaultysId.did);
     }
-    // writeFileSync(__dirname + "/assets/wot.json", s2.toString());
+    // require("fs").writeFileSync(__dirname + "/assets/wot.json", s2.toString());
   });
   it("read Backup v0", async () => {
-    const data = readFileSync(__dirname + "/assets/wot_v0.json");
-    const store = MemoryStorage(() => { }).fromString(
-      data.toString("utf-8"),
-      () => { },
-      () => { },
+    // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
+    //console.log(data);
+    const store = storagify(
+      deserialize(JSON.stringify(wot_v0)),
+      () => "",
+      () => "",
     );
     assert.equal(store.listSubstores().length, 3);
     const contacts = ["did:vaultys:0222cf6797fb5d997d9ca9bf650af26e986b8b18", "did:vaultys:04f9f57c532d525407c4f07c46d5868794dfdb44", "did:vaultys:04fbd2781a354e8d3636c7884ca6d87775fadc6a", "did:vaultys:02a3da6fb68019dfd77d8825a254d0e26f13074e", "did:vaultys:031ce55a84f388767ee8861b1f52c1faef7047e7"];
@@ -194,13 +197,24 @@ describe("backup WoT", () => {
     assert.deepEqual(store.substore("registrations").list(), apps);
     assert.deepEqual(store.substore("wot").list(), ["1750418334298", "1750418334312", "1750418334325", "1750418334341", "1750418334353", "1750418334370", "1750418334385", "1750418334401", "1750418334418", "1750418334433"]);
     const idManager = await IdManager.fromStore(store);
-    assert.equal(idManager.vaultysId.did, "did:vaultys:0033a68fb6c21f5760f344180044d84652e3ab51");
-    const keyManager = await KeyManager.create_Id25519_fromEntropy(store.get("entropy"));
-    assert.equal(keyManager.id.toString("hex"), "84a17601a170c4202192cfc18fcfa0756f6b4302d3a9dc8d5b6ac2764a6145f0b69ef1d31e4d4322a178c420eab89312a8a2390370b01504e6a499f7d27b0e849b54013b8b5affd5c430565ca165c420704a71f385b839fa7aded0b198cb4830c736feff434f2772f990739b30d5481c");
+    // migration
+    migrateIdManager(idManager);
+    //await new Promise((r) => setTimeout(r, 300));
+    const newContats = ["did:vaultys:04f9f57c532d525407c4f07c46d5868794dfdb44", "did:vaultys:04fbd2781a354e8d3636c7884ca6d87775fadc6a", "did:vaultys:031ce55a84f388767ee8861b1f52c1faef7047e7", "did:vaultys:028814f629126dba851cc6639b2960d1bbc941e6", "did:vaultys:020fdb7bba1ff3db860ec560acf0518487aa7aea"];
+    const newApps = ["did:vaultys:004790c0e7651084ec26918899b9d0e0b1d5e7a2", "did:vaultys:004ed3d4278aefb5d140b73e15d23e2d6c081529", "did:vaultys:000ae5fcf15c3c5527c96ff2769f0b6b29417941", "did:vaultys:00bc190099ed87fe837bd23f802b96b93c64cf64", "did:vaultys:000bdbee85201b86f4dc89578a03fe81e23148de"];
+    assert.deepEqual(store.substore("contacts").list(), newContats);
+    assert.deepEqual(store.substore("registrations").list(), newApps);
+    assert.deepEqual(store.substore("wot").list(), ["1750418334298", "1750418334312", "1750418334325", "1750418334341", "1750418334353", "1750418334370", "1750418334385", "1750418334401", "1750418334418", "1750418334433"]);
+
+    //assert.equal(idManager.vaultysId.did, "did:vaultys:00f2b4cab97b9bb95f375e17d3f58966da52202f");
+    assert.equal(idManager.vaultysId.did, "did:vaultys:00a6effd86d237d99117c68dcf0b843e3c2f9e4c");
+    const keyManager = await Ed25519Manager.createFromEntropy(store.get("entropy"));
+    assert.equal(keyManager.id.toString("hex"), "83a17601a178c42002593d5fcd0e42b33f57c96a5cdc1daa1ac0b63952085d75ee8e485dc42c20e9a165c4203ca1b470b4505842a9b6446273759a6ae4b3a019bc9b48d563e0398cb2cbec7e");
     const vid = new VaultysId(keyManager, undefined, 0);
     assert.equal(vid.did, idManager.vaultysId.did);
     for (const certid of store.substore("wot").list()) {
       const cert = store.substore("wot").get(certid);
+      //console.log(Challenger.deserializeCertificate(cert));
       assert.equal(await Challenger.verifyCertificate(cert), true);
     }
     for (const appid of store.substore("registrations").list()) {
@@ -209,11 +223,60 @@ describe("backup WoT", () => {
       assert.equal(appid, VaultysId.fromId(app.serverId, undefined, "base64").did);
       assert.equal(await Challenger.verifyCertificate(app!.certificate!), true);
     }
+    assert.equal(idManager.contacts.length, 5);
+    for (const contact of newContats) {
+      const c = idManager.getContact(contact);
+      assert.equal(contact, c!.did);
+      assert.equal(await Challenger.verifyCertificate(c!.certificate!), true);
+    }
+    assert.equal(idManager.apps.length, 5);
+    for (const app of newApps) {
+      const c = idManager.getApp(app);
+      assert.equal(app, c!.did);
+      assert.equal(await Challenger.verifyCertificate(c!.certificate!), true);
+    }
+
+    assert.equal(await idManager.verifyWebOfTrust(), true);
+  });
+
+  it("read Backup v1", async () => {
+    // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
+    //console.log(data);
+    const store = storagify(
+      deserialize(JSON.stringify(wot_v1)),
+      () => "",
+      () => "",
+    );
+    assert.equal(store.listSubstores().length, 3);
+    const contacts = ["did:vaultys:039868dabdfa5b2b93a42837adb56264f503827f", "did:vaultys:044d24c906f5a585e065271793792f93cc2a588e", "did:vaultys:02ba1810d8f453da15469643b305fca91667458d", "did:vaultys:03a9aef25b7aeb6d3fbe244d5628fa2d3c204212", "did:vaultys:01d6a4fbc7ad3c3959e16bd8e6b13d359fa716dd"];
+    const apps = ["did:vaultys:00c63e39b800ba52d10e2186ef273302088c9f6d", "did:vaultys:00be5e25cf45b386da62947c98ab56fa72f93398", "did:vaultys:00d7f1829ba0717753699cd444cbe5b13e2b593f", "did:vaultys:007014a482f672c8b462955a69b38faeaf750789", "did:vaultys:0021bebd098c332957cbe9fd088597b4dd5a07d7"];
+    assert.deepEqual(store.substore("contacts").list(), contacts);
+    assert.deepEqual(store.substore("registrations").list(), apps);
+    assert.deepEqual(store.substore("wot").list(), ["1750441335308", "1750441335318", "1750441335326", "1750441335334", "1750441335341", "1750441335349", "1750441335357", "1750441335364", "1750441335372", "1750441335379"]);
+    const idManager = await IdManager.fromStore(store);
+    assert.equal(idManager.vaultysId.did, "did:vaultys:001feb17d2d85718dee401fc2e776f21142ebaf1");
+    const keyManager = await Ed25519Manager.createFromEntropy(store.get("entropy"));
+    assert.equal(keyManager.id.toString("hex"), "83a17601a178c42038242fb2cd2352a584af35515efbb7757d7997943750541bef4db8f4a57c78eea165c4207f44f58019be61744095611788153748ca7f9f5cba68ce4cc1391b8fc4f3d45b");
+    const vid = new VaultysId(keyManager, undefined, 0);
+    assert.equal(vid.did, idManager.vaultysId.did);
+    for (const certid of store.substore("wot").list()) {
+      const cert = store.substore("wot").get(certid);
+      //console.log(Challenger.deserializeCertificate(cert));
+      assert.equal(await Challenger.verifyCertificate(cert), true);
+    }
+    for (const appid of store.substore("registrations").list()) {
+      const app = store.substore("registrations").get(appid);
+      assert.equal(appid, app.site);
+      assert.equal(appid, VaultysId.fromId(app.serverId, undefined, "base64").did);
+      assert.equal(await Challenger.verifyCertificate(app!.certificate!), true);
+    }
+    assert.equal(idManager.contacts.length, 5);
     for (const contact of contacts) {
       const c = idManager.getContact(contact);
       assert.equal(contact, c!.did);
       assert.equal(await Challenger.verifyCertificate(c!.certificate!), true);
     }
+    assert.equal(idManager.apps.length, 5);
     for (const app of apps) {
       const c = idManager.getApp(app);
       assert.equal(app, c!.did);
@@ -435,7 +498,7 @@ describe("SRG v0 challenge with IdManager", () => {
       // Create a sample file
       const fileContent = randomBytes(1024);
       const originalFile = {
-        arrayBuffer: crypto.Buffer.from(fileContent),
+        arrayBuffer: Buffer.from(fileContent),
         type: "application/octet-stream",
         name: "test.bin",
       };
@@ -847,7 +910,7 @@ describe("SRG v1 challenge with IdManager", () => {
       // Create a sample file
       const fileContent = randomBytes(1024);
       const originalFile = {
-        arrayBuffer: crypto.Buffer.from(fileContent),
+        arrayBuffer: Buffer.from(fileContent),
         type: "application/octet-stream",
         name: "test.bin",
       };

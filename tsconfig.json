@@ -10,7 +10,8 @@
     "allowJs": true,
     "skipLibCheck": true,
     "outDir": "./dist/node",
-    "declaration": true
+    "declaration": true,
+    "resolveJsonModule": true
   },
   "include": ["index.ts", "src"],
   "exclude": ["node_modules", "dist"]

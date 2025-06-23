@@ -72,6 +72,8 @@ export default class VaultysId {
      * @returns Decrypted message as Buffer or null if decryption fails
      */
     dhiesDecrypt(encryptedMessage: Buffer, senderId: Buffer | string): Promise<Buffer | null>;
+    signChallenge_v0(challenge: Buffer | string, oldId: Buffer): Promise<Buffer>;
+    verifyChallenge_v0(challenge: Buffer | string, signature: Buffer | string, userVerification: boolean, oldId: Buffer): boolean;
     signChallenge(challenge: Buffer | string): Promise<Buffer>;
     verifyChallenge(challenge: Buffer | string, signature: Buffer | string, userVerification: boolean): boolean;
     signcrypt(plaintext: string, recipientIds: (Buffer | string)[]): Promise<string>;

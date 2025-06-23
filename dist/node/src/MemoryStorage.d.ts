@@ -2,6 +2,7 @@ export declare const serialize: (data: any) => string;
 export declare const deserialize: (string: string) => any;
 export declare const MemoryStorage: (save: () => void) => Store;
 export declare const LocalStorage: (key?: string) => Store;
+export declare const storagify: (object: Record<string, any>, save: () => void, destroy: () => void) => Store;
 export type Store = {
     substore(key: string): Store;
     renameSubstore?(oldname: string, newname: string): void;

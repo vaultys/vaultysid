@@ -2,16 +2,16 @@ import assert from "assert";
 import "./shims";
 import VaultysId from "../src/VaultysId";
 import { randomBytes } from "../src/crypto";
-import PQManager from "../src/PQManager";
 import { Buffer } from "buffer/";
+import { PQManager } from "../src/KeyManager";
 
 describe("PQC", () => {
   it("serder a VaultytsID secret - software", async () => {
     const vaultysId = await VaultysId.generatePerson(true);
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.id.length, 2034);
-    assert.equal(vaultysId.id.toString("hex").length, 4068);
-    assert.equal(vaultysId.id.toString("base64").length, 2712);
+    assert.equal(vaultysId.id.length, 1998);
+    assert.equal(vaultysId.id.toString("hex").length, 3996);
+    assert.equal(vaultysId.id.toString("base64").length, 2664);
     assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
     const id2 = VaultysId.fromSecret(vaultysId.getSecret());
 
@@ -24,7 +24,7 @@ describe("PQC", () => {
     const vaultysId = await VaultysId.generateOrganization(true);
     if (!vaultysId) assert.fail("VaultysId creation failed");
     assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
-    assert.equal(vaultysId.id.length, 2034);
+    assert.equal(vaultysId.id.length, 1998);
     const id2 = VaultysId.fromId(vaultysId.id);
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
@@ -41,7 +41,7 @@ describe("PQC", () => {
   });
 
   it("sign and verify a message", async () => {
-    const signer = await PQManager.generate_PQ();
+    const signer = await PQManager.generate();
     const id = signer.id;
     const verifier = PQManager.fromId(id);
     const message = Buffer.from("this is a message to be verified man", "utf-8");

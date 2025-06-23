@@ -3,18 +3,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.instanciateApp = exports.instanciateContact = void 0;
 const Challenger_1 = __importDefault(require("./Challenger"));
-const Fido2Manager_1 = __importDefault(require("./Fido2Manager"));
-const KeyManager_1 = __importDefault(require("./KeyManager"));
+const KeyManager_1 = require("./KeyManager");
 const MemoryChannel_1 = require("./MemoryChannel");
+const MemoryStorage_1 = require("./MemoryStorage");
 const SoftCredentials_1 = __importDefault(require("./platform/SoftCredentials"));
 const VaultysId_1 = __importDefault(require("./VaultysId"));
 const crypto_1 = require("./crypto");
-const Fido2PRFManager_1 = __importDefault(require("./Fido2PRFManager"));
 const msgpack_1 = require("@msgpack/msgpack");
 const buffer_1 = require("buffer/");
 const tweetnacl_1 = __importDefault(require("tweetnacl"));
-const PQManager_1 = __importDefault(require("./PQManager"));
+const platform_1 = require("./platform");
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = buffer_1.Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
 const PRF_NONCE_LENGTH = 32;
@@ -32,24 +32,26 @@ const getSignatureType = (challenge) => {
 const instanciateContact = (c) => {
     let vaultysId;
     if (c.type === 3) {
-        vaultysId = new VaultysId_1.default(Fido2Manager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+        vaultysId = new VaultysId_1.default(KeyManager_1.Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
     }
     else if (c.type === 4) {
-        vaultysId = new VaultysId_1.default(Fido2PRFManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+        vaultysId = new VaultysId_1.default(KeyManager_1.Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
     }
     else {
         if (c.keyManager.signer.publicKey.length === 1952) {
-            vaultysId = new VaultysId_1.default(PQManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+            vaultysId = new VaultysId_1.default(KeyManager_1.PQManager.instantiate(c.keyManager), c.certificate, c.type);
         }
         else {
-            vaultysId = new VaultysId_1.default(KeyManager_1.default.instantiate(c.keyManager), c.certificate, c.type);
+            vaultysId = new VaultysId_1.default(KeyManager_1.Ed25519Manager.instantiate(c.keyManager), c.certificate, c.type);
         }
     }
     return vaultysId;
 };
+exports.instanciateContact = instanciateContact;
 const instanciateApp = (a) => {
     return VaultysId_1.default.fromId(buffer_1.Buffer.from(a.serverId, "base64"), a.certificate);
 };
+exports.instanciateApp = instanciateApp;
 class IdManager {
     constructor(vaultysId, store) {
         this.protocol_version = 0;
@@ -68,6 +70,83 @@ class IdManager {
     }
     setProtocolVersion(version) {
         this.protocol_version = version;
+    }
+    /**
+     * Exports the current profile as a backup
+     * @param encrypted Whether to encrypt the backup
+     * @param passphrase Optional passphrase for encryption (generated if not provided)
+     * @returns Object containing backup data and optional passphrase
+     */
+    async exportBackup(passphrase) {
+        let dataToExport;
+        if (!passphrase) {
+            // Plaintext export
+            const exportedData = {
+                version: 1,
+                data: buffer_1.Buffer.from(this.store.toString()),
+            };
+            dataToExport = (0, msgpack_1.encode)(exportedData);
+        }
+        else {
+            const backup = await platform_1.platformCrypto.pbkdf2.encrypt(passphrase, buffer_1.Buffer.from(this.store.toString(), "utf8"));
+            if (!backup)
+                throw new Error("Failed to encrypt backup");
+            dataToExport = (0, msgpack_1.encode)(backup);
+        }
+        // Generate filename
+        const date = new Date();
+        const year = date.getFullYear().toString().slice(-2);
+        const month = ("0" + (date.getMonth() + 1)).slice(-2);
+        const day = ("0" + date.getDate()).slice(-2);
+        const filename = `vaultys.backup.${year}${month}${day}.backup`;
+        return {
+            data: dataToExport,
+            filename,
+        };
+    }
+    /**
+     * Imports a backup file
+     * @param backupData The backup file data as Uint8Array
+     * @param passphrase Optional passphrase for decryption (only needed for encrypted backups)
+     * @returns Promise resolving to import result or null if import failed
+     */
+    async importBackup(backupData, passphrase) {
+        try {
+            // Decode the backup data
+            const backup = (0, msgpack_1.decode)(backupData);
+            let importedData;
+            if (backup.encryptInfo) {
+                // This is an encrypted backup
+                if (!passphrase) {
+                    throw new Error("Passphrase required for encrypted backup");
+                }
+                if (!backup.data) {
+                    throw new Error("Invalid backup format");
+                }
+                importedData = await platform_1.platformCrypto.pbkdf2.decrypt(backup, passphrase);
+                if (!importedData) {
+                    throw new Error("Failed to decrypt backup. Incorrect passphrase?");
+                }
+            }
+            else {
+                importedData = backup.data;
+            }
+            // Import the data into a new profile
+            const store = (0, MemoryStorage_1.MemoryStorage)(() => { }).fromString(buffer_1.Buffer.from(importedData).toString(), () => { });
+            const idManager = await IdManager.fromStore(store);
+            // Determine if PIN verification is required
+            const requiresPin = !!idManager.store.get("metadata").pin;
+            const requiresHardware = idManager.vaultysId.isHardware();
+            return {
+                idManager,
+                requiresPin,
+                requiresHardware,
+            };
+        }
+        catch (error) {
+            console.error("Import error:", error);
+            return null;
+        }
     }
     static async fromStore(store) {
         const entropy = store.get("entropy");
@@ -124,6 +203,24 @@ class IdManager {
         });
         this.store.save();
     }
+    async verifyWebOfTrust() {
+        let verified = true;
+        for (const certid of this.store.substore("wot").list()) {
+            const cert = this.store.substore("wot").get(certid);
+            verified = verified && (await Challenger_1.default.verifyCertificate(cert));
+        }
+        for (const appid of this.store.substore("registrations").list()) {
+            const app = this.store.substore("registrations").get(appid);
+            verified = verified && appid === VaultysId_1.default.fromId(app.serverId, undefined, "base64").did;
+        }
+        for (const contact of this.contacts) {
+            verified = verified && (await Challenger_1.default.verifyCertificate(contact.certificate));
+        }
+        for (const app of this.apps) {
+            verified = verified && (await Challenger_1.default.verifyCertificate(app.certificate));
+        }
+        return verified;
+    }
     isHardware() {
         return this.vaultysId.isHardware();
     }
@@ -160,7 +257,7 @@ class IdManager {
         return s
             .list()
             .map((did) => s.get(did))
-            .map(instanciateContact)
+            .map(exports.instanciateContact)
             .map((contact) => contact.toVersion(this.vaultysId.version));
     }
     get apps() {
@@ -168,20 +265,20 @@ class IdManager {
         return s
             .list()
             .map((did) => s.get(did))
-            .map(instanciateApp)
+            .map(exports.instanciateApp)
             .map((app) => app.toVersion(this.vaultysId.version));
     }
     getContact(did) {
         const c = this.store.substore("contacts").get(did);
         if (!c)
             return null;
-        return instanciateContact(c).toVersion(this.vaultysId.version);
+        return (0, exports.instanciateContact)(c).toVersion(this.vaultysId.version);
     }
     getApp(did) {
         const app = this.store.substore("registrations").get(did);
         if (!app)
             return null;
-        return instanciateApp(app).toVersion(this.vaultysId.version);
+        return (0, exports.instanciateApp)(app).toVersion(this.vaultysId.version);
     }
     setContactMetadata(did, name, value) {
         const c = this.store.substore("contacts").get(did);
@@ -360,7 +457,7 @@ class IdManager {
         const s = this.store.substore("contacts");
         for (const did of s.list()) {
             const data = s.get(did);
-            const contact = instanciateContact(data);
+            const contact = (0, exports.instanciateContact)(data);
             const newContact = contact.toVersion(version);
             if (newContact.did !== did) {
                 s.set(newContact.did, { ...contact, ...newContact, metadata: data.metadata, oldDid: did });
@@ -371,7 +468,7 @@ class IdManager {
         const apps = this.store.substore("registrations");
         for (const did of apps.list()) {
             const data = apps.get(did);
-            const site = instanciateApp(data);
+            const site = (0, exports.instanciateApp)(data);
             if (site) {
                 const newSite = site.toVersion(version);
                 if (newSite.did !== did) {

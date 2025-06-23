@@ -1,12 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.LocalStorage = exports.MemoryStorage = exports.deserialize = exports.serialize = void 0;
+exports.storagify = exports.LocalStorage = exports.MemoryStorage = exports.deserialize = exports.serialize = void 0;
 const buffer_1 = require("buffer/");
 const replacer = (key, value) => {
     //if(key=="1686045792046") console.log(value);
     if (!value)
         return value;
     if (key === "certificate")
+        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
+    if (key === "publicKey")
+        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
+    if (key === "secretKey")
         return "__C__" + buffer_1.Buffer.from(value).toString("base64");
     if (value.type === "Buffer") {
         return "_bx_" + buffer_1.Buffer.from(value.data).toString("base64");
@@ -17,7 +21,7 @@ const replacer = (key, value) => {
     return value;
 };
 const reviver = (key, value) => {
-    if (value && key === "certificate") {
+    if (value && (key === "certificate" || key === "publicKey" || key === "secretKey")) {
         if (typeof value === "string" && value.startsWith("__C__")) {
             return buffer_1.Buffer.from(value.slice(5), "base64");
         }
@@ -37,7 +41,7 @@ const MemoryStorage = (save) => {
     let data = {};
     if (!save)
         save = () => (0, exports.serialize)(data);
-    return storagify(data, save, () => "");
+    return (0, exports.storagify)(data, save, () => "");
 };
 exports.MemoryStorage = MemoryStorage;
 const LocalStorage = (key = "vaultysStorage") => {
@@ -48,19 +52,20 @@ const LocalStorage = (key = "vaultysStorage") => {
         localStorage[key] = "{}";
     else
         data = (0, exports.deserialize)(localStorage[key]);
-    return storagify(data, () => {
+    return (0, exports.storagify)(data, () => {
         //console.log("save !!!!!", key, _id);
         localStorage.setItem(key, (0, exports.serialize)(data));
     }, () => localStorage.removeItem(key));
 };
 exports.LocalStorage = LocalStorage;
 const storagify = (object, save, destroy) => {
+    const result = { _raw: object };
     return {
+        ...result,
         destroy,
         save,
-        toString: () => (0, exports.serialize)(object),
-        fromString: (string, s, d) => storagify((0, exports.deserialize)(string), s, d),
-        _raw: object,
+        toString: () => (0, exports.serialize)(result._raw),
+        fromString: (string, s, d) => (0, exports.storagify)((0, exports.deserialize)(string), s, d),
         set: (key, value) => (object[key] = value),
         delete: (key) => delete object[key],
         get: (key) => object[key],
@@ -78,7 +83,8 @@ const storagify = (object, save, destroy) => {
         substore: (key) => {
             if (!object["!" + key])
                 object["!" + key] = {};
-            return storagify(object["!" + key], save, destroy);
+            return (0, exports.storagify)(object["!" + key], save, destroy);
         },
     };
 };
+exports.storagify = storagify;

@@ -141,7 +141,7 @@ const deserialize = (challenge: Buffer): ChallengeType => {
       result.state = STEP1;
       const id2 = VaultysId.fromId(result.pk2);
       const challenge = serializeUnsigned(result);
-      if (!id2.verifyChallenge(challenge, result.sign2, true)) {
+      if (!id2.verifyChallenge(challenge, result.sign2, true) && !id2.verifyChallenge_v0(challenge, result.sign2, true, result.pk2)) {
         result.state = ERROR;
         result.error = "[STEP1] failed the verification of pk2";
       }
@@ -156,11 +156,11 @@ const deserialize = (challenge: Buffer): ChallengeType => {
         result.error = "[COMPLETE] pk1 and pk2 are using different serialization version";
       }
       const challenge = serializeUnsigned(result);
-      if (!id2.verifyChallenge(challenge, result.sign2, true)) {
+      if (!id2.verifyChallenge(challenge, result.sign2, true) && !id2.verifyChallenge_v0(challenge, result.sign2, true, result.pk2)) {
         result.state = ERROR;
         result.error = "[COMPLETE] failed the verification of pk2";
       }
-      if (!id1.verifyChallenge(challenge, result.sign1, true)) {
+      if (!id1.verifyChallenge(challenge, result.sign1, true) && !id1.verifyChallenge_v0(challenge, result.sign1, true, result.pk1)) {
         result.state = ERROR;
         result.error = "[COMPLETE] failed the verification of pk1";
       }

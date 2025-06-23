@@ -2,7 +2,7 @@ import assert from "assert";
 import "./shims";
 import VaultysId from "../src/VaultysId";
 import { randomBytes } from "../src/crypto";
-import Fido2Manager from "../src/Fido2Manager";
+import { Fido2Manager } from "../src/KeyManager";
 
 describe("PQC", () => {
   it("serder a VaultytsID secret - webauthn", async () => {

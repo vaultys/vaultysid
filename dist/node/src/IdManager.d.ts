@@ -24,14 +24,39 @@ export type File = {
     type: string;
     name?: string;
 };
+export declare const instanciateContact: (c: StoredContact) => VaultysId;
+export declare const instanciateApp: (a: StoredApp) => VaultysId;
 export default class IdManager {
     vaultysId: VaultysId;
     store: Store;
     protocol_version: 0 | 1;
     constructor(vaultysId: VaultysId, store: Store);
     setProtocolVersion(version: 0 | 1): void;
+    /**
+     * Exports the current profile as a backup
+     * @param encrypted Whether to encrypt the backup
+     * @param passphrase Optional passphrase for encryption (generated if not provided)
+     * @returns Object containing backup data and optional passphrase
+     */
+    exportBackup(passphrase?: string): Promise<{
+        data: Uint8Array;
+        passphrase?: string;
+        filename: string;
+    }>;
+    /**
+     * Imports a backup file
+     * @param backupData The backup file data as Uint8Array
+     * @param passphrase Optional passphrase for decryption (only needed for encrypted backups)
+     * @returns Promise resolving to import result or null if import failed
+     */
+    importBackup(backupData: Uint8Array, passphrase?: string): Promise<{
+        idManager: IdManager;
+        requiresPin: boolean;
+        requiresHardware: boolean;
+    } | null>;
     static fromStore(store: Store): Promise<IdManager>;
     merge(otherStore: Store, master?: boolean): void;
+    verifyWebOfTrust(): Promise<boolean>;
     isHardware(): boolean;
     signIn(): Promise<boolean>;
     get contacts(): VaultysId[];

@@ -1,17 +1,16 @@
 import { Readable, Writable } from "stream";
 import Challenger from "./Challenger";
-import Fido2Manager from "./Fido2Manager";
-import KeyManager from "./KeyManager";
+import KeyManager, { Ed25519Manager, Fido2Manager, Fido2PRFManager, PQManager } from "./KeyManager";
 import { Channel, StreamChannel } from "./MemoryChannel";
-import { Store } from "./MemoryStorage";
+import { MemoryStorage, Store } from "./MemoryStorage";
 import SoftCredentials from "./platform/SoftCredentials";
 import VaultysId from "./VaultysId";
 import { hash, randomBytes, secureErase } from "./crypto";
-import Fido2PRFManager from "./Fido2PRFManager";
 import { decode, encode } from "@msgpack/msgpack";
 import { Buffer } from "buffer/";
 import nacl from "tweetnacl";
-import PQManager from "./PQManager";
+import { VaultysBackup } from "./platform/abstract";
+import { platformCrypto } from "./platform";
 
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
@@ -60,7 +59,7 @@ export const instanciateContact = (c: StoredContact) => {
     if (c.keyManager.signer.publicKey.length === 1952) {
       vaultysId = new VaultysId(PQManager.instantiate(c.keyManager), c.certificate, c.type);
     } else {
-      vaultysId = new VaultysId(KeyManager.instantiate(c.keyManager), c.certificate, c.type);
+      vaultysId = new VaultysId(Ed25519Manager.instantiate(c.keyManager), c.certificate, c.type);
     }
   }
   return vaultysId;
@@ -88,6 +87,68 @@ export default class IdManager {
 
   setProtocolVersion(version: 0 | 1) {
     this.protocol_version = version;
+  }
+
+  /**
+   * Exports the current profile as a backup
+   * @param encrypted Whether to encrypt the backup
+   * @param passphrase Optional passphrase for encryption (generated if not provided)
+   * @returns Object containing backup data and optional passphrase
+   */
+  async exportBackup(passphrase?: string): Promise<Uint8Array> {
+    if (!passphrase) {
+      // Plaintext export
+      const exportedData: VaultysBackup = {
+        version: 1,
+        data: Buffer.from(this.store.toString()),
+      };
+      return encode(exportedData);
+    } else {
+      const backup = await platformCrypto.pbkdf2.encrypt(passphrase, Buffer.from(this.store.toString(), "utf8"));
+      if (!backup) throw new Error("Failed to encrypt backup");
+
+      return encode(backup);
+    }
+  }
+
+  /**
+   * Imports a backup file
+   * @param backupData The backup file data as Uint8Array
+   * @param passphrase Optional passphrase for decryption (only needed for encrypted backups)
+   * @returns Promise resolving to import result or null if import failed
+   */
+  static async importBackup(backupData: Uint8Array, passphrase?: string): Promise<IdManager | null> {
+    try {
+      // Decode the backup data
+      const backup = decode(backupData) as VaultysBackup;
+      let importedData: Buffer | null;
+
+      if (backup.encryptInfo) {
+        // This is an encrypted backup
+        if (!passphrase) {
+          throw new Error("Passphrase required for encrypted backup");
+        }
+
+        if (!backup.data) {
+          throw new Error("Invalid backup format");
+        }
+
+        importedData = await platformCrypto.pbkdf2.decrypt(backup, passphrase);
+
+        if (!importedData) {
+          throw new Error("Failed to decrypt backup. Incorrect passphrase?");
+        }
+      } else {
+        importedData = backup.data;
+      }
+
+      // Import the data into a new profile
+      const store = MemoryStorage(() => {}).fromString(Buffer.from(importedData).toString(), () => {});
+      return await IdManager.fromStore(store);
+    } catch (error) {
+      console.error("Import error:", error);
+      return null;
+    }
   }
 
   static async fromStore(store: Store) {
