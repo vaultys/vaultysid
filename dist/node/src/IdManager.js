@@ -78,31 +78,20 @@ class IdManager {
      * @returns Object containing backup data and optional passphrase
      */
     async exportBackup(passphrase) {
-        let dataToExport;
         if (!passphrase) {
             // Plaintext export
             const exportedData = {
                 version: 1,
                 data: buffer_1.Buffer.from(this.store.toString()),
             };
-            dataToExport = (0, msgpack_1.encode)(exportedData);
+            return (0, msgpack_1.encode)(exportedData);
         }
         else {
             const backup = await platform_1.platformCrypto.pbkdf2.encrypt(passphrase, buffer_1.Buffer.from(this.store.toString(), "utf8"));
             if (!backup)
                 throw new Error("Failed to encrypt backup");
-            dataToExport = (0, msgpack_1.encode)(backup);
+            return (0, msgpack_1.encode)(backup);
         }
-        // Generate filename
-        const date = new Date();
-        const year = date.getFullYear().toString().slice(-2);
-        const month = ("0" + (date.getMonth() + 1)).slice(-2);
-        const day = ("0" + date.getDate()).slice(-2);
-        const filename = `vaultys.backup.${year}${month}${day}.backup`;
-        return {
-            data: dataToExport,
-            filename,
-        };
     }
     /**
      * Imports a backup file
@@ -110,7 +99,7 @@ class IdManager {
      * @param passphrase Optional passphrase for decryption (only needed for encrypted backups)
      * @returns Promise resolving to import result or null if import failed
      */
-    async importBackup(backupData, passphrase) {
+    static async importBackup(backupData, passphrase) {
         try {
             // Decode the backup data
             const backup = (0, msgpack_1.decode)(backupData);
@@ -133,15 +122,7 @@ class IdManager {
             }
             // Import the data into a new profile
             const store = (0, MemoryStorage_1.MemoryStorage)(() => { }).fromString(buffer_1.Buffer.from(importedData).toString(), () => { });
-            const idManager = await IdManager.fromStore(store);
-            // Determine if PIN verification is required
-            const requiresPin = !!idManager.store.get("metadata").pin;
-            const requiresHardware = idManager.vaultysId.isHardware();
-            return {
-                idManager,
-                requiresPin,
-                requiresHardware,
-            };
+            return await IdManager.fromStore(store);
         }
         catch (error) {
             console.error("Import error:", error);

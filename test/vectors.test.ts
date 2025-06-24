@@ -1,9 +1,9 @@
-import { assert } from "chai";
+import assert from "assert";
 import VaultysId from "../src/VaultysId";
 import { migrateVaultysId } from "../src/utils/migration";
 import { Buffer } from "buffer/";
 
-const serializer = (object: any) => {
+const serializer = (object: object) => {
   return JSON.stringify(
     object,
     (key, value) => {
@@ -20,7 +20,7 @@ const serializer = (object: any) => {
   );
 };
 
-const IDs = {
+const IDs: Record<string, object> = {
   "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=": {
     type: 1,
     keyManager: {

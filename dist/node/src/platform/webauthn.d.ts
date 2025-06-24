@@ -4,12 +4,14 @@ export interface WebAuthnProvider {
     isAvailable(): boolean;
 }
 export declare class BrowserWebAuthn implements WebAuthnProvider {
+    private origin;
+    constructor(origin?: string);
     isAvailable(): boolean;
     create(options: PublicKeyCredentialCreationOptions): Promise<PublicKeyCredential>;
     get(options: PublicKeyCredentialRequestOptions): Promise<PublicKeyCredential>;
 }
 export declare class NodeWebAuthn implements WebAuthnProvider {
-    private origin;
+    #private;
     constructor(origin?: string);
     isAvailable(): boolean;
     create(options: PublicKeyCredentialCreationOptions): Promise<PublicKeyCredential>;

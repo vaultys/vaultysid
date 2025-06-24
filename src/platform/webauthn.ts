@@ -8,6 +8,12 @@ export interface WebAuthnProvider {
 
 // Browser implementation
 export class BrowserWebAuthn implements WebAuthnProvider {
+  private origin: string;
+
+  constructor(origin = "test") {
+    this.origin = origin;
+  }
+
   isAvailable(): boolean {
     return typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
   }
@@ -29,10 +35,10 @@ export class BrowserWebAuthn implements WebAuthnProvider {
 
 // Node.js implementation using SoftCredentials
 export class NodeWebAuthn implements WebAuthnProvider {
-  private origin: string;
+  #origin: string;
 
   constructor(origin = "test") {
-    this.origin = origin;
+    this.#origin = origin;
   }
 
   isAvailable(): boolean {
@@ -44,7 +50,7 @@ export class NodeWebAuthn implements WebAuthnProvider {
       {
         publicKey: options,
       },
-      this.origin,
+      this.#origin,
     );
   }
 
@@ -53,7 +59,7 @@ export class NodeWebAuthn implements WebAuthnProvider {
       {
         publicKey: options,
       },
-      this.origin,
+      this.#origin,
     );
   }
 }
