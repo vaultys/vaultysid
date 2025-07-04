@@ -12,7 +12,7 @@ export default class VaultysId {
     static fromId(id: StringifiedBuffer | Buffer | Uint8Array | string, certificate?: Buffer, encoding?: BufferEncoding): VaultysId;
     static createPublicKeyCredentialOptionsPQC: () => PublicKeyCredentialCreationOptions;
     static createPublicKeyCredentialCreationOptions: (passkey: boolean) => PublicKeyCredentialCreationOptions;
-    static fromEntropy(entropy: Buffer, type: number, pqc?: boolean): Promise<VaultysId>;
+    static fromEntropy(entropy: Buffer, type: number, alg?: "dilithium_ed25519" | "dilithium" | "ed25519"): Promise<VaultysId>;
     static createWebauthn(passkey?: boolean, onPRFEnabled?: () => Promise<boolean>): Promise<VaultysId | null>;
     static createPQC(): Promise<VaultysId | null>;
     static fido2FromAttestation(attestation: PublicKeyCredential, onPRFEnabled?: () => Promise<boolean>): Promise<VaultysId>;
@@ -20,9 +20,9 @@ export default class VaultysId {
     static organizationFromEntropy(entropy: Buffer): Promise<VaultysId>;
     static personFromEntropy(entropy: Buffer): Promise<VaultysId>;
     static fromSecret(secret: string, encoding?: BufferEncoding): VaultysId;
-    static generatePerson(pqc?: boolean): Promise<VaultysId>;
-    static generateOrganization(pqc?: boolean): Promise<VaultysId>;
-    static generateMachine(pqc?: boolean): Promise<VaultysId>;
+    static generatePerson(alg?: "dilithium_ed25519" | "dilithium" | "ed25519"): Promise<VaultysId>;
+    static generateOrganization(alg?: "dilithium_ed25519" | "dilithium" | "ed25519"): Promise<VaultysId>;
+    static generateMachine(alg?: "dilithium_ed25519" | "dilithium" | "ed25519"): Promise<VaultysId>;
     get relationshipCertificate(): Buffer | undefined;
     getSecret(encoding?: BufferEncoding): string;
     get fingerprint(): string;

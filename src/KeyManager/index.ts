@@ -1,5 +1,6 @@
 import { Buffer } from "buffer/";
-import PQManager from "./PQManager";
+import DilithiumManager from "./DilithiumManager";
+import HybridManager from "./HybridManager";
 import Fido2Manager from "./Fido2Manager";
 import Fido2PRFManager from "./Fido2PRFManager";
 import Ed25519Manager from "./Ed25519Manager";
@@ -19,4 +20,4 @@ export type HISCP = {
 
 export default KeyManager;
 
-export { PQManager, Fido2Manager, Fido2PRFManager, Ed25519Manager };
+export { HybridManager, DilithiumManager, Fido2Manager, Fido2PRFManager, Ed25519Manager };

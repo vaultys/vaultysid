@@ -2,24 +2,9 @@ import { dearmorAndDecrypt, encryptAndArmor } from "@vaultys/saltpack";
 import { hash, hmac, randomBytes, secureErase } from "../crypto";
 import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
-import { ed25519 } from "@noble/curves/ed25519";
 import { KeyPair } from ".";
 import KeyManager from "./AbstractKeyManager";
 import { decode } from "@msgpack/msgpack";
-import VaultysId from "../VaultysId";
-
-ed25519.CURVE = { ...ed25519.CURVE };
-// @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
-ed25519.CURVE.adjustScalarBytes = (bytes: Uint8Array): Uint8Array => {
-  // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
-  // set the three least significant bits of the first byte
-  bytes[0] &= 248; // 0b1111_1000
-  // and the most significant bit of the last to zero,
-  bytes[31] &= 63; // 0b0001_1111
-  // set the second most significant bit of the last byte to 1
-  bytes[31] |= 64; // 0b0100_0000
-  return bytes;
-};
 
 const sha256 = (data: Buffer) => hash("sha256", data);
 

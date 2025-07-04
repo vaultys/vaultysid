@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/id",
-  "version": "3.0.0-beta2",
+  "version": "3.0.0-beta3",
   "exports": {
     ".": {
       "browser": "./dist/browser/vaultys.min.js",
@@ -20,8 +20,7 @@
     "test": "mocha ./test/*.test.[jt]s",
     "test:pqc": "mocha ./test/pqc.test.ts ",
     "test:server": "http-server . -p 8080",
-    "test:web": "webpack --config webpack.test.config.js && mocha --require tsx test/runner.ts",
-    "testone": "mocha",
+    "test:web": "pnpm build:browser && webpack --config webpack.test.config.js && mocha --require tsx test/runner.ts",
     "visualize": "webpack --config webpack.config.js --json > stats.json"
   },
   "keywords": [],

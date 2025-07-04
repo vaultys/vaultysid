@@ -1,5 +1,5 @@
 import { hash, randomBytes } from "./crypto";
-import KeyManager, { Ed25519Manager, Fido2Manager, Fido2PRFManager, PQManager } from "./KeyManager";
+import KeyManager, { Ed25519Manager, Fido2Manager, Fido2PRFManager, DilithiumManager, HybridManager } from "./KeyManager";
 import SoftCredentials from "./platform/SoftCredentials";
 import { getWebAuthnProvider } from "./platform/webauthn";
 import { Buffer } from "buffer/";
@@ -79,8 +79,12 @@ export default class VaultysId {
       const f2m = Fido2PRFManager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
     } else {
-      if (cleanId.length > 1952) {
-        const pqm = PQManager.fromId(cleanId.slice(1));
+      // console.log(cleanId.length);
+      if (cleanId.length === 1998) {
+        const pqm = DilithiumManager.fromId(cleanId.slice(1));
+        return new VaultysId(pqm, certificate, type);
+      } else if (cleanId.length === 2030) {
+        const pqm = HybridManager.fromId(cleanId.slice(1));
         return new VaultysId(pqm, certificate, type);
       } else {
         const km = Ed25519Manager.fromId(cleanId.slice(1));
@@ -196,10 +200,13 @@ export default class VaultysId {
     return options;
   };
 
-  static async fromEntropy(entropy: Buffer, type: number, pqc = false) {
+  static async fromEntropy(entropy: Buffer, type: number, alg: "dilithium_ed25519" | "dilithium" | "ed25519" = "ed25519") {
     const cleanedEntropy = entropy as Buffer;
-    if (pqc) {
-      const km = await PQManager.createFromEntropy(cleanedEntropy);
+    if (alg === "dilithium") {
+      const km = await DilithiumManager.createFromEntropy(cleanedEntropy);
+      return new VaultysId(km, undefined, type);
+    } else if (alg === "dilithium_ed25519") {
+      const km = await HybridManager.createFromEntropy(cleanedEntropy);
       return new VaultysId(km, undefined, type);
     } else {
       const km = await Ed25519Manager.createFromEntropy(cleanedEntropy);
@@ -259,9 +266,12 @@ export default class VaultysId {
       const f2m = Fido2PRFManager.fromSecret(secretBuffer.slice(1));
       return new VaultysId(f2m, undefined, type);
     } else {
-      //console.log(secretBuffer.length);
+      // console.log(secretBuffer.length);
       if (secretBuffer.length === 73) {
-        const pqm = PQManager.fromSecret(secretBuffer.slice(1));
+        const pqm = DilithiumManager.fromSecret(secretBuffer.slice(1));
+        return new VaultysId(pqm, undefined, type);
+      } else if (secretBuffer.length === 84) {
+        const pqm = HybridManager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(pqm, undefined, type);
       } else {
         const km = Ed25519Manager.fromSecret(secretBuffer.slice(1));
@@ -270,9 +280,12 @@ export default class VaultysId {
     }
   }
 
-  static async generatePerson(pqc = false) {
-    if (pqc) {
-      const km = await PQManager.generate();
+  static async generatePerson(alg: "dilithium_ed25519" | "dilithium" | "ed25519" = "ed25519") {
+    if (alg === "dilithium") {
+      const km = await DilithiumManager.generate();
+      return new VaultysId(km, undefined, TYPE_PERSON);
+    } else if (alg === "dilithium_ed25519") {
+      const km = await HybridManager.generate();
       return new VaultysId(km, undefined, TYPE_PERSON);
     } else {
       const km = await Ed25519Manager.generate();
@@ -280,9 +293,12 @@ export default class VaultysId {
     }
   }
 
-  static async generateOrganization(pqc = false) {
-    if (pqc) {
-      const km = await PQManager.generate();
+  static async generateOrganization(alg: "dilithium_ed25519" | "dilithium" | "ed25519" = "ed25519") {
+    if (alg === "dilithium") {
+      const km = await DilithiumManager.generate();
+      return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+    } else if (alg === "dilithium_ed25519") {
+      const km = await HybridManager.generate();
       return new VaultysId(km, undefined, TYPE_ORGANIZATION);
     } else {
       const km = await Ed25519Manager.generate();
@@ -290,9 +306,12 @@ export default class VaultysId {
     }
   }
 
-  static async generateMachine(pqc = false) {
-    if (pqc) {
-      const km = await PQManager.generate();
+  static async generateMachine(alg: "dilithium_ed25519" | "dilithium" | "ed25519" = "ed25519") {
+    if (alg === "dilithium") {
+      const km = await DilithiumManager.generate();
+      return new VaultysId(km, undefined, TYPE_MACHINE);
+    } else if (alg === "dilithium_ed25519") {
+      const km = await HybridManager.generate();
       return new VaultysId(km, undefined, TYPE_MACHINE);
     } else {
       const km = await Ed25519Manager.generate();

@@ -7,9 +7,13 @@ import { hash, randomBytes } from "../src/crypto";
 import { allVaultysIdType, createApp, createContact, createRandomVaultysId } from "./utils";
 import wot_v0 from "./assets/wot_v0.json";
 import wot_v1 from "./assets/wot_v1.json";
+import clear_backup from "./assets/backup.bin.json";
+import encrypted_backup from "./assets/backup.encrypted.bin.json";
 import { migrateIdManager } from "../src/utils/migration";
 import { Ed25519Manager } from "../src/KeyManager";
-import { deserialize, storagify } from "../src/MemoryStorage";
+import { deserialize, MessagePackStorage, storagify } from "../src/MemoryStorage";
+
+const passphrase = "deal develop devote mail agree try tide expand indicate poverty chuckle target";
 
 describe("IdManager", () => {
   it("serder a vaultys secret", async () => {
@@ -129,8 +133,8 @@ describe("IdManager", () => {
   // });
 });
 
-describe("backup WoT", () => {
-  it("write Backup", async () => {
+describe("WoT", () => {
+  it("write Web of Trust", async () => {
     const id = await VaultysId.generateMachine();
     const s2 = MemoryStorage(() => "");
     const manager2 = new IdManager(id, s2);
@@ -182,7 +186,8 @@ describe("backup WoT", () => {
     }
     // require("fs").writeFileSync(__dirname + "/assets/wot.json", s2.toString());
   });
-  it("read Backup v0", async () => {
+
+  it("read Web of Trust v0", async () => {
     // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
     //console.log(data);
     const store = storagify(
@@ -239,7 +244,7 @@ describe("backup WoT", () => {
     assert.equal(await idManager.verifyWebOfTrust(), true);
   });
 
-  it("read Backup v1", async () => {
+  it("read Web of Trust v1", async () => {
     // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
     //console.log(data);
     const store = storagify(
@@ -285,6 +290,54 @@ describe("backup WoT", () => {
 
     assert.equal(await idManager.verifyWebOfTrust(), true);
   });
+
+  it("create backup v1", async () => {
+    // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
+    //console.log(data);
+    const store = storagify(
+      deserialize(JSON.stringify(wot_v1)),
+      () => "",
+      () => "",
+    );
+    const idManager = await IdManager.fromStore(store);
+
+    const backup = await idManager.exportBackup();
+    // require("fs").writeFileSync(__dirname + "/assets/backup.bin.json", JSON.stringify({ backup: Buffer.from(backup).toString("base64") }));
+    const id2 = await IdManager.importBackup(backup);
+
+    assert.equal(await id2?.verifyWebOfTrust(), true);
+    // console.log(id2?.store.toString());
+    assert.equal(id2?.store.toString(), idManager.store.toString());
+  });
+
+  it("read backup v1", async () => {
+    const id2 = await IdManager.importBackup(Buffer.from(clear_backup.backup, "base64"));
+    assert.equal(await id2?.verifyWebOfTrust(), true);
+  });
+
+  it("create encrypted backup v1", async () => {
+    // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
+    //console.log(data);
+    const store = storagify(
+      deserialize(JSON.stringify(wot_v1)),
+      () => "",
+      () => "",
+    );
+    const idManager = await IdManager.fromStore(store);
+
+    const backup = await idManager.exportBackup(passphrase);
+    // require("fs").writeFileSync(__dirname + "/assets/backup.encrypted.bin.json", JSON.stringify({ backup: Buffer.from(backup).toString("base64") }));
+
+    const id2 = await IdManager.importBackup(backup, passphrase);
+
+    assert.equal(await id2?.verifyWebOfTrust(), true);
+    assert.equal(id2?.store.toString(), idManager.store.toString());
+  }).timeout(20000);
+
+  it("read encrypted backup v1", async () => {
+    const id2 = await IdManager.importBackup(Buffer.from(encrypted_backup.backup, "base64"), passphrase);
+    assert.equal(await id2?.verifyWebOfTrust(), true);
+  }).timeout(10000);
 });
 
 describe("SRG v0 challenge with IdManager", () => {
@@ -444,6 +497,54 @@ describe("SRG v0 challenge with IdManager", () => {
       assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
     }
   });
+
+  // it("pass a challenge over encrypted Channel using MessagePackStorage", async () => {
+  //   for (const id1 of await allVaultysIdType()) {
+  //     const channel = MemoryChannel.createBidirectionnal();
+  //     if (!channel.otherend) assert.fail();
+  //     const s1 = MessagePackStorage();
+  //     const s2 = MessagePackStorage();
+  //     const manager1 = new IdManager(id1, s1);
+  //     const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
+  //     const metadata1 = {
+  //       name: "a",
+  //       email: "b",
+  //     };
+  //     const metadata2 = {
+  //       name: "d",
+  //       phone: "f",
+  //     };
+
+  //     const contacts = await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2)]);
+
+  //     assert.equal(contacts[0].did, manager2.vaultysId.did);
+  //     assert.equal(contacts[1].did, manager1.vaultysId.did);
+
+  //     // assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
+  //     // assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);
+
+  //     assert.equal(s1.substore("wot").list().length, 1);
+  //     assert.equal(s2.substore("wot").list().length, 1);
+
+  //     manager1.setContactMetadata(manager2.vaultysId.did, "name", "salut");
+  //     manager1.setContactMetadata(manager2.vaultysId.did, "group", "pro");
+  //     // assert.deepStrictEqual(
+  //     //   manager1.getCertifiedMetadata(manager2.vaultysId.did),
+  //     //   metadata2
+  //     // );
+  //     // assert.deepStrictEqual(
+  //     //   manager1.getAllMetadata(manager2.vaultysId.did),
+  //     //   {
+  //     //     group: 'pro',
+  //     //     name: 'salut',
+  //     //     phone: 'f'
+  //     //   }
+  //     // );
+
+  //     assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
+  //     assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
+  //   }
+  // });
 
   it("perform PRF over Channel", async () => {
     for (let i = 0; i < 5; i++) {

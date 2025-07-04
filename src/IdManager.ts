@@ -1,8 +1,8 @@
 import { Readable, Writable } from "stream";
 import Challenger from "./Challenger";
-import KeyManager, { Ed25519Manager, Fido2Manager, Fido2PRFManager, PQManager } from "./KeyManager";
+import KeyManager, { Ed25519Manager, Fido2Manager, Fido2PRFManager, HybridManager, DilithiumManager } from "./KeyManager";
 import { Channel, StreamChannel } from "./MemoryChannel";
-import { MemoryStorage, Store } from "./MemoryStorage";
+import { storagify, Store } from "./MemoryStorage";
 import SoftCredentials from "./platform/SoftCredentials";
 import VaultysId from "./VaultysId";
 import { hash, randomBytes, secureErase } from "./crypto";
@@ -56,8 +56,11 @@ export const instanciateContact = (c: StoredContact) => {
   } else if (c.type === 4) {
     vaultysId = new VaultysId(Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
   } else {
+    // console.log(c.keyManager.signer.publicKey.length);
     if (c.keyManager.signer.publicKey.length === 1952) {
-      vaultysId = new VaultysId(PQManager.instantiate(c.keyManager), c.certificate, c.type);
+      vaultysId = new VaultysId(DilithiumManager.instantiate(c.keyManager), c.certificate, c.type);
+    } else if (c.keyManager.signer.publicKey.length === 1984) {
+      vaultysId = new VaultysId(HybridManager.instantiate(c.keyManager), c.certificate, c.type);
     } else {
       vaultysId = new VaultysId(Ed25519Manager.instantiate(c.keyManager), c.certificate, c.type);
     }
@@ -100,11 +103,11 @@ export default class IdManager {
       // Plaintext export
       const exportedData: VaultysBackup = {
         version: 1,
-        data: Buffer.from(this.store.toString()),
+        data: Buffer.from(encode(this.store.toJSON())),
       };
       return encode(exportedData);
     } else {
-      const backup = await platformCrypto.pbkdf2.encrypt(passphrase, Buffer.from(this.store.toString(), "utf8"));
+      const backup = await platformCrypto.pbkdf2.encrypt(passphrase, Buffer.from(encode(this.store.toJSON())));
       if (!backup) throw new Error("Failed to encrypt backup");
 
       return encode(backup);
@@ -121,6 +124,7 @@ export default class IdManager {
     try {
       // Decode the backup data
       const backup = decode(backupData) as VaultysBackup;
+      //console.log(backup);
       let importedData: Buffer | null;
 
       if (backup.encryptInfo) {
@@ -142,8 +146,15 @@ export default class IdManager {
         importedData = backup.data;
       }
 
+      //console.log(decode(importedData));
+
       // Import the data into a new profile
-      const store = MemoryStorage(() => {}).fromString(Buffer.from(importedData).toString(), () => {});
+      // console.log(importedData, decode(importedData));
+      const store = storagify(
+        decode(importedData) as object,
+        () => {},
+        () => {},
+      );
       return await IdManager.fromStore(store);
     } catch (error) {
       console.error("Import error:", error);

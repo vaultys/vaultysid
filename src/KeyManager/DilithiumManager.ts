@@ -6,7 +6,6 @@ import { generateDilithiumKeyPair, signDilithium, verifyDilithium } from "../pqC
 import CypherManager from "./CypherManager";
 
 const sha512 = (data: Buffer) => hash("sha512", data);
-const sha256 = (data: Buffer) => hash("sha256", data);
 
 type DataExport = {
   v: 0; // version
@@ -19,7 +18,7 @@ type SecretExport = {
   s: Buffer; // seed for signing and cypher
 };
 
-export default class PQManager extends CypherManager {
+export default class DilithiumManager extends CypherManager {
   seed?: Buffer;
 
   constructor() {
@@ -27,8 +26,8 @@ export default class PQManager extends CypherManager {
     this.authType = "DilithiumVerificationKey2025";
   }
 
-  static async createFromEntropy(entropy: Buffer, swapIndex = 0) {
-    const km = new PQManager();
+  static async createFromEntropy(entropy: Buffer) {
+    const km = new DilithiumManager();
     km.entropy = entropy;
     km.capability = "private";
     km.seed = sha512(entropy);
@@ -42,7 +41,7 @@ export default class PQManager extends CypherManager {
   }
 
   static generate() {
-    return PQManager.createFromEntropy(randomBytes(32));
+    return DilithiumManager.createFromEntropy(randomBytes(32));
   }
 
   getSecret() {
@@ -66,7 +65,7 @@ export default class PQManager extends CypherManager {
 
   static fromSecret(secret: Buffer) {
     const data = decode(secret) as SecretExport;
-    const km = new PQManager();
+    const km = new DilithiumManager();
     km.version = data.v ?? 0;
     km.capability = "private";
     km.seed = Buffer.from(data.s);
@@ -81,7 +80,7 @@ export default class PQManager extends CypherManager {
   }
 
   static instantiate(obj: any) {
-    const km = new PQManager();
+    const km = new DilithiumManager();
     km.version = obj.version ?? 0;
     km.signer = {
       publicKey: obj.signer.publicKey.data ? Buffer.from(obj.signer.publicKey.data) : Buffer.from(obj.signer.publicKey),
@@ -94,7 +93,7 @@ export default class PQManager extends CypherManager {
 
   static fromId(id: Buffer) {
     const data = decode(id) as DataExport;
-    const km = new PQManager();
+    const km = new DilithiumManager();
     km.version = data.v ?? 0;
     km.capability = "public";
     km.signer = {

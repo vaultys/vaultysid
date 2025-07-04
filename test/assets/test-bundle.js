@@ -1,10 +1,10 @@
 /******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
-/***/ "./dist/node/index.js":
-/*!****************************!*\
-  !*** ./dist/node/index.js ***!
-  \****************************/
+/***/ "./index.ts":
+/*!******************!*\
+  !*** ./index.ts ***!
+  \******************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -47,28 +47,28 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.CryptoChannel = exports.GameOfLifeIcon = exports.KeyManager = exports.IdManager = exports.LocalStorage = exports.convertWebWritableStreamToNodeWritable = exports.convertWebReadableStreamToNodeReadable = exports.StreamChannel = exports.MemoryStorage = exports.MemoryChannel = exports.Challenger = exports.VaultysId = exports.Buffer = exports.crypto = void 0;
-const Challenger_1 = __importDefault(__webpack_require__(/*! ./src/Challenger */ "./dist/node/src/Challenger.js"));
+const Challenger_1 = __importDefault(__webpack_require__(/*! ./src/Challenger */ "./src/Challenger.ts"));
 exports.Challenger = Challenger_1.default;
-const IdManager_1 = __importDefault(__webpack_require__(/*! ./src/IdManager */ "./dist/node/src/IdManager.js"));
+const IdManager_1 = __importDefault(__webpack_require__(/*! ./src/IdManager */ "./src/IdManager.ts"));
 exports.IdManager = IdManager_1.default;
-const KeyManager_1 = __importDefault(__webpack_require__(/*! ./src/KeyManager */ "./dist/node/src/KeyManager/index.js"));
+const KeyManager_1 = __importDefault(__webpack_require__(/*! ./src/KeyManager */ "./src/KeyManager/index.ts"));
 exports.KeyManager = KeyManager_1.default;
-const VaultysId_1 = __importDefault(__webpack_require__(/*! ./src/VaultysId */ "./dist/node/src/VaultysId.js"));
+const VaultysId_1 = __importDefault(__webpack_require__(/*! ./src/VaultysId */ "./src/VaultysId.ts"));
 exports.VaultysId = VaultysId_1.default;
-const MemoryChannel_1 = __webpack_require__(/*! ./src/MemoryChannel */ "./dist/node/src/MemoryChannel.js");
+const MemoryChannel_1 = __webpack_require__(/*! ./src/MemoryChannel */ "./src/MemoryChannel.ts");
 Object.defineProperty(exports, "MemoryChannel", ({ enumerable: true, get: function () { return MemoryChannel_1.MemoryChannel; } }));
 Object.defineProperty(exports, "StreamChannel", ({ enumerable: true, get: function () { return MemoryChannel_1.StreamChannel; } }));
 Object.defineProperty(exports, "convertWebReadableStreamToNodeReadable", ({ enumerable: true, get: function () { return MemoryChannel_1.convertWebReadableStreamToNodeReadable; } }));
 Object.defineProperty(exports, "convertWebWritableStreamToNodeWritable", ({ enumerable: true, get: function () { return MemoryChannel_1.convertWebWritableStreamToNodeWritable; } }));
-const MemoryStorage_1 = __webpack_require__(/*! ./src/MemoryStorage */ "./dist/node/src/MemoryStorage.js");
+const MemoryStorage_1 = __webpack_require__(/*! ./src/MemoryStorage */ "./src/MemoryStorage.ts");
 Object.defineProperty(exports, "MemoryStorage", ({ enumerable: true, get: function () { return MemoryStorage_1.MemoryStorage; } }));
 Object.defineProperty(exports, "LocalStorage", ({ enumerable: true, get: function () { return MemoryStorage_1.LocalStorage; } }));
-const GameOfLifeIcon_1 = __importDefault(__webpack_require__(/*! ./src/GameOfLifeIcon */ "./dist/node/src/GameOfLifeIcon.js"));
+const GameOfLifeIcon_1 = __importDefault(__webpack_require__(/*! ./src/GameOfLifeIcon */ "./src/GameOfLifeIcon.ts"));
 exports.GameOfLifeIcon = GameOfLifeIcon_1.default;
-const cryptoChannel_1 = __importDefault(__webpack_require__(/*! ./src/cryptoChannel */ "./dist/node/src/cryptoChannel.js"));
+const cryptoChannel_1 = __importDefault(__webpack_require__(/*! ./src/cryptoChannel */ "./src/cryptoChannel.ts"));
 exports.CryptoChannel = cryptoChannel_1.default;
 //utils
-const crypto = __importStar(__webpack_require__(/*! ./src/crypto */ "./dist/node/src/crypto.js"));
+const crypto = __importStar(__webpack_require__(/*! ./src/crypto */ "./src/crypto.ts"));
 exports.crypto = crypto;
 const Buffer = crypto.Buffer;
 exports.Buffer = Buffer;
@@ -77,4601 +77,6 @@ if (typeof Symbol.dispose === "undefined") {
     // @ts-ignore
     Symbol.dispose = Symbol("Symbol.dispose");
 }
-
-
-/***/ }),
-
-/***/ "./dist/node/src/Challenger.js":
-/*!*************************************!*\
-  !*** ./dist/node/src/Challenger.js ***!
-  \*************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
-const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
-const VaultysId_1 = __importDefault(__webpack_require__(/*! ./VaultysId */ "./dist/node/src/VaultysId.js"));
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const ERROR = -2;
-const UNINITIALISED = -1;
-const INIT = 0;
-const STEP1 = 1;
-const COMPLETE = 2;
-const writeString = (name, value) => buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii"), buffer_1.Buffer.from([0xa0 + value.length]), buffer_1.Buffer.from(value, "ascii")]);
-const writeBuffer = (name, value) => {
-    const nameHeader = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii")]);
-    let lengthHeader;
-    if (value.length <= 65535) {
-        // bin16: binary data whose length is upto (2^16)-1 bytes
-        lengthHeader = buffer_1.Buffer.from([0xc5, (value.length >> 8) & 0xff, value.length & 0xff]);
-    }
-    else {
-        // bin32: binary data whose length is upto (2^32)-1 bytes
-        lengthHeader = buffer_1.Buffer.from([0xc6, (value.length >> 24) & 0xff, (value.length >> 16) & 0xff, (value.length >> 8) & 0xff, value.length & 0xff]);
-    }
-    return buffer_1.Buffer.concat([nameHeader, lengthHeader, value]);
-};
-const writeInt = (name, value) => {
-    // console.log(value)
-    const start = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa0 + name.length]), buffer_1.Buffer.from(name, "ascii")]);
-    let end;
-    if (value >= 0 && value <= 0x7f) {
-        end = buffer_1.Buffer.from([value]);
-    }
-    else if (value < 0 && value >= -0x20) {
-        end = buffer_1.Buffer.from([value]);
-    }
-    else if (value > 0 && value <= 0xff) {
-        // uint8
-        end = buffer_1.Buffer.from([0xcc, value]);
-    }
-    else if (value >= -0x80 && value <= 0x7f) {
-        // int8
-        end = buffer_1.Buffer.from([0xd0, value]);
-    }
-    else if (value > 0 && value <= 0xffff) {
-        // uint16
-        end = buffer_1.Buffer.from([0xcd, value >>> 8, value]);
-    }
-    else if (value >= -0x8000 && value <= 0x7fff) {
-        // int16
-        end = buffer_1.Buffer.from([0xd1, value >>> 8, value]);
-    }
-    else if (value > 0 && value <= 0xffffffff) {
-        // uint32
-        end = buffer_1.Buffer.from([0xce, value >>> 24, value >>> 16, value >>> 8, value]);
-    }
-    else if (value >= -0x80000000 && value <= 0x7fffffff) {
-        // int32
-        end = buffer_1.Buffer.from([0xd2, value >>> 24, value >>> 16, value >>> 8, value]);
-    }
-    else if (value > 0 && value <= 0xffffffffffffffffn) {
-        // uint64
-        // Split 64 bit number into two 32 bit numbers because JavaScript only regards
-        // 32 bits for bitwise operations.
-        const hi = value / 2 ** 32;
-        const lo = value % 2 ** 32;
-        end = buffer_1.Buffer.from([0xd3, hi >>> 24, hi >>> 16, hi >>> 8, hi, lo >>> 24, lo >>> 16, lo >>> 8, lo]);
-    }
-    else {
-        end = buffer_1.Buffer.from([0x00]);
-    }
-    return buffer_1.Buffer.concat([start, end]);
-};
-const encode_v0 = ({ version, protocol, service, timestamp, pk1, pk2, nonce, metadata }) => {
-    const p = buffer_1.Buffer.concat([
-        buffer_1.Buffer.from([0x87]),
-        writeString("protocol", protocol),
-        writeString("service", service),
-        writeInt("timestamp", timestamp),
-        writeBuffer("pk1", pk1),
-        writeBuffer("pk2", pk2),
-        writeBuffer("nonce", nonce),
-        buffer_1.Buffer.from([0xa0 + "metadata".length]),
-        buffer_1.Buffer.from("metadata", "ascii"),
-        buffer_1.Buffer.from([0x80]), // empty metadata
-    ]);
-    // console.log(p.toString("base64"));
-    return p;
-};
-const encode_v0_full = ({ version, protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }) => {
-    const p = buffer_1.Buffer.concat([
-        buffer_1.Buffer.from([0x89]),
-        writeString("protocol", protocol),
-        writeString("service", service),
-        writeInt("timestamp", timestamp),
-        writeBuffer("pk1", pk1),
-        writeBuffer("pk2", pk2),
-        writeBuffer("nonce", nonce),
-        writeBuffer("sign1", sign1),
-        writeBuffer("sign2", sign2),
-        buffer_1.Buffer.from([0xa0 + "metadata".length]),
-        buffer_1.Buffer.from("metadata", "ascii"),
-        buffer_1.Buffer.from([0x80]), // empty metadata
-    ]);
-    //console.log(p.toString("ascii"))
-    return p;
-};
-const deserialize = (challenge) => {
-    const unpacked = (0, msgpack_1.decode)(challenge);
-    const state = {
-        state: ERROR,
-        error: "",
-    };
-    if (!unpacked.version) {
-        unpacked.version = 0;
-    }
-    const result = {
-        ...unpacked,
-        ...state,
-    };
-    try {
-        if (!result.timestamp || !result.protocol || !result.service) {
-            result.state = ERROR;
-            result.error = "[ERROR] Challenge is missing values";
-        }
-        else if (!result.pk2 && !!result.pk1 && !result.sign1 && !result.sign2 && result.nonce?.length === 16) {
-            result.state = INIT;
-        }
-        else if (!result.sign1 && result.nonce?.length === 32 && !!result.pk1 && !!result.pk2 && !!result.sign2) {
-            result.state = STEP1;
-            const id2 = VaultysId_1.default.fromId(result.pk2);
-            const challenge = serializeUnsigned(result);
-            if (!id2.verifyChallenge(challenge, result.sign2, true) && !id2.verifyChallenge_v0(challenge, result.sign2, true, result.pk2)) {
-                result.state = ERROR;
-                result.error = "[STEP1] failed the verification of pk2";
-            }
-        }
-        else if (!!result.sign1 && result.nonce?.length === 32 && !!result.pk1 && !!result.pk2 && !!result.sign2) {
-            result.state = COMPLETE;
-            //console.log(result);
-            const id1 = VaultysId_1.default.fromId(result.pk1);
-            const id2 = VaultysId_1.default.fromId(result.pk2);
-            if (id1.version !== unpacked.version || id2.version !== unpacked.version) {
-                //console.log(id1.version, id2.version, unpacked.version);
-                result.state = ERROR;
-                result.error = "[COMPLETE] pk1 and pk2 are using different serialization version";
-            }
-            const challenge = serializeUnsigned(result);
-            if (!id2.verifyChallenge(challenge, result.sign2, true) && !id2.verifyChallenge_v0(challenge, result.sign2, true, result.pk2)) {
-                result.state = ERROR;
-                result.error = "[COMPLETE] failed the verification of pk2";
-            }
-            if (!id1.verifyChallenge(challenge, result.sign1, true) && !id1.verifyChallenge_v0(challenge, result.sign1, true, result.pk1)) {
-                result.state = ERROR;
-                result.error = "[COMPLETE] failed the verification of pk1";
-            }
-        }
-    }
-    catch (error) {
-        result.error = "[" + result.state + " -> ERROR] " + error;
-        result.state = ERROR;
-    }
-    return result;
-};
-const serialize = (data) => {
-    if (data.state == INIT) {
-        const { version, protocol, service, timestamp, pk1, nonce, metadata } = data;
-        const picked = { version, protocol, service, timestamp, pk1, nonce, metadata };
-        const encoded = (0, msgpack_1.encode)(picked);
-        return buffer_1.Buffer.from(encoded);
-    }
-    if (data.state == STEP1) {
-        const { version, protocol, service, timestamp, pk1, pk2, nonce, sign2, metadata } = data;
-        const picked = {
-            version,
-            protocol,
-            service,
-            timestamp,
-            pk1,
-            pk2,
-            nonce,
-            sign2,
-            metadata,
-        };
-        const encoded = (0, msgpack_1.encode)(picked);
-        return buffer_1.Buffer.from(encoded);
-    }
-    if (data.state == COMPLETE) {
-        const { version, protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata } = data;
-        const picked = {
-            version,
-            protocol,
-            service,
-            timestamp,
-            pk1,
-            pk2,
-            nonce,
-            sign1,
-            sign2,
-            metadata,
-        };
-        const encoded = (0, msgpack_1.encode)(picked);
-        return buffer_1.Buffer.from(encoded);
-    }
-    return null;
-};
-const serializeUnsigned = (challenge) => {
-    const { version, protocol, service, timestamp, pk1, pk2, nonce, metadata } = challenge;
-    const picked = { version, protocol, service, timestamp, pk1, pk2, nonce, metadata };
-    return version === 0 ? encode_v0(picked) : buffer_1.Buffer.from((0, msgpack_1.encode)(picked));
-};
-const isLive = (challenge, liveliness, time = Date.now()) => {
-    return challenge.timestamp > time - liveliness && challenge.timestamp < time + liveliness;
-};
-class Challenger {
-    constructor(vaultysId, liveliness = 60 * 1000) {
-        this.version = 0;
-        this.state = UNINITIALISED;
-        // create a copy of VaultysId
-        this.vaultysId = VaultysId_1.default.fromSecret(vaultysId.getSecret());
-        this.liveliness = liveliness;
-    }
-    static async verifyCertificate(certificate) {
-        const deser = deserialize(certificate);
-        return deser.state === COMPLETE;
-    }
-    static async fromCertificate(certificate, liveliness) {
-        const deser = deserialize(certificate);
-        if (!deser.version) {
-            deser.version = 0;
-        }
-        if (deser.state === INIT) {
-            const challenger = new Challenger(VaultysId_1.default.fromId(deser.pk1).toVersion(deser.version), liveliness);
-            challenger.challenge = deser;
-            challenger.mykey = deser.pk1;
-            challenger.state = INIT;
-        }
-        else if (deser.state === STEP1) {
-            const challenger = new Challenger(VaultysId_1.default.fromId(deser.pk2).toVersion(deser.version), liveliness);
-            challenger.challenge = deser;
-            challenger.mykey = deser.pk2;
-            challenger.hisKey = deser.pk1;
-            challenger.state = STEP1;
-            return challenger;
-        }
-    }
-    async setChallenge(challengeString) {
-        if (this.state !== UNINITIALISED) {
-            this.state = ERROR;
-            throw new Error("Challenger already initialised, can't reset the state");
-        }
-        this.challenge = deserialize(challengeString);
-        this.version = this.challenge.version;
-        if (!isLive(this.challenge, this.liveliness)) {
-            this.state = ERROR;
-            this.challenge.error = "challenge timestamp failed the liveliness at first signature";
-            throw new Error(this.challenge.error);
-        }
-        if (this.challenge.state === ERROR) {
-            this.state = ERROR;
-            throw new Error(this.challenge.error);
-        }
-        else if (this.challenge.state === INIT) {
-            //this.vaultysId.toVersion(this.challenge.version);
-            this.mykey = this.vaultysId.id;
-            this.challenge.pk2 = this.mykey;
-            this.hisKey = this.challenge.pk1;
-            this.challenge.nonce = buffer_1.Buffer.concat([this.challenge.nonce || new Uint8Array(), (0, crypto_1.randomBytes)(16)]);
-            const serialized = this.getUnsignedChallenge();
-            if (!serialized)
-                throw new Error("Error processing Challenge");
-            this.challenge.sign2 = (await this.vaultysId.signChallenge(serialized)) || undefined;
-            this.challenge.state = this.state = STEP1;
-        }
-        else if (this.challenge.state === COMPLETE) {
-            //this.vaultysId.toVersion(this.challenge.version);
-            this.mykey = this.vaultysId.id;
-            if (!this.challenge.pk1?.equals(this.mykey) && !this.challenge.pk1?.equals(this.mykey)) {
-                this.state = ERROR;
-                throw new Error("Can't link the vaultys id to this challenge");
-            }
-            else {
-                this.state = COMPLETE;
-            }
-        }
-        else {
-            throw new Error("Challenge is from a protocol already launched, this is completely unsafe");
-        }
-    }
-    getContext() {
-        return {
-            protocol: this.challenge?.protocol,
-            service: this.challenge?.service,
-            metadata: this.challenge?.metadata,
-        };
-    }
-    createChallenge(protocol, service, version = 0, metadata) {
-        this.version = version;
-        if (this.state == UNINITIALISED) {
-            this.mykey = this.vaultysId.toVersion(version).id;
-            // console.log(this)
-            this.challenge = {
-                version,
-                protocol,
-                service,
-                metadata: metadata ? { pk1: metadata } : {},
-                timestamp: Date.now(),
-                pk1: this.mykey,
-                nonce: (0, crypto_1.randomBytes)(16),
-                state: INIT,
-            };
-            this.state = INIT;
-        }
-        else {
-            this.state = ERROR;
-            throw new Error("Challenger already initialised, can't reset the state");
-        }
-    }
-    getCertificate() {
-        if (!this.challenge)
-            return buffer_1.Buffer.from([]);
-        return serialize(this.challenge) || buffer_1.Buffer.from([]);
-    }
-    getUnsignedChallenge() {
-        return serializeUnsigned(this.challenge);
-    }
-    getContactDid() {
-        if (!this.hisKey)
-            return null;
-        return VaultysId_1.default.fromId(this.hisKey).did;
-    }
-    getContactId() {
-        // to be sure this function is not misused, we get the id of the contact only once the protocol is complete
-        if (this.isComplete()) {
-            const contact = VaultysId_1.default.fromId(this.hisKey, this.getCertificate() || undefined);
-            return contact;
-        }
-        else
-            throw new Error("The challenge is not COMPLETE, it is unsafe to get the Contact ID before");
-    }
-    static fromString(vaultysId, challengeString) {
-        const challenger = new Challenger(vaultysId);
-        challenger.setChallenge(challengeString);
-        return challenger;
-    }
-    hasFailed() {
-        return this.state == ERROR;
-    }
-    isComplete() {
-        return this.state == COMPLETE;
-    }
-    async init(challengeString) {
-        if (this.state !== UNINITIALISED) {
-            throw new Error("Can't init INITIALISED challenge");
-        }
-        const tempchallenge = deserialize(challengeString);
-        this.version = tempchallenge.version = tempchallenge.version ? 1 : 0;
-        this.vaultysId.toVersion(this.version);
-        if (tempchallenge.state === INIT) {
-            if (tempchallenge.pk2?.toString("base64") !== this.vaultysId.id.toString("base64")) {
-                this.state = ERROR;
-                throw new Error("challenge is not corresponding to the right id");
-            }
-            this.challenge = tempchallenge;
-            this.version = tempchallenge.version;
-            this.mykey = this.challenge.pk2 = this.vaultysId.id;
-            this.hisKey = this.challenge.pk1;
-            this.challenge.state = this.state = INIT;
-            return;
-        }
-        if (tempchallenge.state === STEP1) {
-            if (tempchallenge.pk2?.toString("base64") !== this.vaultysId.id.toString("base64")) {
-                this.state = ERROR;
-                throw new Error("challenge is not corresponding to the right id");
-            }
-            this.challenge = tempchallenge;
-            this.version = tempchallenge.version;
-            this.mykey = this.challenge.pk2;
-            this.hisKey = this.challenge.pk1;
-            this.state = this.challenge.state = STEP1;
-            return;
-        }
-    }
-    async update(challengeString, metadata) {
-        if (this.state === ERROR) {
-            throw new Error("Can't update errorneous challenge");
-        }
-        else if (this.state === COMPLETE) {
-            throw new Error("Can't update COMPLETE challenge");
-        }
-        else {
-            const tempchallenge = deserialize(challengeString);
-            // console.log(this.state, tempchallenge.state);
-            if (!tempchallenge) {
-                this.state = ERROR;
-                throw new Error("Can't read the new incoming challenge");
-            }
-            if (tempchallenge.state === ERROR) {
-                //console.log(tempchallenge.pk1?.length, tempchallenge.pk2?.length);
-                this.state = ERROR;
-                throw new Error(tempchallenge.error);
-            }
-            if (!isLive(tempchallenge, this.liveliness)) {
-                // console.log(this.liveliness);
-                // const time = Date.now();
-                // console.log(time - tempchallenge.timestamp, this.liveliness);
-                // console.log(tempchallenge.timestamp > time - this.liveliness && tempchallenge.timestamp < time + this.liveliness);
-                this.state = ERROR;
-                throw new Error("challenge timestamp failed the liveliness");
-            }
-            this.version = tempchallenge.version;
-            this.vaultysId.toVersion(this.version);
-            if (this.state === UNINITIALISED && tempchallenge.state === INIT) {
-                if (tempchallenge.metadata.pk2) {
-                    this.state = ERROR;
-                    throw new Error("Metadata is malformed: pk2 is already set");
-                }
-                this.challenge = tempchallenge;
-                this.mykey = this.challenge.pk2 = this.vaultysId.id;
-                this.hisKey = this.challenge.pk1;
-                if (metadata)
-                    this.challenge.metadata.pk2 = metadata;
-                this.challenge.nonce = buffer_1.Buffer.concat([this.challenge.nonce, (0, crypto_1.randomBytes)(16)]);
-                const serialized = this.getUnsignedChallenge();
-                this.challenge.sign2 = await this.vaultysId.signChallenge(serialized);
-                this.challenge.state = this.state = STEP1;
-                return;
-            }
-            if (this.state === UNINITIALISED && tempchallenge.state === STEP1) {
-                if (tempchallenge.pk1?.toString("base64") !== this.vaultysId.id.toString("base64")) {
-                    // console.log(this.vaultysId.version, this);
-                    this.state = ERROR;
-                    throw new Error("challenge is not corresponding to the right id");
-                }
-                const serialized = serializeUnsigned(tempchallenge);
-                tempchallenge.sign1 = await this.vaultysId.signChallenge(serialized);
-                this.challenge = tempchallenge;
-                this.mykey = this.challenge.pk1;
-                this.hisKey = this.challenge.pk2;
-                this.state = this.challenge.state = COMPLETE;
-                return;
-            }
-            if (this.state === UNINITIALISED && tempchallenge.state === COMPLETE) {
-                console.log("COMPLETE case?!!");
-                return;
-            }
-            if (tempchallenge.protocol !== this.challenge.protocol || tempchallenge.service !== this.challenge.service) {
-                this.state = ERROR;
-                throw new Error(`The challenge was expecting protocol '${this.challenge.protocol}' and service '${this.challenge.service}', received '${tempchallenge.protocol}' and '${tempchallenge.service}'`);
-            }
-            if (this.state === INIT && tempchallenge.state === STEP1) {
-                // @ts-ignore
-                if (!tempchallenge.nonce?.subarray(0, 16).equals(this.challenge.nonce.subarray(0, 16))) {
-                    this.state = ERROR;
-                    throw new Error("Nonce has been tampered with");
-                }
-                if (tempchallenge.timestamp !== this.challenge?.timestamp) {
-                    this.state = ERROR;
-                    throw new Error("Timestamp has been tampered with");
-                }
-                if (!this.mykey?.equals(tempchallenge.pk1)) {
-                    this.state = ERROR;
-                    throw new Error(`The challenge has been tampered with. Received pk1 = '${tempchallenge.pk1}', expected pk1 = '${this.mykey}'`);
-                }
-                const serialized = serializeUnsigned(tempchallenge);
-                if (!serialized) {
-                    this.state = ERROR;
-                    throw new Error("Error processing Challenge");
-                }
-                tempchallenge.sign1 = await this.vaultysId.signChallenge(serialized);
-                this.challenge = tempchallenge;
-                this.hisKey = tempchallenge.pk2;
-                this.state = this.challenge.state = COMPLETE;
-            }
-            else if (this.state === STEP1 && tempchallenge.state === COMPLETE) {
-                if (tempchallenge.protocol !== this.challenge.protocol || tempchallenge.service !== this.challenge.service) {
-                    this.state = ERROR;
-                    throw new Error(`The challenge was expecting protocol '${this.challenge.protocol}' and service '${this.challenge.service}', received '${tempchallenge.protocol}' and '${tempchallenge.service}'`);
-                }
-                // @ts-ignore
-                if (!tempchallenge.nonce?.subarray(16, 32).equals(this.challenge.nonce.subarray(16, 32))) {
-                    this.state = ERROR;
-                    throw new Error("Nonce has been tampered with");
-                }
-                if (tempchallenge.timestamp !== this.challenge?.timestamp) {
-                    this.state = ERROR;
-                    throw new Error("Timestamp has been tampered with");
-                }
-                // INFO: no need for liveliness check since the whole certificate is complete
-                // if (!isLive(tempchallenge, this.liveliness)) {
-                //   this.state = ERROR;
-                //   throw new Error("challenge timestamp failed the liveliness at 2nd signature");
-                // }
-                if (!this.mykey.equals(tempchallenge.pk2)) {
-                    this.state = ERROR;
-                    throw new Error(`The challenge pk2 has been tampered with`);
-                }
-                this.challenge = tempchallenge;
-                this.state = COMPLETE;
-            }
-            else {
-                //console.log(tempchallenge);
-                const error = `The challenge is in an expected state. Received state = '${tempchallenge.state}', expected state = '${this.state + 1}'`;
-                this.state = ERROR;
-                throw new Error(error);
-            }
-        }
-    }
-}
-Challenger.deserializeCertificate = deserialize;
-Challenger.serializeCertificate_v0 = encode_v0_full;
-Challenger.serializeCertificate = serializeUnsigned;
-exports["default"] = Challenger;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/GameOfLifeIcon.js":
-/*!*****************************************!*\
-  !*** ./dist/node/src/GameOfLifeIcon.js ***!
-  \*****************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
-const squareSize = 10;
-const boardTopx = 0;
-const boardTopy = 0;
-const createFrom256 = (hex) => hex.match(/.{1,4}/g)?.map((line) => parseInt(line, 16).toString(2).padStart(16, "0")) || [];
-const createFromFingerprint = (fp) => createFrom256((0, crypto_1.hash)("sha256", (0, crypto_1.fromHex)(fp.replaceAll(" ", ""))).toString("hex"));
-const nextstep = (bin, memo) => {
-    const output = [];
-    for (let i = 0; i < 16; i++) {
-        let line = "";
-        for (let j = 0; j < 16; j++) {
-            let count = 0;
-            for (let k = i - 1; k < i + 2; k++) {
-                for (let l = j - 1; l < j + 2; l++) {
-                    if (k > -1 && k < 16 && l > -1 && l < 16) {
-                        if ((k != i || l != j) && bin[k][l] == "1")
-                            count++;
-                    }
-                }
-            }
-            let live = false;
-            if (count == 3)
-                live = true;
-            else if (count == 2 && bin[i][j] == "1")
-                live = true;
-            line += live ? "1" : "O";
-            if (memo && live) {
-                memo[i][j]++;
-            }
-        }
-        output.push(line);
-    }
-    return output;
-};
-const run = (hex, max) => {
-    const result = createFrom256(hex)?.map((line) => line.split("").map((c) => parseInt(c)));
-    let step = createFrom256(hex);
-    for (let a = 0; a < max; a++) {
-        step = nextstep(step, result);
-    }
-    return result;
-};
-const renderStep = (context, step) => {
-    for (let i = 0; i < 16; i++) {
-        for (let j = 0; j < 16; j++) {
-            context.fillStyle = step[i][j] == 1 ? "black" : "white";
-            let xOffset = boardTopx + j * squareSize;
-            let yOffset = boardTopy + i * squareSize;
-            context.fillRect(xOffset, yOffset, squareSize, squareSize);
-            context.fillRect(150 - xOffset, yOffset, squareSize, squareSize);
-            context.fillRect(xOffset, 150 - yOffset, squareSize, squareSize);
-            context.fillRect(150 - xOffset, 150 - yOffset, squareSize, squareSize);
-        }
-    }
-};
-const heatMapColorforValue = (value, offset = 1) => {
-    var h = (1.0 - value) * 240 + offset;
-    //return `rgba(0,0,0,${value})`
-    return "hsl(" + h + ", 100%, 50%)";
-};
-const renderMemo = (data, mapcolors = 2, context) => {
-    let min = 1000;
-    let max = 0;
-    const memo = JSON.parse(JSON.stringify(data));
-    for (let i = 0; i < 8; i++) {
-        for (let j = 0; j < 8; j++) {
-            memo[i][j] =
-                memo[15 - i][j] =
-                    memo[i][15 - j] =
-                        memo[15 - i][15 - j] =
-                            memo[i][j] + memo[15 - i][j] + memo[i][15 - j] + memo[15 - i][15 - j];
-            const val = memo[i][j];
-            if (val < min)
-                min = val;
-            if (val > max)
-                max = val;
-        }
-    }
-    for (let i = 0; i < 16; i++) {
-        for (let j = 0; j < 16; j++) {
-            context.fillStyle = heatMapColorforValue(Math.floor(((memo[i][j] - min) * mapcolors) / max) / mapcolors, max * max);
-            let xOffset = boardTopx + j * squareSize;
-            let yOffset = boardTopy + i * squareSize;
-            context.fillRect(xOffset, yOffset, squareSize, squareSize);
-        }
-    }
-};
-exports["default"] = {
-    renderFingerprint: (fp, canvas, steps = 32) => {
-        let step = createFromFingerprint(fp.replaceAll(" ", ""));
-        let memo = step?.map((line) => line.split("").map((c) => parseInt(c)));
-        const context = canvas.getContext("2d");
-        if (!context || !memo)
-            return;
-        for (let t = 0; t < steps; t++) {
-            step = nextstep(step, memo);
-        }
-        renderMemo(memo, 3, context);
-        return canvas;
-    },
-    animateFingerprint: async (fp, canvas, steps = 32, speed = 500) => {
-        let step = createFromFingerprint(fp.replaceAll(" ", ""));
-        let memo = step?.map((line) => line.split("").map((c) => parseInt(c)));
-        const context = canvas.getContext("2d");
-        if (!context || !memo)
-            return;
-        for (let t = 0; t < steps; t++) {
-            step = nextstep(step, memo);
-            renderMemo(memo, 3, context);
-            await new Promise((resolve) => setTimeout(resolve, speed));
-        }
-        renderMemo(memo, 3, context);
-        return canvas;
-    },
-};
-
-
-/***/ }),
-
-/***/ "./dist/node/src/IdManager.js":
-/*!************************************!*\
-  !*** ./dist/node/src/IdManager.js ***!
-  \************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.instanciateApp = exports.instanciateContact = void 0;
-const Challenger_1 = __importDefault(__webpack_require__(/*! ./Challenger */ "./dist/node/src/Challenger.js"));
-const KeyManager_1 = __webpack_require__(/*! ./KeyManager */ "./dist/node/src/KeyManager/index.js");
-const MemoryChannel_1 = __webpack_require__(/*! ./MemoryChannel */ "./dist/node/src/MemoryChannel.js");
-const MemoryStorage_1 = __webpack_require__(/*! ./MemoryStorage */ "./dist/node/src/MemoryStorage.js");
-const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
-const VaultysId_1 = __importDefault(__webpack_require__(/*! ./VaultysId */ "./dist/node/src/VaultysId.js"));
-const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const platform_1 = __webpack_require__(/*! ./platform */ "./dist/node/src/platform/index.js");
-// "vaultys/encryption/" + version = 0x01
-const ENCRYPTION_HEADER = buffer_1.Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
-const PRF_NONCE_LENGTH = 32;
-const getSignatureType = (challenge) => {
-    if (challenge.startsWith("vaultys://connect?")) {
-        return "LOGIN";
-    }
-    else if (challenge.startsWith("vaultys://signfile?")) {
-        return "DOCUMENT";
-    }
-    else {
-        return "UNKNOWN";
-    }
-};
-const instanciateContact = (c) => {
-    let vaultysId;
-    if (c.type === 3) {
-        vaultysId = new VaultysId_1.default(KeyManager_1.Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
-    }
-    else if (c.type === 4) {
-        vaultysId = new VaultysId_1.default(KeyManager_1.Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
-    }
-    else {
-        if (c.keyManager.signer.publicKey.length === 1952) {
-            vaultysId = new VaultysId_1.default(KeyManager_1.PQManager.instantiate(c.keyManager), c.certificate, c.type);
-        }
-        else {
-            vaultysId = new VaultysId_1.default(KeyManager_1.Ed25519Manager.instantiate(c.keyManager), c.certificate, c.type);
-        }
-    }
-    return vaultysId;
-};
-exports.instanciateContact = instanciateContact;
-const instanciateApp = (a) => {
-    return VaultysId_1.default.fromId(buffer_1.Buffer.from(a.serverId, "base64"), a.certificate);
-};
-exports.instanciateApp = instanciateApp;
-class IdManager {
-    constructor(vaultysId, store) {
-        this.protocol_version = 0;
-        // alias since this is symetric key encryption
-        this.acceptEncryptFile = this.acceptDecryptFile;
-        this.vaultysId = vaultysId;
-        this.store = store;
-        if (!this.store.get("metadata")) {
-            this.store.set("metadata", {});
-        }
-        if (this.vaultysId.keyManager.entropy)
-            this.store.set("entropy", this.vaultysId.keyManager.entropy);
-        else
-            this.store.set("secret", this.vaultysId.getSecret());
-        this.store.save();
-    }
-    setProtocolVersion(version) {
-        this.protocol_version = version;
-    }
-    /**
-     * Exports the current profile as a backup
-     * @param encrypted Whether to encrypt the backup
-     * @param passphrase Optional passphrase for encryption (generated if not provided)
-     * @returns Object containing backup data and optional passphrase
-     */
-    async exportBackup(passphrase) {
-        if (!passphrase) {
-            // Plaintext export
-            const exportedData = {
-                version: 1,
-                data: buffer_1.Buffer.from(this.store.toString()),
-            };
-            return (0, msgpack_1.encode)(exportedData);
-        }
-        else {
-            const backup = await platform_1.platformCrypto.pbkdf2.encrypt(passphrase, buffer_1.Buffer.from(this.store.toString(), "utf8"));
-            if (!backup)
-                throw new Error("Failed to encrypt backup");
-            return (0, msgpack_1.encode)(backup);
-        }
-    }
-    /**
-     * Imports a backup file
-     * @param backupData The backup file data as Uint8Array
-     * @param passphrase Optional passphrase for decryption (only needed for encrypted backups)
-     * @returns Promise resolving to import result or null if import failed
-     */
-    static async importBackup(backupData, passphrase) {
-        try {
-            // Decode the backup data
-            const backup = (0, msgpack_1.decode)(backupData);
-            let importedData;
-            if (backup.encryptInfo) {
-                // This is an encrypted backup
-                if (!passphrase) {
-                    throw new Error("Passphrase required for encrypted backup");
-                }
-                if (!backup.data) {
-                    throw new Error("Invalid backup format");
-                }
-                importedData = await platform_1.platformCrypto.pbkdf2.decrypt(backup, passphrase);
-                if (!importedData) {
-                    throw new Error("Failed to decrypt backup. Incorrect passphrase?");
-                }
-            }
-            else {
-                importedData = backup.data;
-            }
-            // Import the data into a new profile
-            const store = (0, MemoryStorage_1.MemoryStorage)(() => { }).fromString(buffer_1.Buffer.from(importedData).toString(), () => { });
-            return await IdManager.fromStore(store);
-        }
-        catch (error) {
-            console.error("Import error:", error);
-            return null;
-        }
-    }
-    static async fromStore(store) {
-        const entropy = store.get("entropy");
-        const secret = store.get("secret");
-        if (secret) {
-            if (entropy) {
-                const secretBuffer = buffer_1.Buffer.from(secret, "base64");
-                const type = secretBuffer[0];
-                const vaultysId = await VaultysId_1.default.fromEntropy(entropy, type);
-                return new IdManager(vaultysId, store);
-            }
-            else {
-                const vaultysId = VaultysId_1.default.fromSecret(secret);
-                return new IdManager(vaultysId, store);
-            }
-        }
-        else if (entropy) {
-            const vaultysId = await VaultysId_1.default.machineFromEntropy(entropy);
-            return new IdManager(vaultysId, store);
-        }
-        else {
-            const vaultysId = await VaultysId_1.default.generateMachine();
-            return new IdManager(vaultysId, store);
-        }
-    }
-    merge(otherStore, master = true) {
-        // TODO: check if same profile ?
-        // TODO: revamp contact metadata and sync
-        const master_store = master ? otherStore : this.store;
-        const slave_store = master ? this.store : otherStore;
-        this.store.set("metadata", { ...slave_store.get("metadata"), ...master_store.get("metadata") });
-        ["signatures", "wot"].forEach((table) => {
-            const other = otherStore.substore(table);
-            const me = this.store.substore(table);
-            other.list().forEach((k) => {
-                if (!me.get(k)) {
-                    me.set(k, other.get(k));
-                }
-            });
-        });
-        const other = otherStore.substore("contacts");
-        const me = this.store.substore("contacts");
-        const m = master ? other : me;
-        const s = master ? me : other;
-        other.list().forEach((did) => {
-            if (!me.get(did)) {
-                me.set(did, other.get(did));
-            }
-            else {
-                const contact = me.get(did);
-                contact.metadata = { ...s.get(did).metadata, ...m.get(did).metadata };
-                me.set(did, contact);
-            }
-        });
-        this.store.save();
-    }
-    async verifyWebOfTrust() {
-        let verified = true;
-        for (const certid of this.store.substore("wot").list()) {
-            const cert = this.store.substore("wot").get(certid);
-            verified = verified && (await Challenger_1.default.verifyCertificate(cert));
-        }
-        for (const appid of this.store.substore("registrations").list()) {
-            const app = this.store.substore("registrations").get(appid);
-            verified = verified && appid === VaultysId_1.default.fromId(app.serverId, undefined, "base64").did;
-        }
-        for (const contact of this.contacts) {
-            verified = verified && (await Challenger_1.default.verifyCertificate(contact.certificate));
-        }
-        for (const app of this.apps) {
-            verified = verified && (await Challenger_1.default.verifyCertificate(app.certificate));
-        }
-        return verified;
-    }
-    isHardware() {
-        return this.vaultysId.isHardware();
-    }
-    async signIn() {
-        if (!this.vaultysId.isHardware())
-            return true;
-        await window.CredentialUserInteractionRequest();
-        const challenge = (0, crypto_1.randomBytes)(PRF_NONCE_LENGTH);
-        const keyManager = this.vaultysId.keyManager;
-        const creds = (await navigator.credentials.get({
-            publicKey: {
-                challenge,
-                allowCredentials: [
-                    {
-                        type: "public-key",
-                        id: keyManager.fid,
-                        transports: keyManager.transports,
-                    },
-                ],
-                userVerification: "discouraged",
-            },
-        }));
-        if (creds == null)
-            return false;
-        const response = creds.response;
-        const extractedChallenge = SoftCredentials_1.default.extractChallenge(response.clientDataJSON);
-        if (challenge.toString("base64") !== extractedChallenge) {
-            return false;
-        }
-        return keyManager.verifyCredentials(creds);
-    }
-    get contacts() {
-        const s = this.store.substore("contacts");
-        return s
-            .list()
-            .map((did) => s.get(did))
-            .map(exports.instanciateContact)
-            .map((contact) => contact.toVersion(this.vaultysId.version));
-    }
-    get apps() {
-        const s = this.store.substore("registrations");
-        return s
-            .list()
-            .map((did) => s.get(did))
-            .map(exports.instanciateApp)
-            .map((app) => app.toVersion(this.vaultysId.version));
-    }
-    getContact(did) {
-        const c = this.store.substore("contacts").get(did);
-        if (!c)
-            return null;
-        return (0, exports.instanciateContact)(c).toVersion(this.vaultysId.version);
-    }
-    getApp(did) {
-        const app = this.store.substore("registrations").get(did);
-        if (!app)
-            return null;
-        return (0, exports.instanciateApp)(app).toVersion(this.vaultysId.version);
-    }
-    setContactMetadata(did, name, value) {
-        const c = this.store.substore("contacts").get(did);
-        if (c) {
-            if (!c.metadata) {
-                c.metadata = {};
-            }
-            c.metadata[name] = value;
-        }
-    }
-    getContactMetadata(did, name) {
-        const c = this.store.substore("contacts").get(did);
-        if (c && c.metadata) {
-            return c.metadata[name];
-        }
-        return null;
-    }
-    getContactMetadatas(did) {
-        const c = this.store.substore("contacts").get(did);
-        if (c && c.metadata) {
-            return c.metadata;
-        }
-        return null;
-    }
-    async verifyRelationshipCertificate(did) {
-        const c = this.store.substore("contacts").get(did) || this.store.substore("registrations").get(did);
-        return Challenger_1.default.verifyCertificate(c.certificate);
-    }
-    set name(n) {
-        this.store.get("metadata").name = n;
-    }
-    get name() {
-        return this.store.get("metadata").name;
-    }
-    get displayName() {
-        const metadata = this.store.get("metadata");
-        const result = metadata.firstname ? metadata.firstname + " " + (metadata.name ?? "") : metadata.name;
-        return result?.length > 0 ? result : "Anonymous " + this.vaultysId.fingerprint?.slice(-4);
-    }
-    set phone(n) {
-        this.store.get("metadata").phone = n;
-    }
-    get phone() {
-        return this.store.get("metadata").phone;
-    }
-    set email(n) {
-        this.store.get("metadata").email = n;
-    }
-    get email() {
-        return this.store.get("metadata").email;
-    }
-    // set avatar(n) {
-    //   this.store.get("metadata").avatar = {
-    //     data: Buffer.from(n.data).toString("base64"),
-    //     type: n.type,
-    //   };
-    // }
-    // get avatar() {
-    //   const temp = this.store.get("metadata").avatar;
-    //   if (!temp) return null;
-    //   return {
-    //     data: Buffer.from(temp.data, "base64"),
-    //     type: temp.type,
-    //   };
-    // }
-    async signChallenge(challenge) {
-        const signature = await this.vaultysId.signChallenge(challenge);
-        this.store.substore("signatures").set("" + Date.now(), {
-            signature,
-            challenge,
-        });
-        this.store.save();
-        return signature;
-    }
-    async signFile(file) {
-        const h = (0, crypto_1.hash)("sha256", file.arrayBuffer).toString("hex");
-        const challenge = buffer_1.Buffer.from(`vaultys://signfile?hash=${h}&timestamp=${Date.now()}`, "utf-8");
-        const payload = {
-            challenge,
-            signature: await this.vaultysId.signChallenge(challenge),
-        };
-        this.store.substore("signatures").set(Date.now() + "", payload);
-        this.store.save();
-        return payload;
-    }
-    verifyFile(file, fileSignature, contactId, userVerifiation = true) {
-        const data = fileSignature.challenge.toString("utf8");
-        if (!data.startsWith("vaultys://signfile?")) {
-            return false;
-        }
-        const h = (0, crypto_1.hash)("sha256", file.arrayBuffer).toString("hex");
-        const url = new URL(data);
-        const fileHash = url.searchParams.get("hash");
-        if (h !== fileHash) {
-            return false;
-        }
-        if (url.search.match(/[a-z\d]+=[a-z\d]+/gi)?.length === 2 && url.searchParams.get("timestamp")) {
-            return contactId.verifyChallenge(fileSignature.challenge, fileSignature.signature, userVerifiation);
-        }
-        return false;
-    }
-    async decryptFile(toDecrypt, channel) {
-        // Extract nonce and ciphertext from arrayBuffer
-        const data = new Uint8Array(toDecrypt.arrayBuffer);
-        const header = data.slice(0, ENCRYPTION_HEADER.length);
-        if (buffer_1.Buffer.from(header).toString("hex") !== ENCRYPTION_HEADER.toString("hex")) {
-            throw new Error("Invalid header for encrypted file");
-        }
-        const prfNonceBytes = data.slice(ENCRYPTION_HEADER.length, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH);
-        const nonceBytes = data.slice(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + tweetnacl_1.default.secretbox.nonceLength);
-        const ciphertext = data.slice(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + tweetnacl_1.default.secretbox.nonceLength);
-        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("prf|encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption|prf");
-        if (prf?.length !== PRF_NONCE_LENGTH) {
-            throw new Error("Invalid PRF generated");
-        }
-        // Use sha256 hash of the PRF as the secretbox key (must be 32 bytes)
-        const secretKey = (0, crypto_1.hash)("sha256", prf);
-        (0, crypto_1.secureErase)(prf);
-        // Decrypt using nacl.secretbox.open
-        const decrypted = tweetnacl_1.default.secretbox.open(ciphertext, nonceBytes, secretKey);
-        (0, crypto_1.secureErase)(secretKey);
-        if (!decrypted) {
-            throw new Error("Decryption failed");
-        }
-        return {
-            name: toDecrypt.name,
-            type: toDecrypt.type,
-            arrayBuffer: buffer_1.Buffer.from(decrypted),
-        };
-    }
-    async encryptFile(toEncrypt, channel) {
-        // Generate a secure random nonce for both the PRF and the secretbox
-        const prfNonceBytes = (0, crypto_1.randomBytes)(PRF_NONCE_LENGTH);
-        const prf = channel ? await this.requestPRF(channel, "encryption/" + buffer_1.Buffer.from(prfNonceBytes).toString("hex") + "/encryption") : await this.vaultysId.hmac("prf|encryption/" + prfNonceBytes.toString("hex") + "/encryption|prf");
-        if (prf?.length !== PRF_NONCE_LENGTH) {
-            return null;
-        }
-        // Use sha256 hash of the PRF as the secretbox key (must be 32 bytes)
-        const secretKey = (0, crypto_1.hash)("sha256", prf);
-        (0, crypto_1.secureErase)(prf);
-        // Generate a random nonce for secretbox encryption
-        const nonceBytes = tweetnacl_1.default.randomBytes(tweetnacl_1.default.secretbox.nonceLength);
-        // Encrypt using nacl.secretbox
-        const ciphertext = tweetnacl_1.default.secretbox(new Uint8Array(toEncrypt.arrayBuffer), nonceBytes, secretKey);
-        (0, crypto_1.secureErase)(secretKey);
-        // Combine encryption nonce and ciphertext into a single buffer
-        const result = new Uint8Array(ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + nonceBytes.length + ciphertext.length);
-        result.set(ENCRYPTION_HEADER);
-        result.set(prfNonceBytes, ENCRYPTION_HEADER.length);
-        result.set(nonceBytes, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH);
-        result.set(ciphertext, ENCRYPTION_HEADER.length + PRF_NONCE_LENGTH + nonceBytes.length);
-        return {
-            name: toEncrypt.name,
-            type: toEncrypt.type,
-            arrayBuffer: buffer_1.Buffer.from(result), // Buffer contains secretbox nonce + ciphertext
-        };
-    }
-    getSignatures() {
-        const store = this.store.substore("signatures");
-        return store
-            .list()
-            .sort()
-            .map((date) => {
-            const payload = store.get(date);
-            const challenge = buffer_1.Buffer.from(payload.challenge).toString("utf-8");
-            return {
-                date,
-                payload,
-                challenge,
-                type: getSignatureType(challenge),
-            };
-        });
-    }
-    migrate(version) {
-        this.vaultysId.toVersion(version);
-        const s = this.store.substore("contacts");
-        for (const did of s.list()) {
-            const data = s.get(did);
-            const contact = (0, exports.instanciateContact)(data);
-            const newContact = contact.toVersion(version);
-            if (newContact.did !== did) {
-                s.set(newContact.did, { ...contact, ...newContact, metadata: data.metadata, oldDid: did });
-                s.delete(did);
-                //console.log(did, "->", newContact.did);
-            }
-        }
-        const apps = this.store.substore("registrations");
-        for (const did of apps.list()) {
-            const data = apps.get(did);
-            const site = (0, exports.instanciateApp)(data);
-            if (site) {
-                const newSite = site.toVersion(version);
-                if (newSite.did !== did) {
-                    const name = data.site === did ? newSite.did : data.site;
-                    apps.set(newSite.did, { site: name, oldDid: did, serverId: newSite.id.toString("base64"), certificate: data.certificate, timestamp: data.timestamp });
-                    apps.delete(did);
-                    // console.log(did, "->", newSite.did);
-                }
-            }
-        }
-        this.store.save();
-    }
-    async verifyChallenge(challenge, signature) {
-        return this.vaultysId.verifyChallenge(challenge, signature, true);
-    }
-    async upload(channel, stream) {
-        const challenger = await this.startSRP(channel, "p2p", "transfer");
-        if (challenger.isComplete()) {
-            const { upload } = (0, MemoryChannel_1.StreamChannel)(channel);
-            await upload(stream);
-        }
-        else
-            channel.send(buffer_1.Buffer.from([0]));
-    }
-    async download(channel, stream) {
-        const challenger = await this.acceptSRP(channel, "p2p", "transfer");
-        if (challenger.isComplete()) {
-            const { download } = (0, MemoryChannel_1.StreamChannel)(channel);
-            await download(stream);
-        }
-        else
-            channel.send(buffer_1.Buffer.from([0]));
-    }
-    async requestDecrypt(channel, toDecrypt) {
-        const challenger = await this.acceptSRP(channel, "p2p", "decrypt");
-        if (challenger.isComplete()) {
-            channel.send(toDecrypt);
-            const new_encrypted = await channel.receive();
-            const decrypted = await this.vaultysId.dhiesDecrypt(new_encrypted, challenger.getContactId().id);
-            return decrypted;
-        }
-        else
-            channel.send(buffer_1.Buffer.from([0]));
-    }
-    async acceptDecrypt(channel, accept) {
-        const challenger = await this.startSRP(channel, "p2p", "decrypt", {}, accept);
-        if (challenger.isComplete()) {
-            const toDecrypt = await channel.receive();
-            const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
-            if (decrypted) {
-                const encrypted = await this.vaultysId.dhiesEncrypt(decrypted, challenger.getContactId().id);
-                channel.send(encrypted ?? buffer_1.Buffer.from([0]));
-            }
-            else
-                channel.send(buffer_1.Buffer.from([0]));
-        }
-        else
-            channel.send(buffer_1.Buffer.from([0]));
-    }
-    async requestDecryptFile(channel, toDecrypt) {
-        return this.decryptFile(toDecrypt, channel);
-    }
-    async requestEncryptFile(channel, toEncrypt) {
-        return this.encryptFile(toEncrypt, channel);
-    }
-    async acceptDecryptFile(channel, accept) {
-        let result_contact = null;
-        await this.acceptPRF(channel, (contact, appid) => {
-            if (appid.length > 63 && appid.startsWith("encryption/") && appid.endsWith("/encryption")) {
-                result_contact = contact;
-                //TODO: maybe by default should be in web of trust?
-                return accept?.(contact) || Promise.resolve(true);
-            }
-            else
-                return Promise.resolve(false);
-        });
-        return result_contact;
-    }
-    async requestSignFile(channel, file) {
-        const challenger = await this.acceptSRP(channel, "p2p", "signfile");
-        if (challenger.isComplete()) {
-            channel.send(buffer_1.Buffer.from((0, msgpack_1.encode)(file)));
-            const result = await channel.receive();
-            const fileSignature = (0, msgpack_1.decode)(result);
-            if (this.verifyFile(file, fileSignature, challenger.getContactId().toVersion(1))) {
-                return fileSignature;
-            }
-            else
-                return undefined;
-        }
-        else
-            channel.send(buffer_1.Buffer.from([0]));
-    }
-    async acceptSignFile(channel, accept) {
-        const challenger = await this.startSRP(channel, "p2p", "signfile");
-        if (challenger.isComplete()) {
-            const result = await channel.receive();
-            const file = (0, msgpack_1.decode)(result);
-            if (!accept || (await accept(challenger.getContactId(), file))) {
-                const result = await this.signFile(file);
-                channel.send(buffer_1.Buffer.from((0, msgpack_1.encode)(result)));
-            }
-            else
-                channel.send(buffer_1.Buffer.from([0]));
-        }
-        else
-            channel.send(buffer_1.Buffer.from([0]));
-    }
-    async requestPRF(channel, appid) {
-        if (appid.length < 3) {
-            throw new Error("appid is too short, less than 3 characters");
-        }
-        if (appid.split("|").length > 1) {
-            throw new Error("appid contains illegal character |");
-        }
-        const challenger = await this.acceptSRP(channel, "p2p", "prf");
-        if (challenger.isComplete()) {
-            channel.send(buffer_1.Buffer.from(appid, "utf-8"));
-            const prf = await channel.receive();
-            return buffer_1.Buffer.from(prf);
-        }
-        else
-            channel.send(buffer_1.Buffer.from([0]));
-    }
-    async acceptPRF(channel, accept) {
-        const challenger = await this.startSRP(channel, "p2p", "prf");
-        if (challenger.isComplete()) {
-            const result = await channel.receive();
-            const appid = result.toString("utf-8");
-            if (appid.length < 3 || appid.split("|").length > 1) {
-                // error if appid is too short or contains illegal character
-                channel.send(buffer_1.Buffer.from([0]));
-            }
-            else if (!accept || (await accept(challenger.getContactId(), appid))) {
-                const hmac = (await this.vaultysId.hmac("prf|" + appid + "|prf")) ?? buffer_1.Buffer.from([0]);
-                channel.send(hmac);
-                (0, crypto_1.secureErase)(hmac);
-            }
-            else
-                channel.send(buffer_1.Buffer.from([0]));
-        }
-        else
-            channel.send(buffer_1.Buffer.from([0]));
-    }
-    /***************************/
-    /*   SIGNING PARTY HERE!   */
-    /***************************/
-    listCertificates() {
-        const wot = this.store.substore("wot");
-        return wot.list().map((timestamp) => {
-            const c = wot.get(timestamp);
-            if (c.timestamp) {
-                return c;
-            }
-            else {
-                const result = {
-                    ...Challenger_1.default.deserializeCertificate(wot.get(timestamp)),
-                    raw: c,
-                };
-                wot.set(timestamp, result);
-                return result;
-            }
-        });
-    }
-    async startSRP(channel, protocol, service, metadata = {}, accept) {
-        const challenger = new Challenger_1.default(this.vaultysId);
-        challenger.createChallenge(protocol, service, this.protocol_version, metadata);
-        //console.log(challenger);
-        const cert = challenger.getCertificate();
-        if (!cert) {
-            channel.close();
-            channel.send(buffer_1.Buffer.from([0]));
-            throw new Error("Error processing challenge");
-        }
-        channel.send(cert);
-        try {
-            const message = await channel.receive();
-            // console.log("startSRP", message)
-            const contact = Challenger_1.default.deserializeCertificate(message).pk2;
-            if (!contact) {
-                channel.send(buffer_1.Buffer.from([0]));
-                throw new Error("Contact pk2 is not sent");
-            }
-            if (accept && !(await accept(VaultysId_1.default.fromId(contact)))) {
-                channel.send(buffer_1.Buffer.from([0]));
-                throw new Error("Contact refused");
-            }
-            await challenger.update(message);
-        }
-        catch (error) {
-            channel.send(buffer_1.Buffer.from([0]));
-            throw new Error(error);
-        }
-        if (challenger.isComplete()) {
-            const certificate = challenger.getCertificate();
-            if (!certificate) {
-                channel.close();
-                channel.send(buffer_1.Buffer.from([0]));
-                throw new Error("Error processing challenge");
-            }
-            // there is a caveat here, we are not sure that the last bit of information has been received
-            channel.send(certificate);
-            this.store.substore("wot").set(Date.now() + "", certificate);
-            // TODO create/update merkle tree + sign it
-            return challenger;
-        }
-        else {
-            channel.send(buffer_1.Buffer.from([0]));
-            throw new Error("Can't add a new contact if the protocol is not complete");
-        }
-    }
-    async acceptSRP(channel, protocol, service, metadata = {}, accept) {
-        const challenger = new Challenger_1.default(this.vaultysId);
-        try {
-            const message = await channel.receive();
-            const chal = Challenger_1.default.deserializeCertificate(message);
-            if (!chal.pk1) {
-                channel.send(buffer_1.Buffer.from([0]));
-                throw new Error("Contact pk1 is not sent");
-            }
-            if (chal.protocol !== protocol) {
-                channel.send(buffer_1.Buffer.from([0]));
-                throw new Error("protocol is not the one expected: " + chal.protocol + " !=" + protocol);
-            }
-            if (chal.service !== service) {
-                channel.send(buffer_1.Buffer.from([0]));
-                throw new Error("service is not the one expected: " + chal.service + " !=" + service);
-            }
-            if (accept && !(await accept(VaultysId_1.default.fromId(chal.pk1)))) {
-                channel.send(buffer_1.Buffer.from([0]));
-                throw new Error("Contact refused");
-            }
-            await challenger.update(message, metadata);
-        }
-        catch (error) {
-            channel.send(buffer_1.Buffer.from([0]));
-            throw new Error(error);
-        }
-        const cert = challenger.getCertificate();
-        if (!cert) {
-            channel.send(buffer_1.Buffer.from([0]));
-            await channel.close();
-            throw new Error("Error processing challenge");
-        }
-        // console.log("acceptSRP sending 1")
-        channel.send(cert);
-        // console.log("acceptSRP sending 2")
-        try {
-            const message = await channel.receive();
-            // console.log("acceptSRP 2", message)
-            await challenger.update(message);
-        }
-        catch (error) {
-            await channel.close();
-            //console.log(challenger);
-            throw new Error(error);
-        }
-        if (challenger.isComplete()) {
-            const certificate = challenger.getCertificate();
-            this.store.substore("wot").set(Date.now() + "", certificate);
-            // TODO create/update merkle tree + sign it
-            return challenger;
-        }
-        else {
-            await channel.close();
-            throw new Error("Can't add a new contact if the protocol is not complete");
-        }
-    }
-    saveApp(app, name) {
-        app.toVersion(this.vaultysId.version);
-        if (!app.isMachine()) {
-            this.saveContact(app);
-        }
-        else {
-            const appstore = this.store.substore("registrations");
-            if (!appstore.get(app.did)) {
-                appstore.set(app.did, {
-                    site: name ?? app.did,
-                    serverId: app.id.toString("base64"),
-                    certificate: app.certificate,
-                });
-            }
-        }
-    }
-    saveContact(contact) {
-        contact.toVersion(this.vaultysId.version);
-        if (contact.isMachine()) {
-            this.saveApp(contact);
-        }
-        else {
-            const contactstore = this.store.substore("contacts");
-            if (!contactstore.get(contact.did)) {
-                contactstore.set(contact.did, contact);
-                this.store.save();
-            }
-        }
-    }
-    async askContact(channel, metadata = {}, accept) {
-        const challenger = await this.startSRP(channel, "p2p", "auth", metadata, accept);
-        const contact = challenger.getContactId();
-        this.saveContact(contact);
-        return contact;
-    }
-    async acceptContact(channel, metadata = {}, accept) {
-        const challenger = await this.acceptSRP(channel, "p2p", "auth", metadata, accept);
-        const contact = challenger.getContactId();
-        this.saveContact(contact);
-        return contact;
-    }
-}
-exports["default"] = IdManager;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/KeyManager/AbstractKeyManager.js":
-/*!********************************************************!*\
-  !*** ./dist/node/src/KeyManager/AbstractKeyManager.js ***!
-  \********************************************************/
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-class KeyManager {
-    constructor() {
-        // Abstract class - properties will be initialized by concrete implementations
-    }
-    static createFromEntropy(entropy, swapIndex) {
-        throw new Error("Method must be implemented by concrete class");
-    }
-    static generate() {
-        throw new Error("Method must be implemented by concrete class");
-    }
-    static fromSecret(secret) {
-        throw new Error("Method must be implemented by concrete class");
-    }
-    static instantiate(obj) {
-        throw new Error("Method must be implemented by concrete class");
-    }
-    static fromId(id) {
-        throw new Error("Method must be implemented by concrete class");
-    }
-    async sign(data) {
-        if (this.capability == "public")
-            return null;
-        return (await this.getSigner()).sign(data);
-    }
-    /**
-     * Static method to perform a Diffie-Hellman key exchange between two KeyManager instances
-     * @param keyManager1 First KeyManager instance
-     * @param keyManager2 Second KeyManager instance
-     * @returns A shared secret that both parties can derive
-     */
-    static async diffieHellman(keyManager1, keyManager2) {
-        return await keyManager1.performDiffieHellman(keyManager2);
-    }
-    static encrypt(plaintext, recipientIds) {
-        throw new Error("Method must be implemented by concrete class");
-    }
-}
-exports["default"] = KeyManager;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/KeyManager/CypherManager.js":
-/*!***************************************************!*\
-  !*** ./dist/node/src/KeyManager/CypherManager.js ***!
-  \***************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.DHIES = void 0;
-exports.getCypherPublicKeyFromId = getCypherPublicKeyFromId;
-const saltpack_1 = __webpack_require__(/*! @vaultys/saltpack */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta4/node_modules/@vaultys/saltpack/dist/index.js");
-const crypto_1 = __webpack_require__(/*! ../crypto */ "./dist/node/src/crypto.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/ed25519.js");
-const AbstractKeyManager_1 = __importDefault(__webpack_require__(/*! ./AbstractKeyManager */ "./dist/node/src/KeyManager/AbstractKeyManager.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
-ed25519_1.ed25519.CURVE = { ...ed25519_1.ed25519.CURVE };
-// @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
-ed25519_1.ed25519.CURVE.adjustScalarBytes = (bytes) => {
-    // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
-    // set the three least significant bits of the first byte
-    bytes[0] &= 248; // 0b1111_1000
-    // and the most significant bit of the last to zero,
-    bytes[31] &= 63; // 0b0001_1111
-    // set the second most significant bit of the last byte to 1
-    bytes[31] |= 64; // 0b0100_0000
-    return bytes;
-};
-const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
-/**
- * DHIES (Diffie-Hellman Integrated Encryption Scheme) for KeyManager
- * Provides authenticated encryption using Diffie-Hellman key exchange
- */
-class DHIES {
-    constructor(keyManager) {
-        this.keyManager = keyManager;
-    }
-    /**
-     * Encrypts a message for a recipient using DHIES
-     *
-     * @param message The plaintext message to encrypt
-     * @param recipientPublicKey The recipient's public key
-     * @returns Encrypted message with ephemeral public key and authentication tag, or null if encryption fails
-     */
-    async encrypt(message, recipientPublicKey) {
-        if (this.keyManager.capability === "public") {
-            console.error("Cannot encrypt with DHIES using a public KeyManager");
-            return null;
-        }
-        const cypher = await this.keyManager.getCypher();
-        // Convert message to Buffer if it's a string
-        const messageBuffer = typeof message === "string" ? buffer_1.Buffer.from(message, "utf8") : message;
-        try {
-            const ephemeralKey = (0, crypto_1.randomBytes)(32); // Generate a random 32-byte key for ephemeral key
-            // Derive shared secret using recipient's public key and sender secret key
-            const dh = await cypher.diffieHellman(recipientPublicKey);
-            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKey, dh));
-            // Key derivation: derive encryption and MAC keys from shared secret
-            const kdfOutput = this.kdf(sharedSecret, this.keyManager.cypher.publicKey, recipientPublicKey);
-            const encryptionKey = kdfOutput.encryptionKey;
-            const macKey = kdfOutput.macKey;
-            // Encrypt the message using XChaCha20-Poly1305
-            const nonce = (0, crypto_1.randomBytes)(24); // 24 bytes nonce for XChaCha20-Poly1305
-            const ciphertext = buffer_1.Buffer.from(tweetnacl_1.default.secretbox(messageBuffer, nonce, encryptionKey));
-            // Compute MAC (Message Authentication Code)
-            const dataToAuthenticate = buffer_1.Buffer.concat([this.keyManager.cypher.publicKey, nonce, ciphertext]);
-            const mac = this.computeMAC(macKey, dataToAuthenticate);
-            // Construct the final encrypted message: nonce + ephemeralKey + ciphertext + MAC
-            const encryptedMessage = buffer_1.Buffer.concat([nonce, ephemeralKey, ciphertext, mac]);
-            // Securely erase sensitive data
-            (0, crypto_1.secureErase)(sharedSecret);
-            (0, crypto_1.secureErase)(dh);
-            (0, crypto_1.secureErase)(encryptionKey);
-            (0, crypto_1.secureErase)(macKey);
-            return encryptedMessage;
-        }
-        catch (error) {
-            console.error("DHIES encryption failed:", error);
-            return null;
-        }
-    }
-    /**
-     * Decrypts a message encrypted with DHIES
-     *
-     * @param encryptedMessage The complete encrypted message from the encrypt method
-     * @returns Decrypted message as a Buffer, or null if decryption fails
-     */
-    async decrypt(encryptedMessage, senderPublicKey) {
-        if (this.keyManager.capability === "public") {
-            console.error("Cannot decrypt with DHIES using a public KeyManager");
-            return null;
-        }
-        try {
-            // Extract components from the encrypted message
-            // Format: nonce (24 bytes) + ephemeralKey (32 bytes) + ciphertext + MAC (32 bytes)
-            const nonce = encryptedMessage.slice(0, 24);
-            const ephemeralKey = encryptedMessage.slice(24, 56);
-            const mac = encryptedMessage.slice(encryptedMessage.length - 32);
-            const ciphertext = encryptedMessage.slice(56, encryptedMessage.length - 32);
-            const cypher = await this.keyManager.getCypher();
-            // Derive shared secret using sender public key and recipient secret key
-            const dh = await cypher.diffieHellman(senderPublicKey);
-            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKey, dh));
-            // Key derivation: derive encryption and MAC keys
-            const kdfOutput = this.kdf(sharedSecret, senderPublicKey, this.keyManager.cypher.publicKey);
-            const encryptionKey = kdfOutput.encryptionKey;
-            const macKey = kdfOutput.macKey;
-            // Verify MAC
-            const dataToAuthenticate = buffer_1.Buffer.concat([senderPublicKey, nonce, ciphertext]);
-            const computedMac = this.computeMAC(macKey, dataToAuthenticate);
-            if (!this.constantTimeEqual(mac, computedMac)) {
-                //console.log(mac, computedMac);
-                console.error("DHIES: MAC verification failed");
-                return null;
-            }
-            // Decrypt the ciphertext
-            const plaintext = tweetnacl_1.default.secretbox.open(ciphertext, nonce, encryptionKey);
-            if (!plaintext) {
-                console.error("DHIES: Decryption failed");
-                return null;
-            }
-            const result = buffer_1.Buffer.from(plaintext);
-            // Securely erase sensitive data
-            (0, crypto_1.secureErase)(sharedSecret);
-            (0, crypto_1.secureErase)(encryptionKey);
-            (0, crypto_1.secureErase)(macKey);
-            return result;
-        }
-        catch (error) {
-            console.error("DHIES decryption failed:", error);
-            return null;
-        }
-    }
-    /**
-     * Key Derivation Function: Derives encryption and MAC keys from the shared secret
-     */
-    kdf(sharedSecret, ephemeralPublicKey, staticPublicKey) {
-        // Create a context for the KDF to ensure different keys for different uses
-        const context = buffer_1.Buffer.concat([buffer_1.Buffer.from("DHIES-KDF"), ephemeralPublicKey, staticPublicKey]);
-        // Derive encryption key: HKDF-like construction
-        const encryptionKeyMaterial = (0, crypto_1.hash)("sha512", buffer_1.Buffer.concat([
-            sharedSecret,
-            context,
-            buffer_1.Buffer.from([0x01]), // Domain separation byte
-        ]));
-        // Derive MAC key (using a different domain separation byte)
-        const macKeyMaterial = (0, crypto_1.hash)("sha512", buffer_1.Buffer.concat([
-            sharedSecret,
-            context,
-            buffer_1.Buffer.from([0x02]), // Domain separation byte
-        ]));
-        // Use first 32 bytes of each as the actual keys (for NaCl's secretbox)
-        return {
-            encryptionKey: encryptionKeyMaterial.slice(0, 32),
-            macKey: macKeyMaterial.slice(0, 32),
-        };
-    }
-    /**
-     * Computes MAC for authenticated encryption
-     */
-    computeMAC(macKey, data) {
-        return (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([macKey, data]));
-    }
-    /**
-     * Constant-time comparison of two buffers to prevent timing attacks
-     */
-    constantTimeEqual(a, b) {
-        if (a.length !== b.length) {
-            return false;
-        }
-        let result = 0;
-        for (let i = 0; i < a.length; i++) {
-            result |= a[i] ^ b[i];
-        }
-        return result === 0;
-    }
-}
-exports.DHIES = DHIES;
-function getCypherPublicKeyFromId(id) {
-    const data = (0, msgpack_1.decode)(id);
-    return data.e;
-}
-class CypherManager extends AbstractKeyManager_1.default {
-    constructor() {
-        super();
-        this.version = 1;
-        this.capability = "private";
-        this.authType = "";
-        this.encType = "X25519KeyAgreementKey2019";
-    }
-    async getCypher() {
-        // todo fetch secretKey here
-        const cypher = this.cypher;
-        return {
-            hmac: (message) => (cypher.secretKey ? (0, crypto_1.hmac)("sha256", buffer_1.Buffer.from(cypher.secretKey), "VaultysID/" + message + "/end") : undefined),
-            signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
-            decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
-            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
-        };
-    }
-    cleanSecureData() {
-        if (this.cypher?.secretKey) {
-            (0, crypto_1.secureErase)(this.cypher.secretKey);
-            delete this.cypher.secretKey;
-        }
-        if (this.entropy) {
-            (0, crypto_1.secureErase)(this.entropy);
-            delete this.entropy;
-        }
-    }
-    /**
-     * Performs a Diffie-Hellman key exchange with another KeyManager instance
-     * @param otherKeyManager The other party's KeyManager instance
-     * @returns A shared secret that can be used for symmetric encryption
-     */
-    async performDiffieHellman(otherKeyManager) {
-        if (this.capability === "public") {
-            console.error("Cannot perform DH key exchange with a public key capability");
-            return null;
-        }
-        const cypher = await this.getCypher();
-        const otherKey = otherKeyManager.cypher.publicKey;
-        // Perform the X25519 scalar multiplication to derive the shared secret
-        const sharedSecret = await cypher.diffieHellman(otherKey);
-        // Hash the shared secret for better security (to derive a symmetric key)
-        const derivedKey = sha256(sharedSecret);
-        // Securely erase the shared secret from memory
-        (0, crypto_1.secureErase)(sharedSecret);
-        return derivedKey;
-    }
-    /**
-     * Static method to perform a Diffie-Hellman key exchange between two KeyManager instances
-     * @param keyManager1 First KeyManager instance
-     * @param keyManager2 Second KeyManager instance
-     * @returns A shared secret that both parties can derive
-     */
-    static async diffieHellman(keyManager1, keyManager2) {
-        return keyManager1.performDiffieHellman(keyManager2);
-    }
-    /**
-     * Encrypt a message using DHIES for a recipient
-     * @param message Message to encrypt
-     * @param recipientId Recipient's KeyManager ID
-     * @returns Encrypted message or null if encryption fails
-     */
-    async dhiesEncrypt(message, recipientId) {
-        const dhies = new DHIES(this);
-        return dhies.encrypt(message, getCypherPublicKeyFromId(recipientId));
-    }
-    /**
-     * Decrypt a message encrypted with DHIES
-     * @param encryptedMessage Encrypted message from dhiesEncrypt
-     * @returns Decrypted message or null if decryption fails
-     */
-    async dhiesDecrypt(encryptedMessage, senderId) {
-        const dhies = new DHIES(this);
-        return dhies.decrypt(encryptedMessage, getCypherPublicKeyFromId(senderId));
-    }
-    static async encrypt(plaintext, recipientIds) {
-        const publicKeys = recipientIds.map(getCypherPublicKeyFromId);
-        return await (0, saltpack_1.encryptAndArmor)(plaintext, null, publicKeys);
-    }
-    async signcrypt(plaintext, recipientIds) {
-        const publicKeys = recipientIds.map(getCypherPublicKeyFromId);
-        const cypher = await this.getCypher();
-        return await cypher.signcrypt(plaintext, publicKeys);
-    }
-    async decrypt(encryptedMessage, senderId = null) {
-        const cypher = await this.getCypher();
-        const senderKey = senderId ? getCypherPublicKeyFromId(senderId) : null;
-        const message = await cypher.decrypt(encryptedMessage, senderKey);
-        return message.toString();
-    }
-    // use better hash to prevent attack
-    getSecretHash(data) {
-        const toHash = buffer_1.Buffer.concat([data, buffer_1.Buffer.from("secrethash"), this.cypher.secretKey]);
-        return (0, crypto_1.hash)("sha256", toHash);
-    }
-}
-exports["default"] = CypherManager;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/KeyManager/Ed25519Manager.js":
-/*!****************************************************!*\
-  !*** ./dist/node/src/KeyManager/Ed25519Manager.js ***!
-  \****************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const saltpack_1 = __webpack_require__(/*! @vaultys/saltpack */ "./node_modules/.pnpm/@vaultys+saltpack@1.0.0-beta4/node_modules/@vaultys/saltpack/dist/index.js");
-const crypto_1 = __webpack_require__(/*! ../crypto */ "./dist/node/src/crypto.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
-const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/ed25519.js");
-const CypherManager_1 = __importDefault(__webpack_require__(/*! ./CypherManager */ "./dist/node/src/KeyManager/CypherManager.js"));
-ed25519_1.ed25519.CURVE = { ...ed25519_1.ed25519.CURVE };
-// @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
-ed25519_1.ed25519.CURVE.adjustScalarBytes = (bytes) => {
-    // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
-    // set the three least significant bits of the first byte
-    bytes[0] &= 248; // 0b1111_1000
-    // and the most significant bit of the last to zero,
-    bytes[31] &= 63; // 0b0001_1111
-    // set the second most significant bit of the last byte to 1
-    bytes[31] |= 64; // 0b0100_0000
-    return bytes;
-};
-const serializeID_v0 = (km) => {
-    const encodeBinary = (data) => {
-        if (data.length <= 65535) {
-            // bin16: binary data whose length is upto (2^16)-1 bytes
-            return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
-        }
-        else {
-            // bin32: binary data whose length is upto (2^32)-1 bytes
-            return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
-        }
-    };
-    const version = buffer_1.Buffer.from([0x84, 0xa1, 0x76, 0]);
-    const proof = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x70]), encodeBinary(buffer_1.Buffer.from([]))]);
-    const sign = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x78]), encodeBinary(km.signer.publicKey)]);
-    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
-    return buffer_1.Buffer.concat([version, proof, sign, cypher]);
-};
-const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
-const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
-class Ed25519Manager extends CypherManager_1.default {
-    constructor() {
-        super();
-        this.version = 1;
-        this.capability = "private";
-        this.authType = "Ed25519VerificationKey2020";
-    }
-    static async createFromEntropy(entropy) {
-        const km = new Ed25519Manager();
-        km.entropy = entropy;
-        km.capability = "private";
-        const seed = sha512(entropy);
-        // const derivedKey = privateDerivePath(await bip32.Bip32PrivateKey.fromEntropy(seed.slice(0, 32)), `m/1'/0'/${swapIndex}'`);
-        // km.proofKey = {
-        //   publicKey: Buffer.from([]), //deprecated
-        // };
-        //km.proof = hash("sha256", km.proofKey.publicKey);
-        // const privateKey = privateDerivePath(derivedKey, "/0'");
-        km.signer = {
-            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(seed.slice(0, 32))),
-            secretKey: seed.slice(0, 32),
-        };
-        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed.slice(32, 64));
-        km.cypher = {
-            publicKey: buffer_1.Buffer.from(cypher.publicKey),
-            secretKey: buffer_1.Buffer.from(cypher.secretKey),
-        };
-        return km;
-    }
-    static generate() {
-        return Ed25519Manager.createFromEntropy((0, crypto_1.randomBytes)(32));
-    }
-    get id() {
-        if (this.version === 0)
-            return serializeID_v0(this);
-        else
-            return buffer_1.Buffer.from((0, msgpack_1.encode)({
-                v: this.version,
-                x: this.signer.publicKey,
-                e: this.cypher.publicKey,
-            }));
-    }
-    async getCypher() {
-        // todo fetch secretKey here
-        const cypher = this.cypher;
-        return {
-            hmac: (message) => (cypher.secretKey ? (0, crypto_1.hmac)("sha256", buffer_1.Buffer.from(cypher.secretKey), "VaultysID/" + message + "/end") : undefined),
-            signcrypt: async (plaintext, publicKeys) => (0, saltpack_1.encryptAndArmor)(plaintext, cypher, publicKeys),
-            decrypt: async (encryptedMessage, senderKey) => (0, saltpack_1.dearmorAndDecrypt)(encryptedMessage, cypher, senderKey),
-            diffieHellman: async (publicKey) => buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(cypher.secretKey, publicKey)),
-        };
-    }
-    getSigner() {
-        // todo fetch secretKey here
-        const secretKey = this.signer.secretKey;
-        const sign = (data) => Promise.resolve(buffer_1.Buffer.from(ed25519_1.ed25519.sign(data, secretKey)));
-        //console.log(secretKey.toString("hex"), new bip32.PrivateKey(secretKey).toPublicKey().toBytes().toString("hex"), Buffer.from(ed25519.getPublicKey(secretKey)).toString("hex"));
-        return Promise.resolve({ sign });
-    }
-    getSecret() {
-        return buffer_1.Buffer.from((0, msgpack_1.encode)({
-            v: this.version,
-            x: this.signer.secretKey,
-            e: this.cypher.secretKey,
-        }));
-    }
-    static fromSecret(secret) {
-        const data = (0, msgpack_1.decode)(secret);
-        const km = new Ed25519Manager();
-        km.version = data.v ?? 0;
-        km.capability = "private";
-        km.signer = {
-            secretKey: data.x.slice(0, 32),
-            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(data.x.slice(0, 32))),
-        };
-        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
-        km.cypher = {
-            publicKey: buffer_1.Buffer.from(cypher.publicKey),
-            secretKey: buffer_1.Buffer.from(cypher.secretKey),
-        };
-        return km;
-    }
-    static instantiate(obj) {
-        const km = new Ed25519Manager();
-        km.version = obj.version ?? 0;
-        km.signer = {
-            publicKey: obj.signer.publicKey.data ? buffer_1.Buffer.from(obj.signer.publicKey.data) : buffer_1.Buffer.from(obj.signer.publicKey),
-        };
-        km.cypher = {
-            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
-        };
-        return km;
-    }
-    static fromId(id) {
-        const data = (0, msgpack_1.decode)(id);
-        const km = new Ed25519Manager();
-        km.version = data.v ?? 0;
-        km.capability = "public";
-        km.signer = {
-            publicKey: data.x,
-        };
-        km.cypher = {
-            publicKey: data.e,
-        };
-        return km;
-    }
-    verify(data, signature, userVerificationIgnored) {
-        return ed25519_1.ed25519.verify(signature, data, this.signer.publicKey);
-    }
-    cleanSecureData() {
-        if (this.cypher?.secretKey) {
-            (0, crypto_1.secureErase)(this.cypher.secretKey);
-            delete this.cypher.secretKey;
-        }
-        if (this.signer?.secretKey) {
-            (0, crypto_1.secureErase)(this.signer.secretKey);
-            delete this.signer.secretKey;
-        }
-        if (this.entropy) {
-            (0, crypto_1.secureErase)(this.entropy);
-            delete this.entropy;
-        }
-    }
-}
-exports["default"] = Ed25519Manager;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/KeyManager/Fido2Manager.js":
-/*!**************************************************!*\
-  !*** ./dist/node/src/KeyManager/Fido2Manager.js ***!
-  \**************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const crypto_1 = __webpack_require__(/*! ../crypto */ "./dist/node/src/crypto.js");
-const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
-const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const webauthn_1 = __webpack_require__(/*! ../platform/webauthn */ "./dist/node/src/platform/webauthn.js");
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
-const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ../platform/SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const pqCrypto_1 = __webpack_require__(/*! ../pqCrypto */ "./dist/node/src/pqCrypto.js");
-const CypherManager_1 = __importDefault(__webpack_require__(/*! ./CypherManager */ "./dist/node/src/KeyManager/CypherManager.js"));
-const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
-const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
-const lookup = {
-    usb: 1,
-    nfc: 2,
-    ble: 4,
-    internal: 8,
-    hybrid: 16,
-    "smart-card": 32,
-};
-const encodeBinary = (data) => {
-    if (data.length <= 65535) {
-        // bin16: binary data whose length is upto (2^16)-1 bytes
-        return buffer_1.Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
-    }
-    else {
-        // bin32: binary data whose length is upto (2^32)-1 bytes
-        return buffer_1.Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
-    }
-};
-const serializeID_v0 = (km) => {
-    const version = buffer_1.Buffer.from([0x83, 0xa1, 0x76, km.version]);
-    const cypher = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
-    const ckey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0xa1, 0x63]), encodeBinary(km.ckey)]);
-    return buffer_1.Buffer.concat([version, ckey, cypher]);
-};
-const getTransports = (num) => Object.keys(lookup).filter((i) => num && lookup[i]);
-const fromTransports = (transports) => transports.reduceRight((memo, i) => memo + (lookup[i] ? lookup[i] : 0), 0);
-const getAuthTypeFromCkey = (ckey) => {
-    const type = cbor_1.default.decode(ckey).get(1);
-    if (type === 1) {
-        return "Ed25519VerificationKey2020";
-    }
-    else if (type === 2) {
-        return "P256VerificationKey2020";
-    }
-    else
-        return "Unknown";
-};
-const getSignerFromCkey = (ckey) => {
-    const k = cbor_1.default.decode(ckey);
-    let publicKey = buffer_1.Buffer.from([]);
-    if (k.get(3) == -7)
-        publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
-    else if (k.get(3) == -8)
-        publicKey = k.get(-2);
-    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
-        publicKey = k.get(-101);
-    return { publicKey };
-};
-class Fido2Manager extends CypherManager_1.default {
-    constructor() {
-        super();
-        this._transports = 0;
-        this.encType = "X25519KeyAgreementKey2019";
-        this.webAuthn = (0, webauthn_1.getWebAuthnProvider)();
-    }
-    get transports() {
-        return getTransports(this._transports);
-    }
-    static async createFromAttestation(attestation) {
-        const f2m = new Fido2Manager();
-        f2m.ckey = SoftCredentials_1.default.getCOSEPublicKey(attestation);
-        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
-        f2m.fid = buffer_1.Buffer.from(attestation.id, "base64");
-        // fix for firefox, getTransports not available ! https://developer.mozilla.org/en-US/docs/Web/API/AuthenticatorAttestationResponse/getTransports
-        const response = attestation.response;
-        const transports = response.getTransports ? response.getTransports() : ["usb"];
-        f2m._transports = fromTransports(transports);
-        // signing
-        f2m.signer = getSignerFromCkey(f2m.ckey);
-        //encrypting
-        const entropy = (0, crypto_1.randomBytes)(32);
-        const seed = sha512(entropy);
-        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed.slice(0, 32));
-        f2m.cypher = {
-            publicKey: buffer_1.Buffer.from(cypher.publicKey),
-            secretKey: buffer_1.Buffer.from(cypher.secretKey),
-        };
-        f2m.entropy = entropy;
-        return f2m;
-    }
-    get id() {
-        if (this.version == 0)
-            return serializeID_v0(this);
-        else
-            return buffer_1.Buffer.from((0, msgpack_1.encode)({
-                v: this.version,
-                c: this.ckey,
-                e: this.cypher.publicKey,
-            }));
-    }
-    get id_v0() {
-        return serializeID_v0(this);
-    }
-    getSecret() {
-        return buffer_1.Buffer.from((0, msgpack_1.encode)({
-            v: this.version,
-            f: this.fid,
-            t: this._transports,
-            c: this.ckey,
-            e: this.cypher.secretKey,
-        }));
-    }
-    static fromSecret(secret) {
-        const data = (0, msgpack_1.decode)(secret);
-        const f2m = new Fido2Manager();
-        f2m.version = data.v ?? 0;
-        f2m.capability = "private";
-        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
-        f2m._transports = data.t ? data.t : 15;
-        f2m.ckey = data.c;
-        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
-        f2m.signer = getSignerFromCkey(data.c);
-        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
-        f2m.cypher = {
-            publicKey: buffer_1.Buffer.from(cypher.publicKey),
-            secretKey: buffer_1.Buffer.from(cypher.secretKey),
-        };
-        return f2m;
-    }
-    static instantiate(obj) {
-        const f2m = new Fido2Manager();
-        f2m.version = obj.version ?? 0;
-        f2m.fid = typeof obj.fid === "string" ? buffer_1.Buffer.from(obj.fid, "base64") : obj.fid;
-        f2m._transports = obj.t ? obj.t : 15;
-        f2m.ckey = obj.ckey.data ? buffer_1.Buffer.from(obj.ckey.data) : buffer_1.Buffer.from(obj.ckey);
-        f2m.signer = getSignerFromCkey(f2m.ckey);
-        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
-        f2m.cypher = {
-            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
-        };
-        return f2m;
-    }
-    static fromId(id) {
-        const data = (0, msgpack_1.decode)(id);
-        const f2m = new Fido2Manager();
-        f2m.version = data.v ?? 0;
-        f2m.capability = "public";
-        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
-        f2m.ckey = data.c;
-        f2m.signer = getSignerFromCkey(data.c);
-        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
-        f2m.cypher = {
-            publicKey: data.e,
-        };
-        return f2m;
-    }
-    async getSigner() {
-        return {
-            sign: async (data) => {
-                if (!navigator.credentials)
-                    return null;
-                // ugly request userinteraction (needed for Safari and iOS)
-                try {
-                    await window?.CredentialUserInteractionRequest();
-                }
-                catch (error) { }
-                const challenge = (0, crypto_1.hash)("sha256", data);
-                const publicKey = {
-                    challenge,
-                    userVerification: "preferred",
-                    allowCredentials: [
-                        {
-                            type: "public-key",
-                            id: this.fid,
-                            transports: getTransports(this._transports),
-                        },
-                    ],
-                };
-                const { response } = (await this.webAuthn.get(publicKey));
-                const publicKeyResponse = response;
-                const output = {
-                    s: buffer_1.Buffer.from(publicKeyResponse.signature),
-                    c: buffer_1.Buffer.from(publicKeyResponse.clientDataJSON),
-                    a: buffer_1.Buffer.from(publicKeyResponse.authenticatorData),
-                };
-                return buffer_1.Buffer.from((0, msgpack_1.encode)(output));
-            },
-        };
-    }
-    verify(data, signature, userVerification = false) {
-        const signatureBuffer = buffer_1.Buffer.from(signature);
-        const decoded = (0, msgpack_1.decode)(signatureBuffer);
-        const response = {
-            signature: decoded.s,
-            clientDataJSON: decoded.c,
-            authenticatorData: decoded.a,
-            userHandle: buffer_1.Buffer.from([]).buffer,
-        };
-        const challenge = (0, crypto_1.hash)("sha256", data).toString("base64");
-        const extractedChallenge = SoftCredentials_1.default.extractChallenge(response.clientDataJSON);
-        if (challenge !== extractedChallenge) {
-            return false;
-        }
-        return SoftCredentials_1.default.simpleVerify(this.ckey, response, userVerification);
-    }
-    verifyCredentials(credentials, userVerification = false) {
-        if (credentials.id !== this.fid.toString("base64")) {
-            return false;
-        }
-        const response = credentials.response;
-        const rpIdHash = buffer_1.Buffer.from(response.authenticatorData.slice(0, 32)).toString("hex");
-        const myIdHash = sha256(buffer_1.Buffer.from(credentials.id, "base64")).toString("hex");
-        if (rpIdHash !== myIdHash) {
-            return false;
-        }
-        return SoftCredentials_1.default.simpleVerify(this.ckey, response, userVerification);
-    }
-    async createRevocationCertificate() {
-        // TODO use an external id
-        return null;
-    }
-}
-exports["default"] = Fido2Manager;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/KeyManager/Fido2PRFManager.js":
-/*!*****************************************************!*\
-  !*** ./dist/node/src/KeyManager/Fido2PRFManager.js ***!
-  \*****************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const crypto_1 = __webpack_require__(/*! ../crypto */ "./dist/node/src/crypto.js");
-const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
-const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ../platform/SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
-const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./dist/node/src/KeyManager/Fido2Manager.js"));
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const pqCrypto_1 = __webpack_require__(/*! ../pqCrypto */ "./dist/node/src/pqCrypto.js");
-const lookup = {
-    usb: 1,
-    nfc: 2,
-    ble: 4,
-    internal: 8,
-    hybrid: 16,
-    "smart-card": 32,
-};
-const getTransports = (num) => Object.keys(lookup).filter((i) => num && lookup[i]);
-const fromTransports = (transports) => transports.reduceRight((memo, i) => memo + (lookup[i] ? lookup[i] : 0), 0);
-const getAuthTypeFromCkey = (ckey) => {
-    const decoded = cbor_1.default.decode(ckey, { extendedResults: true });
-    const type = decoded.value.get(1);
-    if (type === 1) {
-        return "Ed25519VerificationKey2020";
-    }
-    else if (type === 2) {
-        return "P256VerificationKey2020";
-    }
-    else
-        return "Unknown";
-};
-const getSignerFromCkey = (ckey) => {
-    const k = cbor_1.default.decode(ckey, { extendedResults: true }).value;
-    //console.log("getSignerFromCkey", k);
-    let publicKey = buffer_1.Buffer.from([]);
-    if (k.get(3) == -7)
-        publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
-    else if (k.get(3) == -8)
-        publicKey = k.get(-2);
-    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
-        publicKey = k.get(-101);
-    return { publicKey };
-};
-class Fido2PRFManager extends Fido2Manager_1.default {
-    constructor() {
-        super();
-        this.prfsalt = buffer_1.Buffer.from("VaultysID salt");
-    }
-    static async createFromAttestation(attestation) {
-        const f2m = new Fido2PRFManager();
-        f2m.ckey = SoftCredentials_1.default.getCOSEPublicKey(attestation);
-        //console.log(attestation, f2m.ckey);
-        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
-        f2m.fid = buffer_1.Buffer.from(attestation.id, "base64");
-        // fix for firefox, getTransports not available ! https://developer.mozilla.org/en-US/docs/Web/API/AuthenticatorAttestationResponse/getTransports
-        const response = attestation.response;
-        const transports = response.getTransports ? response.getTransports() : ["usb"];
-        f2m._transports = fromTransports(transports);
-        // signing
-        f2m.signer = getSignerFromCkey(f2m.ckey);
-        await f2m.getCypher();
-        delete f2m.cypher.secretKey;
-        return f2m;
-    }
-    getSecret() {
-        return buffer_1.Buffer.from((0, msgpack_1.encode)({
-            v: this.version,
-            f: this.fid,
-            t: this._transports,
-            c: this.ckey,
-            e: this.cypher.publicKey,
-        }));
-    }
-    static fromSecret(secret) {
-        const data = (0, msgpack_1.decode)(secret);
-        const f2m = new Fido2PRFManager();
-        f2m.version = data.v ?? 0;
-        f2m.capability = "private";
-        f2m.fid = typeof data.f === "string" ? buffer_1.Buffer.from(data.f, "base64") : data.f;
-        f2m._transports = data.t ? data.t : 15;
-        f2m.ckey = data.c;
-        f2m.authType = getAuthTypeFromCkey(f2m.ckey);
-        f2m.signer = getSignerFromCkey(data.c);
-        f2m.cypher = { publicKey: data.e };
-        return f2m;
-    }
-    cleanSecureData() {
-        if (this.cypher?.secretKey) {
-            (0, crypto_1.secureErase)(this.cypher.secretKey);
-            delete this.cypher.secretKey;
-        }
-    }
-    async getCypher() {
-        if (!this.cypher?.secretKey) {
-            const publicKey = {
-                challenge: buffer_1.Buffer.from([]),
-                userVerification: "preferred",
-                allowCredentials: [
-                    {
-                        type: "public-key",
-                        id: this.fid,
-                        transports: getTransports(this._transports),
-                    },
-                ],
-                extensions: {
-                    prf: {
-                        eval: {
-                            // Input the contextual information
-                            first: this.prfsalt,
-                            // There is a "second" optional field too
-                            // Though it is intended for key rotation.
-                        },
-                    },
-                },
-            };
-            const result = await this.webAuthn.get(publicKey);
-            const { prf } = result.getClientExtensionResults();
-            const first = prf?.results?.first;
-            if (!first)
-                throw new Error("PRF failed");
-            const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(new Uint8Array(first));
-            this.cypher = {
-                publicKey: buffer_1.Buffer.from(cypher.publicKey),
-                secretKey: buffer_1.Buffer.from(cypher.secretKey),
-            };
-        }
-        return super.getCypher();
-    }
-    async createRevocationCertificate() {
-        // impossible
-        return null;
-    }
-}
-exports["default"] = Fido2PRFManager;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/KeyManager/PQManager.js":
-/*!***********************************************!*\
-  !*** ./dist/node/src/KeyManager/PQManager.js ***!
-  \***********************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const crypto_1 = __webpack_require__(/*! ../crypto */ "./dist/node/src/crypto.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
-const pqCrypto_1 = __webpack_require__(/*! ../pqCrypto */ "./dist/node/src/pqCrypto.js");
-const CypherManager_1 = __importDefault(__webpack_require__(/*! ./CypherManager */ "./dist/node/src/KeyManager/CypherManager.js"));
-const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
-const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
-class PQManager extends CypherManager_1.default {
-    constructor() {
-        super();
-        this.authType = "DilithiumVerificationKey2025";
-    }
-    static async createFromEntropy(entropy, swapIndex = 0) {
-        const km = new PQManager();
-        km.entropy = entropy;
-        km.capability = "private";
-        km.seed = sha512(entropy);
-        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
-        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(km.seed.slice(32, 64));
-        km.cypher = {
-            publicKey: buffer_1.Buffer.from(cypher.publicKey),
-            secretKey: buffer_1.Buffer.from(cypher.secretKey),
-        };
-        return km;
-    }
-    static generate() {
-        return PQManager.createFromEntropy((0, crypto_1.randomBytes)(32));
-    }
-    getSecret() {
-        return buffer_1.Buffer.from((0, msgpack_1.encode)({
-            v: this.version,
-            s: this.seed,
-        }));
-    }
-    get id() {
-        return buffer_1.Buffer.from((0, msgpack_1.encode)({
-            v: this.version,
-            x: this.signer.publicKey,
-            e: this.cypher.publicKey,
-        }));
-    }
-    static fromSecret(secret) {
-        const data = (0, msgpack_1.decode)(secret);
-        const km = new PQManager();
-        km.version = data.v ?? 0;
-        km.capability = "private";
-        km.seed = buffer_1.Buffer.from(data.s);
-        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
-        const seed2 = km.seed.slice(32, 64);
-        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
-        km.cypher = {
-            publicKey: buffer_1.Buffer.from(cypher.publicKey),
-            secretKey: buffer_1.Buffer.from(cypher.secretKey),
-        };
-        return km;
-    }
-    static instantiate(obj) {
-        const km = new PQManager();
-        km.version = obj.version ?? 0;
-        km.signer = {
-            publicKey: obj.signer.publicKey.data ? buffer_1.Buffer.from(obj.signer.publicKey.data) : buffer_1.Buffer.from(obj.signer.publicKey),
-        };
-        km.cypher = {
-            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
-        };
-        return km;
-    }
-    static fromId(id) {
-        const data = (0, msgpack_1.decode)(id);
-        const km = new PQManager();
-        km.version = data.v ?? 0;
-        km.capability = "public";
-        km.signer = {
-            publicKey: data.x,
-        };
-        km.cypher = {
-            publicKey: data.e,
-        };
-        // console.log(km)
-        return km;
-    }
-    getSigner() {
-        // todo fetch secretKey here
-        const secretKey = this.signer.secretKey;
-        const sign = (data) => Promise.resolve((0, pqCrypto_1.signDilithium)(data, this.signer.secretKey));
-        return Promise.resolve({ sign });
-    }
-    verify(data, signature, userVerificationIgnored) {
-        return (0, pqCrypto_1.verifyDilithium)(data, signature, this.signer.publicKey);
-    }
-}
-exports["default"] = PQManager;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/KeyManager/index.js":
-/*!*******************************************!*\
-  !*** ./dist/node/src/KeyManager/index.js ***!
-  \*******************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Ed25519Manager = exports.Fido2PRFManager = exports.Fido2Manager = exports.PQManager = void 0;
-const PQManager_1 = __importDefault(__webpack_require__(/*! ./PQManager */ "./dist/node/src/KeyManager/PQManager.js"));
-exports.PQManager = PQManager_1.default;
-const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./dist/node/src/KeyManager/Fido2Manager.js"));
-exports.Fido2Manager = Fido2Manager_1.default;
-const Fido2PRFManager_1 = __importDefault(__webpack_require__(/*! ./Fido2PRFManager */ "./dist/node/src/KeyManager/Fido2PRFManager.js"));
-exports.Fido2PRFManager = Fido2PRFManager_1.default;
-const Ed25519Manager_1 = __importDefault(__webpack_require__(/*! ./Ed25519Manager */ "./dist/node/src/KeyManager/Ed25519Manager.js"));
-exports.Ed25519Manager = Ed25519Manager_1.default;
-const AbstractKeyManager_1 = __importDefault(__webpack_require__(/*! ./AbstractKeyManager */ "./dist/node/src/KeyManager/AbstractKeyManager.js"));
-exports["default"] = AbstractKeyManager_1.default;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/MemoryChannel.js":
-/*!****************************************!*\
-  !*** ./dist/node/src/MemoryChannel.js ***!
-  \****************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.MemoryChannel = void 0;
-exports.pipeChannels = pipeChannels;
-exports.unpipeChannels = unpipeChannels;
-exports.StreamChannel = StreamChannel;
-exports.convertWebWritableStreamToNodeWritable = convertWebWritableStreamToNodeWritable;
-exports.convertWebReadableStreamToNodeReadable = convertWebReadableStreamToNodeReadable;
-const cryptoChannel_1 = __importDefault(__webpack_require__(/*! ./cryptoChannel */ "./dist/node/src/cryptoChannel.js"));
-const stream_1 = __webpack_require__(/*! stream */ "./node_modules/.pnpm/stream-browserify@3.0.0/node_modules/stream-browserify/index.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-/**
- * Pipes two channels together, creating a bidirectional flow where
- * messages sent to one channel are automatically forwarded to the other.
- * @param channel1 The first channel to connect
- * @param channel2 The second channel to connect
- * @returns A Promise that resolves when both channels close
- */
-function pipeChannels(channel1, channel2) {
-    let running = true;
-    // Start both piping directions
-    const pipe1to2 = async () => {
-        try {
-            await channel1.start();
-            await channel2.start();
-            console.log("pipe1to2");
-            while (running) {
-                try {
-                    const data = await channel1.receive();
-                    console.log("pipe1to2", data);
-                    if (!running || data.length === 0)
-                        break;
-                    channel2.send(data);
-                }
-                catch (error) {
-                    if (running)
-                        console.error("Error in pipe1to2:", error);
-                    break;
-                }
-            }
-        }
-        catch (error) {
-            console.error("Fatal error in pipe1to2:", error);
-        }
-    };
-    const pipe2to1 = async () => {
-        try {
-            while (running) {
-                console.log("pipe2to1");
-                try {
-                    const data = await channel2.receive();
-                    console.log("pipe2to1", data);
-                    if (!running || data.length === 0)
-                        break;
-                    channel1.send(data);
-                }
-                catch (error) {
-                    if (running)
-                        console.error("Error in pipe2to1:", error);
-                    break;
-                }
-            }
-        }
-        catch (error) {
-            console.error("Fatal error in pipe2to1:", error);
-        }
-    };
-    // Start the pipes
-    pipe1to2();
-    pipe2to1();
-    // Return function to stop piping
-    return async () => {
-        running = false;
-        await Promise.all([channel1.close(), channel2.close()]);
-    };
-}
-/**
- * Utility function that stops an active channel pipe
- * @param channel1 The first channel in the pipe
- * @param channel2 The second channel in the pipe
- */
-async function unpipeChannels(channel1, channel2) {
-    await Promise.all([channel1.close(), channel2.close()]);
-}
-function StreamChannel(channel) {
-    const onData = async (callback) => {
-        let message = await channel.receive();
-        while (message) {
-            callback(message);
-            if (message.toString("utf-8") === "EOF") {
-                return;
-            }
-            message = await channel.receive();
-        }
-    };
-    const getWriteStream = () => {
-        const stream = new stream_1.Stream.Writable({
-            write: (chunk, encoding, done) => {
-                channel.send(chunk);
-                done();
-            },
-        });
-        return stream;
-    };
-    const upload = async (stream) => {
-        return new Promise((resolve) => {
-            const writeStream = getWriteStream();
-            stream.pipe(writeStream).once("finish", () => {
-                channel.send(buffer_1.Buffer.from("EOF", "utf-8"));
-                writeStream.end();
-                resolve();
-            });
-        });
-    };
-    const uploadData = async (data) => {
-        const stream = stream_1.Readable.from(data);
-        await upload(stream);
-    };
-    const download = async (stream) => {
-        const readStream = getReadStream();
-        const result = new Promise((resolve) => readStream.on("end", () => {
-            resolve();
-        }));
-        readStream.pipe(stream);
-        await result;
-    };
-    const downloadData = async () => {
-        const readStream = getReadStream();
-        const chunks = [];
-        const result = new Promise((resolve) => readStream.on("end", () => {
-            resolve(buffer_1.Buffer.concat(chunks));
-        }));
-        const stream = new stream_1.Stream.Writable({
-            write: (chunk, encoding, done) => {
-                chunks.push(chunk);
-                done();
-            },
-        });
-        readStream.pipe(stream);
-        return result;
-    };
-    const getReadStream = () => {
-        let push;
-        let temp;
-        const stream = new stream_1.Stream.Readable({
-            read() {
-                push = (data) => this.push(data);
-            },
-        });
-        onData((buf) => {
-            if (buf.length === 3 && buf.toString("utf-8") === "EOF" && push) {
-                temp && push(temp);
-                push(null);
-                stream.destroy();
-            }
-            temp = temp ? buffer_1.Buffer.concat([temp, buf]) : buf;
-            if (push) {
-                !push(temp) && (push = null);
-                temp = null;
-            }
-        });
-        return stream;
-    };
-    return {
-        getReadStream,
-        getWriteStream,
-        upload,
-        uploadData,
-        download,
-        downloadData,
-    };
-}
-function convertWebWritableStreamToNodeWritable(webWritableStream) {
-    const writer = webWritableStream.getWriter();
-    return new stream_1.Writable({
-        async write(chunk, encoding, callback) {
-            try {
-                // Get a writer from the Web WritableStream
-                await writer.write(chunk);
-                writer.releaseLock(); // Release the lock on the writer after writing
-                callback(); // Signal that the chunk has been processed
-            }
-            catch (error) {
-                callback(); // Signal an error if it occurred
-            }
-        },
-        async final(callback) {
-            try {
-                // Close the Web WritableStream
-                const writer = webWritableStream.getWriter();
-                await writer.close();
-                writer.releaseLock(); // Release the lock on the writer after closing
-                callback(); // Signal that the stream is finished
-            }
-            catch (error) {
-                callback(); // Signal an error if it occurred during close
-            }
-        },
-        async destroy(error, callback) {
-            try {
-                // Abort the Web WritableStream in case of an error
-                const writer = webWritableStream.getWriter();
-                await writer.abort(error);
-                writer.releaseLock(); // Release the lock on the writer after aborting
-                callback(error); // Signal that the stream is destroyed
-            }
-            catch (abortError) {
-                callback(null); // Signal an error if it occurred during abort
-            }
-        },
-    });
-}
-function convertWebReadableStreamToNodeReadable(webReadableStream) {
-    const reader = webReadableStream.getReader();
-    return new stream_1.Readable({
-        async read() {
-            try {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    //console.log(value);
-                    if (done) {
-                        this.push(null); // Signal the end of the stream
-                        break;
-                    }
-                    this.push(buffer_1.Buffer.from(value)); // Need to convert Uint8Array to Buffer
-                }
-            }
-            catch (error) {
-                this.destroy();
-            }
-        },
-    });
-}
-class MemoryChannel {
-    constructor() {
-        this.messageQueue = [];
-        this.waitingResolvers = [];
-        this.connected = false;
-        this.connectedCallbacks = [];
-        this.closed = false;
-    }
-    setChannel(chan, name) {
-        this.name = name;
-        this.otherend = chan;
-    }
-    static createBidirectionnal() {
-        const input = new MemoryChannel();
-        const output = new MemoryChannel();
-        input.setChannel(output);
-        output.setChannel(input);
-        return input;
-    }
-    onConnected(callback) {
-        if (this.connected) {
-            callback();
-        }
-        else {
-            this.connectedCallbacks.push(callback);
-        }
-    }
-    static createEncryptedBidirectionnal(key = cryptoChannel_1.default.generateKey()) {
-        const input = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
-        const output = cryptoChannel_1.default.encryptChannel(new MemoryChannel(), key);
-        input.setChannel(output);
-        output.setChannel(input);
-        return input;
-    }
-    getConnectionString() {
-        return "vaultys://memory";
-    }
-    fromConnectionString(string) {
-        return string === "vaultys://memory" ? new MemoryChannel() : null;
-    }
-    setLogger(logger) {
-        this.logger = logger;
-    }
-    setInjector(injector) {
-        this.injector = injector;
-    }
-    async start() {
-        this.connected = true;
-        this.connectedCallbacks.forEach((callback) => callback());
-        this.connectedCallbacks = []; // Clear callbacks after calling them
-    }
-    async send(data) {
-        if (this.closed) {
-            throw new Error("Cannot send on closed channel");
-        }
-        if (!this.otherend) {
-            throw new Error("No other end connected to this channel");
-        }
-        // Log the data if a logger is set
-        if (this.logger) {
-            this.logger(data);
-        }
-        // Process data through injector if present
-        let processedData = data;
-        if (this.injector) {
-            processedData = await this.injector(data);
-        }
-        // // Signal that this end is connected
-        if (!this.connected) {
-            await this.start();
-        }
-        // Deliver the message to the other end
-        this.otherend.deliverMessage(processedData);
-    }
-    deliverMessage(data) {
-        // If there are waiting receivers, deliver directly to the first one
-        if (this.waitingResolvers.length > 0) {
-            const resolver = this.waitingResolvers.shift();
-            resolver(data);
-        }
-        else {
-            // Otherwise queue the message
-            this.messageQueue.push(data);
-        }
-    }
-    async receive() {
-        if (this.closed) {
-            throw new Error("Cannot receive on closed channel");
-        }
-        //console.log(this);
-        // If there are queued messages, return the first one
-        if (this.messageQueue.length > 0) {
-            return this.messageQueue.shift();
-        }
-        // Otherwise, wait for a message to arrive
-        return new Promise((resolve) => {
-            this.waitingResolvers.push(resolve);
-        });
-    }
-    async close() {
-        this.closed = true;
-        // Clear any waiting receivers with an error
-        while (this.waitingResolvers.length > 0) {
-            const resolver = this.waitingResolvers.shift();
-            // Resolve with empty buffer to indicate channel closed
-            resolver(buffer_1.Buffer.alloc(0));
-        }
-        // Clear the message queue
-        this.messageQueue = [];
-    }
-}
-exports.MemoryChannel = MemoryChannel;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/MemoryStorage.js":
-/*!****************************************!*\
-  !*** ./dist/node/src/MemoryStorage.js ***!
-  \****************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.storagify = exports.LocalStorage = exports.MemoryStorage = exports.deserialize = exports.serialize = void 0;
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const replacer = (key, value) => {
-    //if(key=="1686045792046") console.log(value);
-    if (!value)
-        return value;
-    if (key === "certificate")
-        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
-    if (key === "publicKey")
-        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
-    if (key === "secretKey")
-        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
-    if (value.type === "Buffer") {
-        return "_bx_" + buffer_1.Buffer.from(value.data).toString("base64");
-    }
-    if (value.constructor.name === "Array") {
-        return "_bx_" + buffer_1.Buffer.from(value).toString("base64");
-    }
-    return value;
-};
-const reviver = (key, value) => {
-    if (value && (key === "certificate" || key === "publicKey" || key === "secretKey")) {
-        if (typeof value === "string" && value.startsWith("__C__")) {
-            return buffer_1.Buffer.from(value.slice(5), "base64");
-        }
-        else
-            return buffer_1.Buffer.from(value);
-    }
-    if (typeof value === "string" && value.startsWith("_bx_")) {
-        return buffer_1.Buffer.from(value.slice(4), "base64");
-    }
-    return value;
-};
-const serialize = (data) => JSON.stringify(data, replacer);
-exports.serialize = serialize;
-const deserialize = (string) => JSON.parse(string, reviver);
-exports.deserialize = deserialize;
-const MemoryStorage = (save) => {
-    let data = {};
-    if (!save)
-        save = () => (0, exports.serialize)(data);
-    return (0, exports.storagify)(data, save, () => "");
-};
-exports.MemoryStorage = MemoryStorage;
-const LocalStorage = (key = "vaultysStorage") => {
-    let data = {};
-    const _id = Math.random();
-    //console.log(key);
-    if (!localStorage[key])
-        localStorage[key] = "{}";
-    else
-        data = (0, exports.deserialize)(localStorage[key]);
-    return (0, exports.storagify)(data, () => {
-        //console.log("save !!!!!", key, _id);
-        localStorage.setItem(key, (0, exports.serialize)(data));
-    }, () => localStorage.removeItem(key));
-};
-exports.LocalStorage = LocalStorage;
-const storagify = (object, save, destroy) => {
-    const result = { _raw: object };
-    return {
-        ...result,
-        destroy,
-        save,
-        toString: () => (0, exports.serialize)(result._raw),
-        fromString: (string, s, d) => (0, exports.storagify)((0, exports.deserialize)(string), s, d),
-        set: (key, value) => (object[key] = value),
-        delete: (key) => delete object[key],
-        get: (key) => object[key],
-        list: () => Object.keys(object).filter((k) => !k.startsWith("!")),
-        listSubstores: () => Object.keys(object)
-            .filter((k) => k.startsWith("!"))
-            .map((k) => k.slice(1)),
-        deleteSubstore: (key) => delete object["!" + key],
-        renameSubstore: (oldname, newname) => {
-            if (oldname === newname || !!object["!" + newname])
-                return;
-            object["!" + newname] = object["!" + oldname];
-            delete object["!" + oldname];
-        },
-        substore: (key) => {
-            if (!object["!" + key])
-                object["!" + key] = {};
-            return (0, exports.storagify)(object["!" + key], save, destroy);
-        },
-    };
-};
-exports.storagify = storagify;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/VaultysId.js":
-/*!************************************!*\
-  !*** ./dist/node/src/VaultysId.js ***!
-  \************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
-const KeyManager_1 = __webpack_require__(/*! ./KeyManager */ "./dist/node/src/KeyManager/index.js");
-const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./platform/SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
-const webauthn_1 = __webpack_require__(/*! ./platform/webauthn */ "./dist/node/src/platform/webauthn.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const pqCrypto_1 = __webpack_require__(/*! ./pqCrypto */ "./dist/node/src/pqCrypto.js");
-const CypherManager_1 = __importDefault(__webpack_require__(/*! ./KeyManager/CypherManager */ "./dist/node/src/KeyManager/CypherManager.js"));
-const TYPE_MACHINE = 0;
-const TYPE_PERSON = 1;
-const TYPE_ORGANIZATION = 2;
-const TYPE_FIDO2 = 3;
-const TYPE_FIDO2PRF = 4;
-const SIGN_INCIPIT = buffer_1.Buffer.from("VAULTYS_SIGN", "utf8");
-class VaultysId {
-    constructor(keyManager, certificate, type = TYPE_MACHINE) {
-        this.encrypt = VaultysId.encrypt;
-        this.type = type;
-        this.keyManager = keyManager;
-        this.certificate = certificate;
-    }
-    // // Set the index of the proof in case of previous key for this protocol/service have been compromised
-    // setProofIndex(protocol, service, index) {
-    //   this.proofIndices[`${protocol}-${service}`] = index;
-    // }
-    // createSwapingCertificate(protocol, service) {
-    //   let proofIndex = this.proofIndices[`${protocol}-${service}`]
-    //     ? this.proofIndices[`${protocol}-${service}`]
-    //     : 0;
-    //   const pk = this.getKey({
-    //     protocol,
-    //     service,
-    //     proofIndex,
-    //   });
-    //   const newPk = this.getKey({
-    //     protocol,
-    //     service,
-    //     proofIndex: proofIndex + 1,
-    //   });
-    //   const xPub = this.device.getProofXPub({
-    //     protocol,
-    //     service,
-    //     index,
-    //   });
-    //   const derivation = PDM.getProofDerivation(protocol, service, index);
-    //   const revocationCertificate = `vaultys://p2p/revocation?pk=${pk}&npk=${newPk}&xpub=${xpub}&index=${derivation}`;
-    // }
-    static fromId(id, certificate, encoding = "hex") {
-        let cleanId = id;
-        if (id.data) {
-            // Buffer thing
-            cleanId = buffer_1.Buffer.from(id.data);
-        }
-        if (id instanceof Uint8Array) {
-            // Buffer thing
-            cleanId = buffer_1.Buffer.from(id);
-        }
-        if (typeof id === "string") {
-            cleanId = buffer_1.Buffer.from(id, encoding);
-        }
-        const type = cleanId[0];
-        if (type === TYPE_FIDO2) {
-            const f2m = KeyManager_1.Fido2Manager.fromId(cleanId.slice(1));
-            return new VaultysId(f2m, certificate, type);
-        }
-        else if (type === TYPE_FIDO2PRF) {
-            const f2m = KeyManager_1.Fido2PRFManager.fromId(cleanId.slice(1));
-            return new VaultysId(f2m, certificate, type);
-        }
-        else {
-            if (cleanId.length > 1952) {
-                const pqm = KeyManager_1.PQManager.fromId(cleanId.slice(1));
-                return new VaultysId(pqm, certificate, type);
-            }
-            else {
-                const km = KeyManager_1.Ed25519Manager.fromId(cleanId.slice(1));
-                return new VaultysId(km, certificate, type);
-            }
-        }
-    }
-    static async fromEntropy(entropy, type, pqc = false) {
-        const cleanedEntropy = entropy;
-        if (pqc) {
-            const km = await KeyManager_1.PQManager.createFromEntropy(cleanedEntropy);
-            return new VaultysId(km, undefined, type);
-        }
-        else {
-            const km = await KeyManager_1.Ed25519Manager.createFromEntropy(cleanedEntropy);
-            return new VaultysId(km, undefined, type);
-        }
-    }
-    static async createWebauthn(passkey = true, onPRFEnabled) {
-        const options = VaultysId.createPublicKeyCredentialCreationOptions(passkey);
-        const webAuthn = (0, webauthn_1.getWebAuthnProvider)();
-        const attestation = await webAuthn.create(options);
-        if (!attestation)
-            return null;
-        else
-            return VaultysId.fido2FromAttestation(attestation, onPRFEnabled);
-    }
-    static async createPQC() {
-        const options = VaultysId.createPublicKeyCredentialOptionsPQC();
-        const webAuthn = (0, webauthn_1.getWebAuthnProvider)();
-        const attestation = await webAuthn.create(options);
-        //console.log(attestation);
-        if (!attestation)
-            return null;
-        else
-            return VaultysId.fido2FromAttestation(attestation);
-    }
-    static async fido2FromAttestation(attestation, onPRFEnabled) {
-        // should be somehow valid.
-        SoftCredentials_1.default.verifyPackedAttestation(attestation.response, true);
-        //console.log(SoftCredentials.verifyPackedAttestation(attestation.response as AuthenticatorAttestationResponse, true));
-        if (attestation.getClientExtensionResults().prf?.enabled && (!onPRFEnabled || (await onPRFEnabled()))) {
-            const f2m = await KeyManager_1.Fido2PRFManager.createFromAttestation(attestation);
-            return new VaultysId(f2m, undefined, TYPE_FIDO2PRF);
-        }
-        else {
-            const f2m = await KeyManager_1.Fido2Manager.createFromAttestation(attestation);
-            return new VaultysId(f2m, undefined, TYPE_FIDO2);
-        }
-    }
-    static async machineFromEntropy(entropy) {
-        return VaultysId.fromEntropy(entropy, TYPE_MACHINE);
-    }
-    static async organizationFromEntropy(entropy) {
-        return VaultysId.fromEntropy(entropy, TYPE_ORGANIZATION);
-    }
-    static async personFromEntropy(entropy) {
-        return VaultysId.fromEntropy(entropy, TYPE_PERSON);
-    }
-    static fromSecret(secret, encoding = "hex") {
-        const secretBuffer = buffer_1.Buffer.from(secret, encoding);
-        const type = secretBuffer[0];
-        if (type == TYPE_FIDO2) {
-            const f2m = KeyManager_1.Fido2Manager.fromSecret(secretBuffer.slice(1));
-            return new VaultysId(f2m, undefined, type);
-        }
-        else if (type == TYPE_FIDO2PRF) {
-            const f2m = KeyManager_1.Fido2PRFManager.fromSecret(secretBuffer.slice(1));
-            return new VaultysId(f2m, undefined, type);
-        }
-        else {
-            //console.log(secretBuffer.length);
-            if (secretBuffer.length === 73) {
-                const pqm = KeyManager_1.PQManager.fromSecret(secretBuffer.slice(1));
-                return new VaultysId(pqm, undefined, type);
-            }
-            else {
-                const km = KeyManager_1.Ed25519Manager.fromSecret(secretBuffer.slice(1));
-                return new VaultysId(km, undefined, type);
-            }
-        }
-    }
-    static async generatePerson(pqc = false) {
-        if (pqc) {
-            const km = await KeyManager_1.PQManager.generate();
-            return new VaultysId(km, undefined, TYPE_PERSON);
-        }
-        else {
-            const km = await KeyManager_1.Ed25519Manager.generate();
-            return new VaultysId(km, undefined, TYPE_PERSON);
-        }
-    }
-    static async generateOrganization(pqc = false) {
-        if (pqc) {
-            const km = await KeyManager_1.PQManager.generate();
-            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
-        }
-        else {
-            const km = await KeyManager_1.Ed25519Manager.generate();
-            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
-        }
-    }
-    static async generateMachine(pqc = false) {
-        if (pqc) {
-            const km = await KeyManager_1.PQManager.generate();
-            return new VaultysId(km, undefined, TYPE_MACHINE);
-        }
-        else {
-            const km = await KeyManager_1.Ed25519Manager.generate();
-            return new VaultysId(km, undefined, TYPE_MACHINE);
-        }
-    }
-    get relationshipCertificate() {
-        return this.certificate;
-    }
-    getSecret(encoding = "hex") {
-        return buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), this.keyManager.getSecret()]).toString(encoding);
-    }
-    get fingerprint() {
-        const fp = buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), (0, crypto_1.hash)("SHA224", this.keyManager.id)]).toString("hex");
-        return fp
-            .slice(0, 40)
-            .toUpperCase()
-            .match(/.{1,4}/g)
-            .join(" ");
-    }
-    get did() {
-        const fp = buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), (0, crypto_1.hash)("SHA224", this.keyManager.id)]).toString("hex");
-        return `did:vaultys:${fp.slice(0, 40)}`;
-    }
-    get didDocument() {
-        return {
-            "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
-            id: this.did,
-            authentication: [
-                {
-                    id: `${this.did}#keys-1`,
-                    type: this.keyManager.authType,
-                    controller: this.did,
-                    publicKeyMultibase: "m" + buffer_1.Buffer.from(this.keyManager.signer.publicKey).toString("base64"),
-                },
-            ],
-            keyAgreement: [
-                {
-                    id: `${this.did}#keys-2`,
-                    type: this.keyManager.encType,
-                    controller: this.did,
-                    publicKeyMultibase: "m" + buffer_1.Buffer.from(this.keyManager.cypher.publicKey).toString("base64"),
-                },
-            ],
-        };
-    }
-    get id() {
-        return buffer_1.Buffer.concat([buffer_1.Buffer.from([this.type]), this.keyManager.id]);
-    }
-    toVersion(v) {
-        this.keyManager.version = v;
-        return this;
-    }
-    get version() {
-        return this.keyManager.version;
-    }
-    isHardware() {
-        return this.type === TYPE_FIDO2 || this.type === TYPE_FIDO2PRF;
-    }
-    isMachine() {
-        return this.type === TYPE_MACHINE;
-    }
-    isPerson() {
-        return this.type === TYPE_PERSON;
-    }
-    getOTPHmac(timelock = 1 * 3600000) {
-        const otp = Math.floor(new Date().getTime() / timelock);
-        return this.keyManager.getSecretHash(buffer_1.Buffer.from(`OTP-${otp}`)).toString("hex");
-    }
-    // Need to think about insecure use of this function
-    getOTP(prefix = "password", timelock = 24 * 3600000) {
-        if (this.certificate) {
-            const otp = Math.floor(new Date().getTime() / timelock);
-            const toHash = buffer_1.Buffer.concat([buffer_1.Buffer.from(prefix, "utf-8"), buffer_1.Buffer.from(this.certificate), buffer_1.Buffer.from([otp])]);
-            return (0, crypto_1.hash)("SHA256", toHash).toString("hex");
-        }
-        throw new Error("no certificate, cannot derive OTP");
-    }
-    async performDiffieHellman(otherVaultysId) {
-        return this.keyManager.performDiffieHellman(otherVaultysId.keyManager);
-    }
-    /**
-     * Static method to perform a Diffie-Hellman key exchange between two VaultysId instances
-     * @param vaultysId1 First VaultysId instance
-     * @param vaultysId2 Second VaultysId instance
-     * @returns A shared secret that both parties can derive
-     */
-    static async diffieHellman(vaultysId1, vaultysId2) {
-        return vaultysId1.performDiffieHellman(vaultysId2);
-    }
-    /**
-     * Encrypt a message using DHIES for a recipient
-     * @param message Message to encrypt
-     * @param recipientId Recipient's VaultysId ID
-     * @returns Encrypted message or null if encryption fails
-     */
-    async dhiesEncrypt(message, recipientId) {
-        let cleanId;
-        if (typeof recipientId === "string") {
-            cleanId = buffer_1.Buffer.from(recipientId.slice(2), "hex");
-        }
-        else {
-            cleanId = recipientId.slice(1);
-        }
-        return this.keyManager.dhiesEncrypt(message, cleanId);
-    }
-    /**
-     * Decrypt a message encrypted with DHIES
-     * @param encryptedMessage Encrypted message from dhiesEncrypt
-     * @returns Decrypted message as Buffer or null if decryption fails
-     */
-    async dhiesDecrypt(encryptedMessage, senderId) {
-        let cleanId;
-        if (typeof senderId === "string") {
-            cleanId = buffer_1.Buffer.from(senderId.slice(2), "hex");
-        }
-        else {
-            cleanId = senderId.slice(1);
-        }
-        return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
-    }
-    async signChallenge_v0(challenge, oldId) {
-        if (typeof challenge == "string") {
-            challenge = buffer_1.Buffer.from(challenge, "hex");
-        }
-        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([oldId, challenge]));
-        const signature = await this.keyManager.sign(result);
-        if (!signature)
-            throw new Error("Could not sign challenge");
-        else
-            return signature;
-    }
-    verifyChallenge_v0(challenge, signature, userVerification, oldId) {
-        if (typeof challenge == "string") {
-            challenge = buffer_1.Buffer.from(challenge, "hex");
-        }
-        if (typeof signature == "string") {
-            signature = buffer_1.Buffer.from(signature, "hex");
-        }
-        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([oldId, challenge]));
-        return this.keyManager.verify(result, signature, userVerification);
-    }
-    async signChallenge(challenge) {
-        if (typeof challenge == "string") {
-            challenge = buffer_1.Buffer.from(challenge, "hex");
-        }
-        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([SIGN_INCIPIT, challenge]));
-        const signature = await this.keyManager.sign(result);
-        if (!signature)
-            throw new Error("Could not sign challenge");
-        else
-            return signature;
-    }
-    verifyChallenge(challenge, signature, userVerification) {
-        if (typeof challenge == "string") {
-            challenge = buffer_1.Buffer.from(challenge, "hex");
-        }
-        if (typeof signature == "string") {
-            signature = buffer_1.Buffer.from(signature, "hex");
-        }
-        const result = (0, crypto_1.hash)("sha256", buffer_1.Buffer.concat([SIGN_INCIPIT, challenge]));
-        return this.keyManager.verify(result, signature, userVerification);
-    }
-    async signcrypt(plaintext, recipientIds) {
-        return this.keyManager.signcrypt(plaintext, recipientIds.map((id) => {
-            if (typeof id === "string")
-                return buffer_1.Buffer.from(id.slice(2), "hex");
-            else
-                return id.slice(1);
-        }));
-    }
-    static async encrypt(plaintext, recipientIds) {
-        return CypherManager_1.default.encrypt(plaintext, recipientIds.map((id) => {
-            if (typeof id === "string")
-                return buffer_1.Buffer.from(id.slice(2), "hex");
-            else
-                return id.slice(1);
-        }));
-    }
-    async decrypt(encryptedMessage, senderId) {
-        let cleanId;
-        if (senderId) {
-            if (typeof senderId === "string")
-                cleanId = buffer_1.Buffer.from(senderId.slice(2));
-            // @ts-ignore
-            else
-                cleanId = senderId.subarray(1);
-        }
-        return this.keyManager.decrypt(encryptedMessage, cleanId);
-    }
-    async hmac(message) {
-        const cypher = await this.keyManager.getCypher();
-        return cypher.hmac(message);
-    }
-}
-VaultysId.createPublicKeyCredentialOptionsPQC = () => {
-    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
-    const hint = "security-key";
-    const options = {
-        challenge: (0, crypto_1.randomBytes)(32),
-        rp: {
-            name: "Vaultys ID",
-        },
-        user: {
-            id: (0, crypto_1.randomBytes)(16),
-            name: "Vaultys ID",
-            displayName: "Vaultys Wallet ID",
-        },
-        attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
-        authenticatorSelection: {
-            authenticatorAttachment: "cross-platform",
-            residentKey: "discouraged",
-            userVerification: "preferred",
-        },
-        // @ts-ignore not yet in dom types
-        hints: [hint],
-        extensions: {
-            prf: {
-                eval: {
-                    first: buffer_1.Buffer.from("VaultysID salt", "utf-8"),
-                },
-            },
-        },
-        pubKeyCredParams: [{ type: "public-key", alg: pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 }],
-    };
-    return options;
-};
-VaultysId.createPublicKeyCredentialCreationOptions = (passkey) => {
-    const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
-    const hint = passkey ? "client-device" : "security-key";
-    const options = {
-        challenge: (0, crypto_1.randomBytes)(32),
-        rp: {
-            name: "Vaultys ID",
-        },
-        user: {
-            id: (0, crypto_1.randomBytes)(16),
-            name: "Vaultys ID",
-            displayName: "Vaultys Wallet ID",
-        },
-        attestation: safari ? "none" : "direct", // SAFARI Dead, they removed direct attestation
-        authenticatorSelection: {
-            authenticatorAttachment: passkey ? "platform" : "cross-platform",
-            residentKey: passkey ? "required" : "discouraged",
-            userVerification: "preferred",
-        },
-        // @ts-ignore not yet in dom types
-        hints: [hint],
-        extensions: {
-            prf: {
-                eval: {
-                    first: buffer_1.Buffer.from("VaultysID salt", "utf-8"),
-                },
-            },
-        },
-        pubKeyCredParams: [
-            {
-                type: "public-key",
-                alg: -7, // SECP256/ECDSA, Ed25519/EdDSA (-8) not supported natively on mobile or yubikey (crying)
-            },
-            {
-                type: "public-key",
-                alg: -8, // Ed25519/EdDSA prefered
-            },
-            {
-                type: "public-key",
-                alg: -257, // RS256
-            },
-            // {
-            //   "type": "public-key",
-            //   "alg": -36
-            // },
-            // {
-            //   "type": "public-key",
-            //   "alg": -37
-            // },
-            // {
-            //   "type": "public-key",
-            //   "alg": -38
-            // },
-            // {
-            //   "type": "public-key",
-            //   "alg": -39
-            // },
-            // {
-            //   "type": "public-key",
-            //   "alg": -258
-            // },
-            // {
-            //   "type": "public-key",
-            //   "alg": -259
-            // }
-        ],
-    };
-    return options;
-};
-exports["default"] = VaultysId;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/crypto.js":
-/*!*********************************!*\
-  !*** ./dist/node/src/crypto.js ***!
-  \*********************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.secureErase = exports.fromUTF8 = exports.fromHex = exports.fromBase64 = exports.toUTF8 = exports.toHex = exports.toBase64 = exports.secretbox = exports.randomBytes = exports.hmac = exports.hash = exports.Buffer = void 0;
-const tweetnacl_1 = __importStar(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-Object.defineProperty(exports, "Buffer", ({ enumerable: true, get: function () { return buffer_1.Buffer; } }));
-const sha2_1 = __webpack_require__(/*! @noble/hashes/sha2 */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/sha2.js");
-const hmac_1 = __webpack_require__(/*! @noble/hashes/hmac */ "./node_modules/.pnpm/@noble+hashes@1.8.0/node_modules/@noble/hashes/hmac.js");
-const getAlgorithm = (alg) => {
-    const cleanAlg = alg.replaceAll("-", "").toLowerCase();
-    if (cleanAlg === "sha256")
-        return sha2_1.sha256;
-    if (cleanAlg === "sha512")
-        return sha2_1.sha512;
-    if (cleanAlg === "sha224")
-        return sha2_1.sha224;
-    return sha2_1.sha256;
-};
-const _randomBytes = (size) => buffer_1.Buffer.from((0, tweetnacl_1.randomBytes)(size));
-exports.randomBytes = _randomBytes;
-const hash = (alg, buffer) => buffer_1.Buffer.from(getAlgorithm(alg).create().update(buffer).digest());
-exports.hash = hash;
-const _hmac = (alg, key, data) => buffer_1.Buffer.from((0, hmac_1.hmac)(getAlgorithm(alg), key, data));
-exports.hmac = _hmac;
-const secretbox = tweetnacl_1.default.secretbox;
-exports.secretbox = secretbox;
-const toBase64 = (bufferLike) => buffer_1.Buffer.from(bufferLike).toString("base64");
-exports.toBase64 = toBase64;
-const toHex = (bufferLike) => buffer_1.Buffer.from(bufferLike).toString("hex");
-exports.toHex = toHex;
-const toUTF8 = (bufferLike) => buffer_1.Buffer.from(bufferLike).toString("utf-8");
-exports.toUTF8 = toUTF8;
-const fromBase64 = (string) => buffer_1.Buffer.from(string, "base64");
-exports.fromBase64 = fromBase64;
-const fromHex = (string) => buffer_1.Buffer.from(string, "hex");
-exports.fromHex = fromHex;
-const fromUTF8 = (string) => buffer_1.Buffer.from(string, "utf-8");
-exports.fromUTF8 = fromUTF8;
-const secureErase = (buffer) => {
-    for (let i = 0; i < buffer.length; i++) {
-        buffer[i] = 0;
-    }
-};
-exports.secureErase = secureErase;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/cryptoChannel.js":
-/*!****************************************!*\
-  !*** ./dist/node/src/cryptoChannel.js ***!
-  \****************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.decrypt = exports.encrypt = void 0;
-const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const newNonce = () => (0, crypto_1.randomBytes)(crypto_1.secretbox.nonceLength);
-const encrypt = (buffer, key) => {
-    //console.log("encrypting: ", buffer, key)
-    const keyUint8Array = key;
-    const nonce = newNonce();
-    const box = (0, crypto_1.secretbox)(Uint8Array.from(buffer), nonce, keyUint8Array);
-    const fullMessage = new Uint8Array(nonce.length + box.length);
-    fullMessage.set(nonce);
-    fullMessage.set(box, nonce.length);
-    return buffer_1.Buffer.from(fullMessage);
-};
-exports.encrypt = encrypt;
-const decrypt = (messageWithNonce, key) => {
-    //console.log("decrypting: ", messageWithNonce, key)
-    const keyUint8Array = key;
-    const messageWithNonceAsUint8Array = messageWithNonce;
-    const nonce = messageWithNonceAsUint8Array.slice(0, crypto_1.secretbox.nonceLength);
-    const message = messageWithNonceAsUint8Array.slice(crypto_1.secretbox.nonceLength, messageWithNonce.length);
-    const decrypted = crypto_1.secretbox.open(message, nonce, keyUint8Array);
-    if (!decrypted) {
-        throw new Error("Could not decrypt message");
-    }
-    return buffer_1.Buffer.from(decrypted);
-};
-exports.decrypt = decrypt;
-// upgrading a channel api with an encrypting layer. The API shoud be
-// - send(Buffer):null
-// - async receive():Buffer
-const encryptChannel = (channel, key) => {
-    const sendHandler = {
-        apply(target, that, args) {
-            return target.call(that, (0, exports.encrypt)(args[0], key));
-        },
-    };
-    const receiveHandler = {
-        async apply(target, that, args) {
-            const result = await target.call(that);
-            return (0, exports.decrypt)(result, key);
-        },
-    };
-    channel.send = new Proxy(channel.send, sendHandler);
-    channel.receive = new Proxy(channel.receive, receiveHandler);
-    return channel;
-};
-const generateKey = () => (0, crypto_1.randomBytes)(32);
-exports["default"] = {
-    decrypt: exports.decrypt,
-    encrypt: exports.encrypt,
-    encryptChannel,
-    generateKey,
-};
-
-
-/***/ }),
-
-/***/ "./dist/node/src/platform/SoftCredentials.js":
-/*!***************************************************!*\
-  !*** ./dist/node/src/platform/SoftCredentials.js ***!
-  \***************************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-// TODO: to revamp and optimize
-// import crypto from "crypto";
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const crypto_1 = __webpack_require__(/*! ../crypto */ "./dist/node/src/crypto.js");
-const cbor_1 = __importDefault(__webpack_require__(/*! cbor */ "./node_modules/.pnpm/cbor@10.0.3/node_modules/cbor/lib/cbor.js"));
-const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/ed25519.js");
-const p256_1 = __webpack_require__(/*! @noble/curves/p256 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/p256.js");
-const p384_1 = __webpack_require__(/*! @noble/curves/p384 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/p384.js");
-const p521_1 = __webpack_require__(/*! @noble/curves/p521 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/p521.js");
-// import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
-const pqCrypto_1 = __webpack_require__(/*! ../pqCrypto */ "./dist/node/src/pqCrypto.js");
-const credentials = {};
-//const subtle = crypto.webcrypto ? crypto.webcrypto.subtle : crypto.subtle;
-const COSEKEYS = {
-    kty: 1,
-    alg: 3,
-    crv: -1,
-    x: -2,
-    y: -3,
-    n: -1,
-    e: -2,
-};
-const COSEKTY = {
-    OKP: 1,
-    EC2: 2,
-    RSA: 3,
-    DILITHIUM: pqCrypto_1.PQ_COSE_KEY_TYPE.DILITHIUM,
-};
-const COSERSASCHEME = {
-    "-3": "pss-sha256",
-    "-39": "pss-sha512",
-    "-38": "pss-sha384",
-    "-65535": "pkcs1-sha1",
-    "-257": "pkcs1-sha256",
-    "-258": "pkcs1-sha384",
-    "-259": "pkcs1-sha512",
-};
-const COSECRV = {
-    1: p256_1.p256,
-    2: p384_1.p384,
-    3: p521_1.p521,
-};
-const COSEALGHASH = {
-    "-257": "SHA-256",
-    "-258": "SHA-384",
-    "-259": "SHA-512",
-    "-65535": "SHA-1",
-    "-39": "SHA-512",
-    "-38": "SHA-384",
-    "-37": "SHA-256",
-    "-260": "SHA-256",
-    "-261": "SHA-512",
-    "-7": "SHA-256",
-    "-36": "SHA-512",
-    [pqCrypto_1.PQ_COSE_ALG.DILITHIUM2.toString()]: "SHA-256", // DILITHIUM2 uses SHA-256 for hashing
-};
-const hash = (alg, message) => (0, crypto_1.hash)(alg.replace("-", ""), message);
-const base64ToPem = (b64cert) => {
-    let pemcert = "";
-    for (let i = 0; i < b64cert.length; i += 64)
-        pemcert += b64cert.slice(i, i + 64) + "\n";
-    return "-----BEGIN CERTIFICATE-----\n" + pemcert + "-----END CERTIFICATE-----";
-};
-// const getCertificateInfo = (certificate: Buffer) => {
-//   const x509 = new X509Certificate(certificate);
-//   const subjectString = x509.subject;
-//   const issuer = x509.issuer;
-//   const issuerName = x509.issuerName.toString();
-//   const subjectParts = subjectString.split(",");
-//   const subject: Record<string, string> = {};
-//   for (const field of subjectParts) {
-//     const kv = field.split("=");
-//     subject[kv[0].trim()] = kv[1];
-//   }
-//   // console.log(subject);
-//   const { Version } = x509.toTextObject().Data as unknown as { Version: string };
-//   const bc = x509.getExtension(BasicConstraintsExtension);
-//   const basicConstraintsCA = bc ? bc.ca : false;
-//   return {
-//     issuer,
-//     issuerName,
-//     subject,
-//     version: Version,
-//     basicConstraintsCA,
-//   };
-// };
-const parseAuthData = (buffer) => {
-    const rpIdHash = buffer.slice(0, 32);
-    buffer = buffer.slice(32);
-    const flagsBuf = buffer.slice(0, 1);
-    buffer = buffer.slice(1);
-    const flagsInt = flagsBuf[0];
-    const flags = {
-        up: !!(flagsInt & 0x01),
-        uv: !!(flagsInt & 0x04),
-        at: !!(flagsInt & 0x40),
-        ed: !!(flagsInt & 0x80),
-        flagsInt,
-    };
-    const counterBuf = buffer.slice(0, 4);
-    buffer = buffer.slice(4);
-    const counter = counterBuf.readUInt32BE(0);
-    let aaguid = undefined;
-    let credID = undefined;
-    let COSEPublicKey = undefined;
-    if (flags.at) {
-        aaguid = buffer.slice(0, 16);
-        buffer = buffer.slice(16);
-        const credIDLenBuf = buffer.slice(0, 2);
-        buffer = buffer.slice(2);
-        const credIDLen = credIDLenBuf.readUInt16BE(0);
-        credID = buffer.slice(0, credIDLen);
-        buffer = buffer.slice(credIDLen);
-        COSEPublicKey = buffer;
-    }
-    //console.log(aaguid);
-    return {
-        rpIdHash,
-        flagsBuf,
-        flags,
-        counter,
-        counterBuf,
-        aaguid,
-        credID,
-        COSEPublicKey,
-    };
-};
-const verifyPackedAttestation = (response, userVerification = false) => {
-    const attestationBuffer = buffer_1.Buffer.from(response.attestationObject);
-    const attestationStruct = cbor_1.default.decodeAllSync(attestationBuffer)[0];
-    if (attestationStruct.fmt == "none")
-        return false;
-    const authDataStruct = parseAuthData(attestationStruct.authData);
-    // check if user has actually touched the device
-    if (!authDataStruct.flags.up)
-        return false;
-    // check if did enter PIN code
-    if (userVerification && !authDataStruct.flags.uv)
-        return false;
-    const clientDataHashBuf = hash("sha256", buffer_1.Buffer.from(response.clientDataJSON));
-    const dataBuffer = buffer_1.Buffer.concat([attestationStruct.authData, clientDataHashBuf]);
-    const signature = attestationStruct.attStmt.sig;
-    let signatureIsValid = false;
-    /* ----- Verify FULL attestation ----- */
-    // if (attestationStruct.attStmt.x5c) {
-    //   const leafCert = base64ToPem(attestationStruct.attStmt.x5c[0].toString("base64"));
-    //   const certInfo = getCertificateInfo(attestationStruct.attStmt.x5c[0]);
-    //   const subject = certInfo.subject as {
-    //     OU: string;
-    //     O: string;
-    //     C: string;
-    //     CN: string;
-    //   };
-    //   // console.log(certInfo);
-    //   if (subject.OU !== "Authenticator Attestation") throw new Error('Batch certificate OU MUST be set strictly to "Authenticator Attestation"!');
-    //   if (!subject.CN) throw new Error("Batch certificate CN MUST no be empty!");
-    //   if (!subject.O) throw new Error("Batch certificate O MUST no be empty!");
-    //   if (!subject.C || subject.C.length !== 2) throw new Error("Batch certificate C MUST be set to two character ISO 3166 code!");
-    //   if (certInfo.basicConstraintsCA) throw new Error("Batch certificate basic constraints CA MUST be false!");
-    //   if (certInfo.version !== "v3 (2)") throw new Error("Batch certificate version MUST be 3(ASN1 2)!");
-    //   signatureIsValid = crypto.createVerify("sha256").update(dataBuffer).verify(leafCert, signature);
-    //   /* ----- Verify FULL attestation ENDS ----- */
-    // } else
-    if (attestationStruct.attStmt.ecdaaKeyId) {
-        throw new Error("ECDAA IS NOT SUPPORTED!");
-    }
-    else {
-        /* ----- Verify SURROGATE attestation ----- */
-        const pubKeyCose = cbor_1.default.decodeAllSync(authDataStruct.COSEPublicKey)[0];
-        const hashAlg = COSEALGHASH[pubKeyCose.get(COSEKEYS.alg)];
-        const data = hash(hashAlg, dataBuffer);
-        if (pubKeyCose.get(COSEKEYS.kty) === COSEKTY.EC2) {
-            // ECDSA
-            const x = pubKeyCose.get(COSEKEYS.x);
-            const y = pubKeyCose.get(COSEKEYS.y);
-            const pubKey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0x04]), x, y]);
-            const ec = COSECRV[pubKeyCose.get(COSEKEYS.crv)];
-            const sig = ec.Signature.fromDER(signature);
-            signatureIsValid = ec.verify(sig, data, pubKey);
-        }
-        else if (pubKeyCose.get(COSEKEYS.kty) === COSEKTY.OKP) {
-            // EdDSA
-            const x = pubKeyCose.get(COSEKEYS.x);
-            signatureIsValid = ed25519_1.ed25519.verify(signature, data, x);
-        }
-        else {
-            return false;
-        }
-        /* ----- Verify SURROGATE attestation ENDS ----- */
-    }
-    if (!signatureIsValid)
-        throw new Error("Failed to verify the signature!");
-    return true;
-};
-class MyPublicKeyCredential {
-    constructor(creds) {
-        this.type = "public-key";
-        this.clientExtensionResults = {};
-        const keys = ["id", "rawId", "response"];
-        this.id = creds.id;
-        this.rawId = buffer_1.Buffer.from(creds.rawId);
-        this.response = creds.response;
-    }
-    getClientExtensionResults() {
-        return {};
-    }
-}
-const verifyECDSA = (data, publicKey, signature) => {
-    return p256_1.p256.verify(p256_1.p256.Signature.fromDER(signature).toCompactHex(), data, publicKey);
-};
-const verifyEdDSA = (data, publicKey, signature) => {
-    return ed25519_1.ed25519.verify(signature, data, publicKey);
-};
-// Webauthn Partial Implementation for testing
-class SoftCredentials {
-    constructor() {
-        this.signCount = 0;
-        this.rawId = (0, crypto_1.randomBytes)(32);
-        this.aaguid = buffer_1.Buffer.alloc(16);
-    }
-    // credentials request payload
-    static createRequest(alg, prf = false) {
-        const challenge = buffer_1.Buffer.from((0, crypto_1.randomBytes)(32).toString("base64"));
-        const result = {
-            publicKey: {
-                challenge,
-                rp: {
-                    name: "Vaultys ID",
-                    id: "Vaultys ID",
-                },
-                user: {
-                    id: buffer_1.Buffer.from("Vaultys Wallet ID", "utf8"),
-                    name: "Vaultys Wallet ID",
-                    displayName: "Vaultys Wallet ID",
-                },
-                pubKeyCredParams: [
-                    {
-                        type: "public-key",
-                        alg,
-                    },
-                ],
-            },
-        };
-        if (prf) {
-            result.publicKey.extensions = { prf: { eval: { first: (0, crypto_1.randomBytes)(32) } } };
-        }
-        return result;
-    }
-    // static getCertificateInfo(response: AuthenticatorAttestationResponse) {
-    //   const attestationBuffer = Buffer.from(response.attestationObject);
-    //   const attestationStruct = cbor.decodeAllSync(attestationBuffer)[0];
-    //   if (attestationStruct.attStmt.x5c) {
-    //     return getCertificateInfo(attestationStruct.attStmt.x5c[0]);
-    //   } else {
-    //     return null;
-    //   }
-    // }
-    static async create(options, origin = "test") {
-        const credential = new SoftCredentials();
-        const publicKey = options.publicKey;
-        credential.options = publicKey;
-        credential.rpId = publicKey.rp.id || publicKey.rp.name;
-        credential.userHandle = buffer_1.Buffer.from(publicKey.user.id.toString(), "base64");
-        credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
-        // Get the algorithm from pubKeyCredParams
-        const pubKeyCredParams = publicKey.pubKeyCredParams;
-        // Check if DILITHIUM is supported (look for PQ_COSE_ALG.DILITHIUM2 in the params)
-        const supportsDilithium = pubKeyCredParams.some((param) => param.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2);
-        // Set algorithm, prioritizing DILITHIUM if it's supported
-        if (supportsDilithium) {
-            credential.alg = pqCrypto_1.PQ_COSE_ALG.DILITHIUM2;
-        }
-        else {
-            credential.alg = publicKey.pubKeyCredParams[0].alg;
-        }
-        if (credential.alg === -8) {
-            const random = ed25519_1.ed25519.utils.randomPrivateKey();
-            credential.keyPair = {
-                privateKey: random,
-                publicKey: ed25519_1.ed25519.getPublicKey(random),
-                algorithm: "EdDSA",
-            };
-            credential.coseKey = new Map();
-            credential.coseKey.set(1, 1);
-            credential.coseKey.set(3, -8);
-            credential.coseKey.set(-1, 6);
-            const x = credential.keyPair.publicKey.slice(0, 32);
-            credential.coseKey.set(-2, x);
-        }
-        else if (credential.alg === -7) {
-            const random = p256_1.p256.utils.randomPrivateKey();
-            credential.keyPair = {
-                privateKey: random,
-                publicKey: p256_1.p256.getPublicKey(random, false),
-                algorithm: "ES256",
-            };
-            credential.coseKey = new Map();
-            credential.coseKey.set(1, 2);
-            credential.coseKey.set(3, -7);
-            credential.coseKey.set(-1, 6);
-            const x = credential.keyPair.publicKey.slice(1, 33);
-            const y = credential.keyPair.publicKey.slice(33);
-            credential.coseKey.set(-2, x);
-            credential.coseKey.set(-3, y);
-            // console.log(extpk,x,y)
-        }
-        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2) {
-            // Generate DILITHIUM key pair
-            const { publicKey: dilithiumPk, secretKey: dilithiumSk } = (0, pqCrypto_1.generateDilithiumKeyPair)();
-            //console.log("PQC", dilithiumPk, dilithiumSk);
-            credential.keyPair = {
-                privateKey: dilithiumSk,
-                publicKey: dilithiumPk,
-                algorithm: "DILITHIUM2",
-                isDILITHIUM: true,
-            };
-            // Create COSE key representation
-            credential.coseKey = (0, pqCrypto_1.createDilithiumCoseKey)(dilithiumPk);
-            //console.log("PQC", credential);
-        }
-        const clientData = {
-            type: "webauthn.create",
-            challenge: publicKey.challenge,
-            origin,
-        };
-        const rpIdHash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(credential.rpId, "ascii"));
-        const flags = buffer_1.Buffer.from("41", "hex"); // attested_data + user_present
-        const signCount = buffer_1.Buffer.allocUnsafe(4);
-        signCount.writeUInt32BE(credential.signCount, 0);
-        const rawIdLength = buffer_1.Buffer.allocUnsafe(2);
-        rawIdLength.writeUInt16BE(credential.rawId.length, 0);
-        const coseKey = cbor_1.default.encode(credential.coseKey);
-        const attestationObject = {
-            authData: buffer_1.Buffer.concat([rpIdHash, flags, signCount, credential.aaguid, rawIdLength, credential.rawId, coseKey]),
-            fmt: "none",
-            attStmt: {},
-        };
-        const pkCredentials = {
-            id: credential.rawId.toString("base64"),
-            rawId: credential.rawId,
-            authenticatorAttachment: null,
-            type: "public-key",
-            getClientExtensionResults: () => {
-                if (publicKey.extensions?.prf?.eval?.first) {
-                    return { prf: { enabled: true } };
-                }
-                else {
-                    return {};
-                }
-            },
-            toJSON() { },
-            response: {
-                clientDataJSON: buffer_1.Buffer.from(JSON.stringify(clientData), "utf-8"),
-                attestationObject: cbor_1.default.encode(attestationObject),
-                getTransports: () => ["usb", "hybrid"],
-                getAuthenticatorData: () => attestationObject.authData,
-                getPublicKey: () => coseKey,
-                getPublicKeyAlgorithm: () => -7,
-            },
-        };
-        return pkCredentials;
-    }
-    static simpleVerify(COSEPublicKey, response, userVerification = false) {
-        const ckey = cbor_1.default.decode(COSEPublicKey, { extendedResults: true }).value;
-        const rpIdHash = response.authenticatorData.slice(0, 32);
-        const flagsInt = buffer_1.Buffer.from(response.authenticatorData)[32];
-        const counter = response.authenticatorData.slice(33, 37);
-        const goodflags = userVerification ? !!(flagsInt & 0x04) : !!(flagsInt & 0x01);
-        if (!goodflags)
-            return false;
-        const hash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(response.clientDataJSON));
-        let data = buffer_1.Buffer.concat([buffer_1.Buffer.from(response.authenticatorData), hash]);
-        if (ckey.get(3) == -7) {
-            data = (0, crypto_1.hash)("sha256", data);
-        }
-        if (ckey.get(1) == 1) {
-            // EdDSA
-            const x = ckey.get(-2);
-            return verifyEdDSA(data, x, buffer_1.Buffer.from(response.signature));
-        }
-        else if (ckey.get(1) == 2) {
-            // ECDSA
-            const x = ckey.get(-2);
-            const y = ckey.get(-3);
-            const pubKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), x, y]);
-            return verifyECDSA(data, pubKey, buffer_1.Buffer.from(response.signature));
-        }
-        else if (ckey.get(1) === COSEKTY.DILITHIUM) {
-            // DILITHIUM
-            const publicKey = ckey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
-            // Verify DILITHIUM signature asynchronously
-            //console.log(data, publicKey, Buffer.from(response.signature));
-            return (0, pqCrypto_1.verifyDilithium)(data, buffer_1.Buffer.from(response.signature), publicKey);
-        }
-        return false;
-    }
-    static getCOSEPublicKey(attestation) {
-        const response = attestation.response;
-        const ato = cbor_1.default.decode(response.attestationObject);
-        //console.log("getCOSEPublicKey", ato, parseAuthData(ato.authData));
-        return parseAuthData(ato.authData).COSEPublicKey;
-    }
-    static verifyPackedAttestation(attestation, userVerification = false) {
-        return verifyPackedAttestation(attestation, userVerification);
-    }
-    static async verify(attestation, assertion, userVerifiation = false) {
-        //if (assertion.id !== attestation.id) return false;
-        const hash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(assertion.response.clientDataJSON));
-        const ass = assertion.response;
-        const att = attestation.response;
-        let data = buffer_1.Buffer.concat([buffer_1.Buffer.from(ass.authenticatorData), hash]);
-        const ato = cbor_1.default.decode(att.attestationObject);
-        const authData = parseAuthData(ato.authData);
-        // check if user has actually touched the device
-        if (!authData.flags.up)
-            return false;
-        // check if the user has entered his PIN code or used biometric sensor
-        if ((userVerifiation && !authData.flags.uv) || !authData.COSEPublicKey)
-            return false;
-        const ckey = cbor_1.default.decode(authData.COSEPublicKey);
-        // Hash data for ES256
-        if (ckey.get(3) == -7) {
-            data = (0, crypto_1.hash)("sha256", data);
-        }
-        // Get key type
-        const keyType = ckey.get(1);
-        if (keyType === 1) {
-            // EdDSA
-            const x = ckey.get(-2);
-            return verifyEdDSA(data, x, buffer_1.Buffer.from(ass.signature));
-        }
-        else if (keyType === 2) {
-            // ECDSA
-            const x = ckey.get(-2);
-            const y = ckey.get(-3);
-            const pubKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), x, y]);
-            return verifyECDSA(data, pubKey, buffer_1.Buffer.from(ass.signature));
-        }
-        else if (keyType === COSEKTY.DILITHIUM) {
-            // DILITHIUM
-            const publicKey = ckey.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
-            // Verify DILITHIUM signature asynchronously
-            //console.log(data, publicKey, Buffer.from(ass.signature));
-            return (0, pqCrypto_1.verifyDilithium)(data, buffer_1.Buffer.from(ass.signature), publicKey);
-        }
-        return false;
-    }
-    static extractChallenge(clientDataJSON) {
-        const clientData = JSON.parse(clientDataJSON.toString());
-        const m = clientData.challenge.length % 4;
-        return clientData.challenge
-            .replace(/-/g, "+")
-            .replace(/_/g, "/")
-            .padEnd(clientData.challenge.length + (m === 0 ? 0 : 4 - m), "=");
-    }
-    static async get({ publicKey }, origin = "test") {
-        if (!publicKey.allowCredentials)
-            throw new Error();
-        const id = buffer_1.Buffer.from(publicKey.allowCredentials[0].id).toString("base64");
-        const credential = credentials[id];
-        credential.signCount += 1;
-        // prepare signature
-        const clientData = {
-            type: "webauthn.get",
-            challenge: buffer_1.Buffer.from(publicKey.challenge).toString("base64"),
-            origin,
-        };
-        const clientDataHash = (0, crypto_1.hash)("sha256", (0, crypto_1.fromUTF8)(JSON.stringify(clientData)));
-        const rpIdHash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(credential.rpId, "utf-8"));
-        const flags = buffer_1.Buffer.from("05", "hex"); // user verification
-        const signCount = buffer_1.Buffer.allocUnsafe(4);
-        signCount.writeUInt32BE(credential.signCount, 0);
-        const authenticatorData = buffer_1.Buffer.concat([rpIdHash, flags, signCount]);
-        const toSign = buffer_1.Buffer.concat([authenticatorData, clientDataHash]);
-        let signature = new Uint8Array();
-        if (credential.alg === -7) {
-            signature = p256_1.p256.sign(toSign, credential.keyPair.privateKey, { prehash: true }).toDERRawBytes();
-        }
-        else if (credential.alg === -8) {
-            signature = ed25519_1.ed25519.sign(toSign, credential.keyPair.privateKey);
-        }
-        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2) {
-            // DILITHIUM signing - this returns a Promise so we need to await it
-            signature = (0, pqCrypto_1.signDilithium)(toSign, credential.keyPair.privateKey);
-        }
-        const pkCredentials = {
-            id,
-            rawId: buffer_1.Buffer.from(id, "base64").buffer,
-            type: "public-key",
-            authenticatorAttachment: null,
-            getClientExtensionResults: () => {
-                if (publicKey.extensions?.prf?.eval?.first) {
-                    // unsafe and not following w3c recommendation. for testing purpose only
-                    return { prf: { results: { first: hash("sha256", publicKey.extensions?.prf?.eval?.first) } } };
-                }
-                else {
-                    return {};
-                }
-            },
-            toJSON() { },
-            response: {
-                authenticatorData,
-                clientDataJSON: buffer_1.Buffer.from(JSON.stringify(clientData), "utf-8"),
-                signature: signature,
-                userHandle: credential.userHandle,
-            },
-        };
-        return pkCredentials;
-    }
-}
-exports["default"] = SoftCredentials;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/platform/abstract.js":
-/*!********************************************!*\
-  !*** ./dist/node/src/platform/abstract.js ***!
-  \********************************************/
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.encryptInfo = void 0;
-exports.encryptInfo = {
-    ALG: "PBKDF2",
-    ITERATIONS: 20000000,
-    DERIVED_KEY_TYPE: "AES-GCM",
-    DERIVED_KEY_LENGTH: 256,
-    HASH: "SHA-256",
-};
-
-
-/***/ }),
-
-/***/ "./dist/node/src/platform/browser.js":
-/*!*******************************************!*\
-  !*** ./dist/node/src/platform/browser.js ***!
-  \*******************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.BrowserCrypto = void 0;
-const pbkdf2_web_1 = __webpack_require__(/*! ./pbkdf2.web */ "./dist/node/src/platform/pbkdf2.web.js");
-const webauthn_1 = __webpack_require__(/*! ./webauthn */ "./dist/node/src/platform/webauthn.js");
-exports.BrowserCrypto = {
-    webauthn: new webauthn_1.BrowserWebAuthn(),
-    pbkdf2: {
-        encrypt: pbkdf2_web_1.encrypt,
-        decrypt: pbkdf2_web_1.decrypt,
-    },
-};
-
-
-/***/ }),
-
-/***/ "./dist/node/src/platform/index.js":
-/*!*****************************************!*\
-  !*** ./dist/node/src/platform/index.js ***!
-  \*****************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.platformCrypto = void 0;
-const environment_1 = __webpack_require__(/*! ../utils/environment */ "./dist/node/src/utils/environment.js");
-const node_1 = __webpack_require__(/*! ./node */ "./dist/node/src/platform/node.js");
-const browser_1 = __webpack_require__(/*! ./browser */ "./dist/node/src/platform/browser.js");
-exports.platformCrypto = environment_1.isNode ? node_1.NodeCrypto : browser_1.BrowserCrypto;
-
-
-/***/ }),
-
-/***/ "./dist/node/src/platform/node.js":
-/*!****************************************!*\
-  !*** ./dist/node/src/platform/node.js ***!
-  \****************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.NodeCrypto = void 0;
-const pbkdf2_node_1 = __webpack_require__(/*! ./pbkdf2.node */ "./dist/node/src/platform/pbkdf2.node.js");
-const webauthn_1 = __webpack_require__(/*! ./webauthn */ "./dist/node/src/platform/webauthn.js");
-exports.NodeCrypto = {
-    webauthn: new webauthn_1.NodeWebAuthn(),
-    pbkdf2: {
-        encrypt: pbkdf2_node_1.encrypt,
-        decrypt: pbkdf2_node_1.decrypt,
-    },
-};
-
-
-/***/ }),
-
-/***/ "./dist/node/src/platform/pbkdf2.node.js":
-/*!***********************************************!*\
-  !*** ./dist/node/src/platform/pbkdf2.node.js ***!
-  \***********************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.getKeyMaterial = getKeyMaterial;
-exports.getKey = getKey;
-exports.decrypt = decrypt;
-exports.encrypt = encrypt;
-const crypto = __importStar(__webpack_require__(/*! crypto */ "./node_modules/.pnpm/crypto-browserify@3.12.1/node_modules/crypto-browserify/index.js"));
-const abstract_1 = __webpack_require__(/*! ./abstract */ "./dist/node/src/platform/abstract.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const crypto_1 = __webpack_require__(/*! ../crypto */ "./dist/node/src/crypto.js");
-// Node-compatible version of key material import
-function getKeyMaterial(mnemonic) {
-    const key = buffer_1.Buffer.from(mnemonic, "utf-8");
-    return Promise.resolve(crypto.createSecretKey(key));
-}
-// Node-compatible version of key derivation
-function getKey(keyMaterial, salt) {
-    return new Promise((resolve) => {
-        const derivedKey = crypto.pbkdf2Sync(keyMaterial.export(), salt, abstract_1.encryptInfo.ITERATIONS, abstract_1.encryptInfo.DERIVED_KEY_LENGTH / 8, abstract_1.encryptInfo.HASH.replace("-", "").toLowerCase());
-        resolve(buffer_1.Buffer.from(derivedKey));
-    });
-}
-/**
- * Node-compatible decrypt function
- */
-async function decrypt(backup, passphrase) {
-    if (!backup.encryptInfo)
-        return backup.data;
-    try {
-        const keyMaterial = await getKeyMaterial(passphrase);
-        const salt = buffer_1.Buffer.from(backup.encryptInfo.salt, "base64");
-        const iv = buffer_1.Buffer.from(backup.encryptInfo.iv, "base64");
-        const key = await getKey(keyMaterial, salt);
-        const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-        // In AES-GCM the tag is the last 16 bytes of the data
-        const tagLength = 16;
-        const ciphertext = backup.data.subarray(0, backup.data.length - tagLength);
-        const tag = backup.data.subarray(backup.data.length - tagLength);
-        decipher.setAuthTag(tag);
-        const decrypted = buffer_1.Buffer.concat([decipher.update(ciphertext), decipher.final()]);
-        return decrypted;
-    }
-    catch (error) {
-        console.error("Decryption error:", error);
-        return null;
-    }
-}
-/**
- * Node-compatible encrypt function
- */
-async function encrypt(mnemonic, plaintext) {
-    if (!mnemonic)
-        return;
-    const salt = (0, crypto_1.randomBytes)(16);
-    const iv = (0, crypto_1.randomBytes)(12);
-    const keyMaterial = await getKeyMaterial(mnemonic);
-    const key = await getKey(keyMaterial, salt);
-    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-    const encrypted = buffer_1.Buffer.concat([cipher.update(plaintext), cipher.final()]);
-    // Get the auth tag and append it to the ciphertext
-    const tag = cipher.getAuthTag();
-    const fullEncrypted = buffer_1.Buffer.concat([encrypted, tag]);
-    const backup = {
-        version: 1,
-        encryptInfo: {
-            ...abstract_1.encryptInfo,
-            iv: iv.toString("base64"),
-            salt: salt.toString("base64"),
-        },
-        data: fullEncrypted,
-    };
-    return backup;
-}
-
-
-/***/ }),
-
-/***/ "./dist/node/src/platform/pbkdf2.web.js":
-/*!**********************************************!*\
-  !*** ./dist/node/src/platform/pbkdf2.web.js ***!
-  \**********************************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.pinEncryptInfo = void 0;
-exports.getKeyMaterial = getKeyMaterial;
-exports.getKey = getKey;
-exports.decrypt = decrypt;
-exports.encrypt = encrypt;
-const abstract_1 = __webpack_require__(/*! ./abstract */ "./dist/node/src/platform/abstract.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-// PIN-specific config with higher iterations for enhanced security
-exports.pinEncryptInfo = {
-    ALG: "PBKDF2",
-    ITERATIONS: 100000, // Less iterations for PIN as it's used more frequently
-    DERIVED_KEY_TYPE: "AES-GCM",
-    DERIVED_KEY_LENGTH: 256,
-    HASH: "SHA-256",
-    SALT_LENGTH: 16,
-    IV_LENGTH: 12,
-};
-/**
- * Imports key material from a string
- */
-function getKeyMaterial(mnemonic) {
-    const enc = new TextEncoder();
-    return window.crypto.subtle.importKey("raw", enc.encode(mnemonic), abstract_1.encryptInfo.ALG, false, ["deriveBits", "deriveKey"]);
-}
-/**
- * Derives a key from key material and salt
- */
-function getKey(keyMaterial, salt) {
-    return window.crypto.subtle.deriveKey({
-        name: abstract_1.encryptInfo.ALG,
-        salt: salt,
-        iterations: abstract_1.encryptInfo.ITERATIONS,
-        hash: abstract_1.encryptInfo.HASH,
-    }, keyMaterial, { name: abstract_1.encryptInfo.DERIVED_KEY_TYPE, length: abstract_1.encryptInfo.DERIVED_KEY_LENGTH }, true, ["encrypt", "decrypt"]);
-}
-/**
- * Decrypts data using a passphrase
- */
-async function decrypt(backup, passphrase) {
-    if (!backup.encryptInfo)
-        return backup.data;
-    try {
-        const keyMaterial = await getKeyMaterial(passphrase);
-        const key = await getKey(keyMaterial, buffer_1.Buffer.from(backup.encryptInfo.salt, "base64"));
-        const decrypted = await window.crypto.subtle.decrypt({
-            name: backup.encryptInfo.DERIVED_KEY_TYPE,
-            iv: buffer_1.Buffer.from(backup.encryptInfo.iv, "base64"),
-        }, key, backup.data);
-        return buffer_1.Buffer.from(decrypted);
-    }
-    catch (error) {
-        console.error(error);
-        return null;
-    }
-}
-/**
- * Encrypts data using a passphrase
- */
-async function encrypt(mnemonic, plaintext) {
-    if (!mnemonic)
-        return;
-    const salt = window.crypto.getRandomValues(new Uint8Array(16));
-    const iv = window.crypto.getRandomValues(new Uint8Array(12));
-    const keyMaterial = await getKeyMaterial(mnemonic);
-    const key = await window.crypto.subtle.deriveKey({
-        name: abstract_1.encryptInfo.ALG,
-        salt,
-        iterations: abstract_1.encryptInfo.ITERATIONS,
-        hash: abstract_1.encryptInfo.HASH,
-    }, keyMaterial, { name: abstract_1.encryptInfo.DERIVED_KEY_TYPE, length: abstract_1.encryptInfo.DERIVED_KEY_LENGTH }, true, ["encrypt", "decrypt"]);
-    const data = await window.crypto.subtle.encrypt({ name: abstract_1.encryptInfo.DERIVED_KEY_TYPE, iv }, key, plaintext);
-    const backup = {
-        version: 1,
-        encryptInfo: { ...abstract_1.encryptInfo, iv: buffer_1.Buffer.from(iv).toString("base64"), salt: buffer_1.Buffer.from(salt).toString("base64") },
-        data: buffer_1.Buffer.from(data),
-    };
-    return backup;
-}
-
-
-/***/ }),
-
-/***/ "./dist/node/src/platform/webauthn.js":
-/*!********************************************!*\
-  !*** ./dist/node/src/platform/webauthn.js ***!
-  \********************************************/
-/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
-
-"use strict";
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.NodeWebAuthn = exports.BrowserWebAuthn = void 0;
-exports.getWebAuthnProvider = getWebAuthnProvider;
-exports.createCredentialRequest = createCredentialRequest;
-const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ./SoftCredentials */ "./dist/node/src/platform/SoftCredentials.js"));
-// Browser implementation
-class BrowserWebAuthn {
-    isAvailable() {
-        return typeof window !== "undefined" && typeof window.PublicKeyCredential !== "undefined";
-    }
-    async create(options) {
-        if (!this.isAvailable()) {
-            throw new Error("WebAuthn is not available in this environment");
-        }
-        return (await navigator.credentials.create({ publicKey: options }));
-    }
-    async get(options) {
-        if (!this.isAvailable()) {
-            throw new Error("WebAuthn is not available in this environment");
-        }
-        return (await navigator.credentials.get({ publicKey: options }));
-    }
-}
-exports.BrowserWebAuthn = BrowserWebAuthn;
-// Node.js implementation using SoftCredentials
-class NodeWebAuthn {
-    constructor(origin = "test") {
-        this.origin = origin;
-    }
-    isAvailable() {
-        return true; // Always available in mock mode
-    }
-    async create(options) {
-        return await SoftCredentials_1.default.create({
-            publicKey: options,
-        }, this.origin);
-    }
-    async get(options) {
-        return await SoftCredentials_1.default.get({
-            publicKey: options,
-        }, this.origin);
-    }
-}
-exports.NodeWebAuthn = NodeWebAuthn;
-// Factory function
-function getWebAuthnProvider(options) {
-    if (typeof window !== "undefined") {
-        return new BrowserWebAuthn();
-    }
-    return new NodeWebAuthn(options?.origin);
-}
-// Helper to create credential request
-function createCredentialRequest(alg, prf = false) {
-    return SoftCredentials_1.default.createRequest(alg, prf);
-}
-
-
-/***/ }),
-
-/***/ "./dist/node/src/pqCrypto.js":
-/*!***********************************!*\
-  !*** ./dist/node/src/pqCrypto.js ***!
-  \***********************************/
-/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
-
-"use strict";
-
-/**
- * Post-Quantum Cryptography Operations
- *
- * This file contains implementations for post-quantum cryptographic algorithms
- * starting with DILITHIUM for digital signatures.
- */
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.PQ_COSE_KEY_PARAMS = exports.PQ_COSE_KEY_TYPE = exports.PQ_COSE_ALG = void 0;
-exports.generateDilithiumKeyPair = generateDilithiumKeyPair;
-exports.signDilithium = signDilithium;
-exports.verifyDilithium = verifyDilithium;
-exports.createDilithiumCoseKey = createDilithiumCoseKey;
-exports.getDilithiumKeyInfo = getDilithiumKeyInfo;
-const ml_dsa_js_1 = __webpack_require__(/*! @noble/post-quantum/ml-dsa.js */ "./node_modules/.pnpm/@noble+post-quantum@0.4.1/node_modules/@noble/post-quantum/ml-dsa.js");
-const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
-const crypto_1 = __webpack_require__(/*! ./crypto */ "./dist/node/src/crypto.js");
-/**
- * COSE algorithm identifiers for post-quantum algorithms
- * Note: These values are provisional and may need to be updated as standards evolve
- */
-exports.PQ_COSE_ALG = {
-    // DILITHIUM variants (using negative values as per COSE convention for new algorithms)
-    DILITHIUM2: -46, // Level 2 (128-bit security)
-    DILITHIUM3: -47, // Level 3 (192-bit security)
-    DILITHIUM5: -48, // Level 5 (256-bit security)
-};
-/**
- * COSE key type for DILITHIUM
- */
-exports.PQ_COSE_KEY_TYPE = {
-    DILITHIUM: 4, // Custom key type for DILITHIUM
-};
-/**
- * COSE key parameter identifiers for DILITHIUM
- */
-exports.PQ_COSE_KEY_PARAMS = {
-    DILITHIUM_MODE: -100, // Mode parameter (2, 3, or 5)
-    DILITHIUM_PK: -101, // Public key
-    DILITHIUM_SK: -102, // Secret key
-};
-/**
- * Generate a DILITHIUM Level 2 key pair
- * @returns Promise resolving to an object containing the key pair
- */
-function generateDilithiumKeyPair(seed) {
-    if (!seed)
-        seed = (0, crypto_1.randomBytes)(32);
-    const keyPair = ml_dsa_js_1.ml_dsa65.keygen(seed);
-    return {
-        publicKey: buffer_1.Buffer.from(keyPair.publicKey),
-        secretKey: buffer_1.Buffer.from(keyPair.secretKey),
-    };
-}
-/**
- * Sign a message using DILITHIUM Level 2
- * @param message - The message to sign
- * @param privateKey - The DILITHIUM private key
- * @returns Promise resolving to signature as Uint8Array
- */
-function signDilithium(message, secretKey) {
-    return buffer_1.Buffer.from(ml_dsa_js_1.ml_dsa65.sign(secretKey, message));
-}
-/**
- * Verify a DILITHIUM Level 2 signature
- * @param message - The original message
- * @param signature - The signature to verify
- * @param publicKey - The DILITHIUM public key
- * @returns Promise resolving to boolean indicating if signature is valid
- */
-function verifyDilithium(message, signature, publicKey) {
-    return ml_dsa_js_1.ml_dsa65.verify(publicKey, message, signature);
-}
-/**
- * Create a COSE key representation for a DILITHIUM public key
- * @param publicKey - The DILITHIUM public key
- * @returns Map representing the COSE key
- */
-function createDilithiumCoseKey(publicKey) {
-    const coseKey = new Map();
-    // Standard COSE key parameters
-    coseKey.set(1, exports.PQ_COSE_KEY_TYPE.DILITHIUM); // kty: Key Type
-    coseKey.set(3, exports.PQ_COSE_ALG.DILITHIUM2); // alg: Algorithm
-    // DILITHIUM-specific parameters
-    coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_MODE, 2); // Level 2
-    coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_PK, publicKey);
-    return coseKey;
-}
-/**
- * Get key size information for DILITHIUM
- * @returns Object with key size information
- */
-function getDilithiumKeyInfo() {
-    return {
-        publicKeySize: 1952, // Size in bytes for DILITHIUM2 public key
-        secretKeySize: 4032, // Size in bytes for DILITHIUM2 private key
-        signatureSize: 3309, // Size in bytes for DILITHIUM2 signature
-    };
-}
-
-
-/***/ }),
-
-/***/ "./dist/node/src/utils/environment.js":
-/*!********************************************!*\
-  !*** ./dist/node/src/utils/environment.js ***!
-  \********************************************/
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.isBrowser = exports.isNode = void 0;
-exports.isNode = typeof window === "undefined";
-exports.isBrowser = !exports.isNode;
 
 
 /***/ }),
@@ -60870,6 +56275,134 @@ exports["default"] = Challenger;
 
 /***/ }),
 
+/***/ "./src/GameOfLifeIcon.ts":
+/*!*******************************!*\
+  !*** ./src/GameOfLifeIcon.ts ***!
+  \*******************************/
+/***/ ((__unused_webpack_module, exports, __webpack_require__) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ./crypto */ "./src/crypto.ts");
+const squareSize = 10;
+const boardTopx = 0;
+const boardTopy = 0;
+const createFrom256 = (hex) => hex.match(/.{1,4}/g)?.map((line) => parseInt(line, 16).toString(2).padStart(16, "0")) || [];
+const createFromFingerprint = (fp) => createFrom256((0, crypto_1.hash)("sha256", (0, crypto_1.fromHex)(fp.replaceAll(" ", ""))).toString("hex"));
+const nextstep = (bin, memo) => {
+    const output = [];
+    for (let i = 0; i < 16; i++) {
+        let line = "";
+        for (let j = 0; j < 16; j++) {
+            let count = 0;
+            for (let k = i - 1; k < i + 2; k++) {
+                for (let l = j - 1; l < j + 2; l++) {
+                    if (k > -1 && k < 16 && l > -1 && l < 16) {
+                        if ((k != i || l != j) && bin[k][l] == "1")
+                            count++;
+                    }
+                }
+            }
+            let live = false;
+            if (count == 3)
+                live = true;
+            else if (count == 2 && bin[i][j] == "1")
+                live = true;
+            line += live ? "1" : "O";
+            if (memo && live) {
+                memo[i][j]++;
+            }
+        }
+        output.push(line);
+    }
+    return output;
+};
+const run = (hex, max) => {
+    const result = createFrom256(hex)?.map((line) => line.split("").map((c) => parseInt(c)));
+    let step = createFrom256(hex);
+    for (let a = 0; a < max; a++) {
+        step = nextstep(step, result);
+    }
+    return result;
+};
+const renderStep = (context, step) => {
+    for (let i = 0; i < 16; i++) {
+        for (let j = 0; j < 16; j++) {
+            context.fillStyle = step[i][j] == 1 ? "black" : "white";
+            let xOffset = boardTopx + j * squareSize;
+            let yOffset = boardTopy + i * squareSize;
+            context.fillRect(xOffset, yOffset, squareSize, squareSize);
+            context.fillRect(150 - xOffset, yOffset, squareSize, squareSize);
+            context.fillRect(xOffset, 150 - yOffset, squareSize, squareSize);
+            context.fillRect(150 - xOffset, 150 - yOffset, squareSize, squareSize);
+        }
+    }
+};
+const heatMapColorforValue = (value, offset = 1) => {
+    var h = (1.0 - value) * 240 + offset;
+    //return `rgba(0,0,0,${value})`
+    return "hsl(" + h + ", 100%, 50%)";
+};
+const renderMemo = (data, mapcolors = 2, context) => {
+    let min = 1000;
+    let max = 0;
+    const memo = JSON.parse(JSON.stringify(data));
+    for (let i = 0; i < 8; i++) {
+        for (let j = 0; j < 8; j++) {
+            memo[i][j] =
+                memo[15 - i][j] =
+                    memo[i][15 - j] =
+                        memo[15 - i][15 - j] =
+                            memo[i][j] + memo[15 - i][j] + memo[i][15 - j] + memo[15 - i][15 - j];
+            const val = memo[i][j];
+            if (val < min)
+                min = val;
+            if (val > max)
+                max = val;
+        }
+    }
+    for (let i = 0; i < 16; i++) {
+        for (let j = 0; j < 16; j++) {
+            context.fillStyle = heatMapColorforValue(Math.floor(((memo[i][j] - min) * mapcolors) / max) / mapcolors, max * max);
+            let xOffset = boardTopx + j * squareSize;
+            let yOffset = boardTopy + i * squareSize;
+            context.fillRect(xOffset, yOffset, squareSize, squareSize);
+        }
+    }
+};
+exports["default"] = {
+    renderFingerprint: (fp, canvas, steps = 32) => {
+        let step = createFromFingerprint(fp.replaceAll(" ", ""));
+        let memo = step?.map((line) => line.split("").map((c) => parseInt(c)));
+        const context = canvas.getContext("2d");
+        if (!context || !memo)
+            return;
+        for (let t = 0; t < steps; t++) {
+            step = nextstep(step, memo);
+        }
+        renderMemo(memo, 3, context);
+        return canvas;
+    },
+    animateFingerprint: async (fp, canvas, steps = 32, speed = 500) => {
+        let step = createFromFingerprint(fp.replaceAll(" ", ""));
+        let memo = step?.map((line) => line.split("").map((c) => parseInt(c)));
+        const context = canvas.getContext("2d");
+        if (!context || !memo)
+            return;
+        for (let t = 0; t < steps; t++) {
+            step = nextstep(step, memo);
+            renderMemo(memo, 3, context);
+            await new Promise((resolve) => setTimeout(resolve, speed));
+        }
+        renderMemo(memo, 3, context);
+        return canvas;
+    },
+};
+
+
+/***/ }),
+
 /***/ "./src/IdManager.ts":
 /*!**************************!*\
   !*** ./src/IdManager.ts ***!
@@ -60917,8 +56450,12 @@ const instanciateContact = (c) => {
         vaultysId = new VaultysId_1.default(KeyManager_1.Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
     }
     else {
+        // console.log(c.keyManager.signer.publicKey.length);
         if (c.keyManager.signer.publicKey.length === 1952) {
-            vaultysId = new VaultysId_1.default(KeyManager_1.PQManager.instantiate(c.keyManager), c.certificate, c.type);
+            vaultysId = new VaultysId_1.default(KeyManager_1.DilithiumManager.instantiate(c.keyManager), c.certificate, c.type);
+        }
+        else if (c.keyManager.signer.publicKey.length === 1984) {
+            vaultysId = new VaultysId_1.default(KeyManager_1.HybridManager.instantiate(c.keyManager), c.certificate, c.type);
         }
         else {
             vaultysId = new VaultysId_1.default(KeyManager_1.Ed25519Manager.instantiate(c.keyManager), c.certificate, c.type);
@@ -60961,12 +56498,12 @@ class IdManager {
             // Plaintext export
             const exportedData = {
                 version: 1,
-                data: buffer_1.Buffer.from(this.store.toString()),
+                data: buffer_1.Buffer.from((0, msgpack_1.encode)(this.store.toJSON())),
             };
             return (0, msgpack_1.encode)(exportedData);
         }
         else {
-            const backup = await platform_1.platformCrypto.pbkdf2.encrypt(passphrase, buffer_1.Buffer.from(this.store.toString(), "utf8"));
+            const backup = await platform_1.platformCrypto.pbkdf2.encrypt(passphrase, buffer_1.Buffer.from((0, msgpack_1.encode)(this.store.toJSON())));
             if (!backup)
                 throw new Error("Failed to encrypt backup");
             return (0, msgpack_1.encode)(backup);
@@ -60982,6 +56519,7 @@ class IdManager {
         try {
             // Decode the backup data
             const backup = (0, msgpack_1.decode)(backupData);
+            //console.log(backup);
             let importedData;
             if (backup.encryptInfo) {
                 // This is an encrypted backup
@@ -60999,8 +56537,10 @@ class IdManager {
             else {
                 importedData = backup.data;
             }
+            //console.log(decode(importedData));
             // Import the data into a new profile
-            const store = (0, MemoryStorage_1.MemoryStorage)(() => { }).fromString(buffer_1.Buffer.from(importedData).toString(), () => { });
+            // console.log(importedData, decode(importedData));
+            const store = (0, MemoryStorage_1.storagify)((0, msgpack_1.decode)(importedData), () => { }, () => { });
             return await IdManager.fromStore(store);
         }
         catch (error) {
@@ -61713,21 +57253,8 @@ const saltpack_1 = __webpack_require__(/*! @vaultys/saltpack */ "./node_modules/
 const crypto_1 = __webpack_require__(/*! ../crypto */ "./src/crypto.ts");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
-const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/ed25519.js");
 const AbstractKeyManager_1 = __importDefault(__webpack_require__(/*! ./AbstractKeyManager */ "./src/KeyManager/AbstractKeyManager.ts"));
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
-ed25519_1.ed25519.CURVE = { ...ed25519_1.ed25519.CURVE };
-// @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
-ed25519_1.ed25519.CURVE.adjustScalarBytes = (bytes) => {
-    // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
-    // set the three least significant bits of the first byte
-    bytes[0] &= 248; // 0b1111_1000
-    // and the most significant bit of the last to zero,
-    bytes[31] &= 63; // 0b0001_1111
-    // set the second most significant bit of the last byte to 1
-    bytes[31] |= 64; // 0b0100_0000
-    return bytes;
-};
 const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
 /**
  * DHIES (Diffie-Hellman Integrated Encryption Scheme) for KeyManager
@@ -61980,6 +57507,114 @@ class CypherManager extends AbstractKeyManager_1.default {
     }
 }
 exports["default"] = CypherManager;
+
+
+/***/ }),
+
+/***/ "./src/KeyManager/DilithiumManager.ts":
+/*!********************************************!*\
+  !*** ./src/KeyManager/DilithiumManager.ts ***!
+  \********************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const crypto_1 = __webpack_require__(/*! ../crypto */ "./src/crypto.ts");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
+const pqCrypto_1 = __webpack_require__(/*! ../pqCrypto */ "./src/pqCrypto.ts");
+const CypherManager_1 = __importDefault(__webpack_require__(/*! ./CypherManager */ "./src/KeyManager/CypherManager.ts"));
+const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
+class DilithiumManager extends CypherManager_1.default {
+    constructor() {
+        super();
+        this.authType = "DilithiumVerificationKey2025";
+    }
+    static async createFromEntropy(entropy) {
+        const km = new DilithiumManager();
+        km.entropy = entropy;
+        km.capability = "private";
+        km.seed = sha512(entropy);
+        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(km.seed.slice(32, 64));
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static generate() {
+        return DilithiumManager.createFromEntropy((0, crypto_1.randomBytes)(32));
+    }
+    getSecret() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            s: this.seed,
+        }));
+    }
+    get id() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)({
+            v: this.version,
+            x: this.signer.publicKey,
+            e: this.cypher.publicKey,
+        }));
+    }
+    static fromSecret(secret) {
+        const data = (0, msgpack_1.decode)(secret);
+        const km = new DilithiumManager();
+        km.version = data.v ?? 0;
+        km.capability = "private";
+        km.seed = buffer_1.Buffer.from(data.s);
+        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
+        const seed2 = km.seed.slice(32, 64);
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
+        km.cypher = {
+            publicKey: buffer_1.Buffer.from(cypher.publicKey),
+            secretKey: buffer_1.Buffer.from(cypher.secretKey),
+        };
+        return km;
+    }
+    static instantiate(obj) {
+        const km = new DilithiumManager();
+        km.version = obj.version ?? 0;
+        km.signer = {
+            publicKey: obj.signer.publicKey.data ? buffer_1.Buffer.from(obj.signer.publicKey.data) : buffer_1.Buffer.from(obj.signer.publicKey),
+        };
+        km.cypher = {
+            publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
+        };
+        return km;
+    }
+    static fromId(id) {
+        const data = (0, msgpack_1.decode)(id);
+        const km = new DilithiumManager();
+        km.version = data.v ?? 0;
+        km.capability = "public";
+        km.signer = {
+            publicKey: data.x,
+        };
+        km.cypher = {
+            publicKey: data.e,
+        };
+        // console.log(km)
+        return km;
+    }
+    getSigner() {
+        // todo fetch secretKey here
+        const secretKey = this.signer.secretKey;
+        const sign = (data) => Promise.resolve((0, pqCrypto_1.signDilithium)(data, this.signer.secretKey));
+        return Promise.resolve({ sign });
+    }
+    verify(data, signature, userVerificationIgnored) {
+        return (0, pqCrypto_1.verifyDilithium)(data, signature, this.signer.publicKey);
+    }
+}
+exports["default"] = DilithiumManager;
 
 
 /***/ }),
@@ -62552,10 +58187,10 @@ exports["default"] = Fido2PRFManager;
 
 /***/ }),
 
-/***/ "./src/KeyManager/PQManager.ts":
-/*!*************************************!*\
-  !*** ./src/KeyManager/PQManager.ts ***!
-  \*************************************/
+/***/ "./src/KeyManager/HybridManager.ts":
+/*!*****************************************!*\
+  !*** ./src/KeyManager/HybridManager.ts ***!
+  \*****************************************/
 /***/ (function(__unused_webpack_module, exports, __webpack_require__) {
 
 "use strict";
@@ -62570,19 +58205,28 @@ const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node
 const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const pqCrypto_1 = __webpack_require__(/*! ../pqCrypto */ "./src/pqCrypto.ts");
 const CypherManager_1 = __importDefault(__webpack_require__(/*! ./CypherManager */ "./src/KeyManager/CypherManager.ts"));
+const ed25519_1 = __webpack_require__(/*! @noble/curves/ed25519 */ "./node_modules/.pnpm/@noble+curves@1.9.2/node_modules/@noble/curves/ed25519.js");
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
-const sha256 = (data) => (0, crypto_1.hash)("sha256", data);
-class PQManager extends CypherManager_1.default {
+class HybridManager extends CypherManager_1.default {
     constructor() {
         super();
-        this.authType = "DilithiumVerificationKey2025";
+        this.authType = "DilithiumEdDSAVerificationKey2025";
     }
-    static async createFromEntropy(entropy, swapIndex = 0) {
-        const km = new PQManager();
+    static async createFromEntropy(entropy) {
+        const km = new HybridManager();
         km.entropy = entropy;
         km.capability = "private";
         km.seed = sha512(entropy);
-        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
+        const signerSeed = sha512(km.seed.slice(0, 32));
+        km.pqSigner = (0, pqCrypto_1.generateDilithiumKeyPair)(signerSeed.slice(0, 32));
+        km.edSigner = {
+            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(signerSeed.slice(32, 64))),
+            secretKey: signerSeed.slice(32, 64),
+        };
+        km.signer = {
+            publicKey: buffer_1.Buffer.concat([km.edSigner.publicKey, km.pqSigner.publicKey]),
+            secretKey: buffer_1.Buffer.concat([km.edSigner.secretKey, km.pqSigner.secretKey]),
+        };
         const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(km.seed.slice(32, 64));
         km.cypher = {
             publicKey: buffer_1.Buffer.from(cypher.publicKey),
@@ -62591,11 +58235,12 @@ class PQManager extends CypherManager_1.default {
         return km;
     }
     static generate() {
-        return PQManager.createFromEntropy((0, crypto_1.randomBytes)(32));
+        return HybridManager.createFromEntropy((0, crypto_1.randomBytes)(32));
     }
     getSecret() {
         return buffer_1.Buffer.from((0, msgpack_1.encode)({
             v: this.version,
+            alg: "hybrid",
             s: this.seed,
         }));
     }
@@ -62608,13 +58253,24 @@ class PQManager extends CypherManager_1.default {
     }
     static fromSecret(secret) {
         const data = (0, msgpack_1.decode)(secret);
-        const km = new PQManager();
+        if (data.alg !== "hybrid")
+            throw new Error("Not a secret for Hybrid Cryptography");
+        const km = new HybridManager();
         km.version = data.v ?? 0;
         km.capability = "private";
         km.seed = buffer_1.Buffer.from(data.s);
-        km.signer = (0, pqCrypto_1.generateDilithiumKeyPair)(km.seed.slice(0, 32));
-        const seed2 = km.seed.slice(32, 64);
-        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed2);
+        const signerSeed = sha512(km.seed.slice(0, 32));
+        km.pqSigner = (0, pqCrypto_1.generateDilithiumKeyPair)(signerSeed.slice(0, 32));
+        km.edSigner = {
+            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(signerSeed.slice(32, 64))),
+            secretKey: signerSeed.slice(32, 64),
+        };
+        km.signer = {
+            publicKey: buffer_1.Buffer.concat([km.edSigner.publicKey, km.pqSigner.publicKey]),
+            secretKey: buffer_1.Buffer.concat([km.edSigner.secretKey, km.pqSigner.secretKey]),
+        };
+        //km.signer = generateDilithiumKeyPair(km.seed.slice(0, 32));
+        const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(km.seed.slice(32, 64));
         km.cypher = {
             publicKey: buffer_1.Buffer.from(cypher.publicKey),
             secretKey: buffer_1.Buffer.from(cypher.secretKey),
@@ -62622,10 +58278,16 @@ class PQManager extends CypherManager_1.default {
         return km;
     }
     static instantiate(obj) {
-        const km = new PQManager();
+        const km = new HybridManager();
         km.version = obj.version ?? 0;
         km.signer = {
             publicKey: obj.signer.publicKey.data ? buffer_1.Buffer.from(obj.signer.publicKey.data) : buffer_1.Buffer.from(obj.signer.publicKey),
+        };
+        km.edSigner = {
+            publicKey: km.signer.publicKey.slice(0, 32),
+        };
+        km.pqSigner = {
+            publicKey: km.signer.publicKey.slice(32),
         };
         km.cypher = {
             publicKey: obj.cypher.publicKey.data ? buffer_1.Buffer.from(obj.cypher.publicKey.data) : buffer_1.Buffer.from(obj.cypher.publicKey),
@@ -62634,11 +58296,17 @@ class PQManager extends CypherManager_1.default {
     }
     static fromId(id) {
         const data = (0, msgpack_1.decode)(id);
-        const km = new PQManager();
+        const km = new HybridManager();
         km.version = data.v ?? 0;
         km.capability = "public";
         km.signer = {
             publicKey: data.x,
+        };
+        km.edSigner = {
+            publicKey: data.x.slice(0, 32),
+        };
+        km.pqSigner = {
+            publicKey: data.x.slice(32),
         };
         km.cypher = {
             publicKey: data.e,
@@ -62648,15 +58316,25 @@ class PQManager extends CypherManager_1.default {
     }
     getSigner() {
         // todo fetch secretKey here
-        const secretKey = this.signer.secretKey;
-        const sign = (data) => Promise.resolve((0, pqCrypto_1.signDilithium)(data, this.signer.secretKey));
+        const sign = (data) => {
+            const sign1 = ed25519_1.ed25519.sign(data, this.edSigner.secretKey);
+            const sign2 = (0, pqCrypto_1.signDilithium)(buffer_1.Buffer.concat([data, sign1]), this.pqSigner.secretKey);
+            return Promise.resolve(buffer_1.Buffer.concat([sign1, sign2]));
+            // removed by dead control flow
+{}
+        };
         return Promise.resolve({ sign });
     }
     verify(data, signature, userVerificationIgnored) {
-        return (0, pqCrypto_1.verifyDilithium)(data, signature, this.signer.publicKey);
+        const sign1 = signature.slice(0, 64);
+        const sign2 = signature.slice(64);
+        const verify1 = ed25519_1.ed25519.verify(sign1, data, this.edSigner.publicKey);
+        if (!verify1)
+            return false;
+        return (0, pqCrypto_1.verifyDilithium)(buffer_1.Buffer.concat([data, sign1]), sign2, this.pqSigner.publicKey);
     }
 }
-exports["default"] = PQManager;
+exports["default"] = HybridManager;
 
 
 /***/ }),
@@ -62673,9 +58351,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.Ed25519Manager = exports.Fido2PRFManager = exports.Fido2Manager = exports.PQManager = void 0;
-const PQManager_1 = __importDefault(__webpack_require__(/*! ./PQManager */ "./src/KeyManager/PQManager.ts"));
-exports.PQManager = PQManager_1.default;
+exports.Ed25519Manager = exports.Fido2PRFManager = exports.Fido2Manager = exports.DilithiumManager = exports.HybridManager = void 0;
+const DilithiumManager_1 = __importDefault(__webpack_require__(/*! ./DilithiumManager */ "./src/KeyManager/DilithiumManager.ts"));
+exports.DilithiumManager = DilithiumManager_1.default;
+const HybridManager_1 = __importDefault(__webpack_require__(/*! ./HybridManager */ "./src/KeyManager/HybridManager.ts"));
+exports.HybridManager = HybridManager_1.default;
 const Fido2Manager_1 = __importDefault(__webpack_require__(/*! ./Fido2Manager */ "./src/KeyManager/Fido2Manager.ts"));
 exports.Fido2Manager = Fido2Manager_1.default;
 const Fido2PRFManager_1 = __importDefault(__webpack_require__(/*! ./Fido2PRFManager */ "./src/KeyManager/Fido2PRFManager.ts"));
@@ -63057,36 +58737,39 @@ exports.MemoryChannel = MemoryChannel;
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.storagify = exports.LocalStorage = exports.MemoryStorage = exports.deserialize = exports.serialize = void 0;
+exports.storagify = exports.MessagePackStore = exports.MemoryStore = exports.MessagePackStorage = exports.LocalStorage = exports.MemoryStorage = exports.deserialize = exports.serialize = void 0;
+const msgpack_1 = __webpack_require__(/*! @msgpack/msgpack */ "./node_modules/.pnpm/@msgpack+msgpack@3.1.2/node_modules/@msgpack/msgpack/dist.esm/index.mjs");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const replacer = (key, value) => {
     //if(key=="1686045792046") console.log(value);
     if (!value)
         return value;
+    // if (key === "entropy") console.log(value, value.constructor.name);
     if (key === "certificate")
-        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
+        return "_bx_" + buffer_1.Buffer.from(value).toString("base64");
     if (key === "publicKey")
-        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
+        return "_bx_" + buffer_1.Buffer.from(value).toString("base64");
     if (key === "secretKey")
-        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
+        return "_bx_" + buffer_1.Buffer.from(value).toString("base64");
+    if (value.constructor.name === "Buffer") {
+        //console.log("Buffer");
+        return "_bx_" + value.toString("base64");
+    }
     if (value.type === "Buffer") {
+        //console.log(key, "_bx_" + Buffer.from(value.data).toString("base64"));
         return "_bx_" + buffer_1.Buffer.from(value.data).toString("base64");
     }
-    if (value.constructor.name === "Array") {
+    if (value.constructor.name === "Array" || value.constructor.name === "Uint8Array") {
         return "_bx_" + buffer_1.Buffer.from(value).toString("base64");
     }
     return value;
 };
 const reviver = (key, value) => {
-    if (value && (key === "certificate" || key === "publicKey" || key === "secretKey")) {
-        if (typeof value === "string" && value.startsWith("__C__")) {
+    if (typeof value === "string") {
+        if (value.startsWith("__C__"))
             return buffer_1.Buffer.from(value.slice(5), "base64");
-        }
-        else
-            return buffer_1.Buffer.from(value);
-    }
-    if (typeof value === "string" && value.startsWith("_bx_")) {
-        return buffer_1.Buffer.from(value.slice(4), "base64");
+        if (value.startsWith("_bx_"))
+            return buffer_1.Buffer.from(value.slice(4), "base64");
     }
     return value;
 };
@@ -63103,44 +58786,106 @@ const MemoryStorage = (save) => {
 exports.MemoryStorage = MemoryStorage;
 const LocalStorage = (key = "vaultysStorage") => {
     let data = {};
-    const _id = Math.random();
-    //console.log(key);
     if (!localStorage[key])
         localStorage[key] = "{}";
     else
         data = (0, exports.deserialize)(localStorage[key]);
-    return (0, exports.storagify)(data, () => {
-        //console.log("save !!!!!", key, _id);
-        localStorage.setItem(key, (0, exports.serialize)(data));
-    }, () => localStorage.removeItem(key));
+    return (0, exports.storagify)(data, () => localStorage.setItem(key, (0, exports.serialize)(data)), () => localStorage.removeItem(key));
 };
 exports.LocalStorage = LocalStorage;
-const storagify = (object, save, destroy) => {
-    const result = { _raw: object };
+const MessagePackStorage = (key = "vaultysStorage") => {
+    let data = {};
+    if (!localStorage[key])
+        localStorage[key] = buffer_1.Buffer.from((0, msgpack_1.encode)({})).toString("base64");
+    else
+        data = (0, msgpack_1.decode)(localStorage[key]);
+    return (0, exports.storagify)(data, () => localStorage.setItem(key, buffer_1.Buffer.from((0, msgpack_1.encode)(data)).toString("base64")), () => localStorage.removeItem(key));
+};
+exports.MessagePackStorage = MessagePackStorage;
+class IStore {
+    constructor(object) {
+        this._raw = object;
+    }
+    save() { }
+    destroy() { }
+    toString() {
+        return buffer_1.Buffer.from((0, msgpack_1.encode)(this._raw)).toString("base64");
+    }
+    toJSON() {
+        return (0, msgpack_1.decode)((0, msgpack_1.encode)(this._raw));
+    }
+    fromJSON(object, s, d) {
+        return new IStore(object);
+    }
+    fromString(string, s, d) {
+        return new IStore((0, msgpack_1.decode)(buffer_1.Buffer.from(string, "base64")));
+    }
+    set(key, value) {
+        this._raw[key] = value;
+    }
+    delete(key) {
+        delete this._raw[key];
+    }
+    get(key) {
+        return this._raw[key];
+    }
+    list() {
+        return Object.keys(this._raw).filter((k) => !k.startsWith("!"));
+    }
+    listSubstores() {
+        return Object.keys(this._raw)
+            .filter((k) => k.startsWith("!"))
+            .map((k) => k.slice(1));
+    }
+    deleteSubstore(key) {
+        delete this._raw["!" + key];
+    }
+    renameSubstore(oldname, newname) {
+        if (oldname === newname || !!this._raw["!" + newname])
+            return;
+        this._raw["!" + newname] = this._raw["!" + oldname];
+        delete this._raw["!" + oldname];
+    }
+    substore(key) {
+        if (!this._raw["!" + key])
+            this._raw["!" + key] = {};
+        return new IStore(this._raw["!" + key]);
+    }
+}
+class MemoryStore extends IStore {
+}
+exports.MemoryStore = MemoryStore;
+class MessagePackStore extends IStore {
+}
+exports.MessagePackStore = MessagePackStore;
+const storagify = (jsonObject, save = () => { }, destroy = () => { }) => {
+    const result = { _raw: jsonObject };
     return {
         ...result,
         destroy,
         save,
         toString: () => (0, exports.serialize)(result._raw),
+        toJSON: () => (0, exports.deserialize)((0, exports.serialize)(result._raw)), // creating a copy
+        fromJSON: (object, s, d) => (0, exports.storagify)(object, s, d), // creating a copy
         fromString: (string, s, d) => (0, exports.storagify)((0, exports.deserialize)(string), s, d),
-        set: (key, value) => (object[key] = value),
-        delete: (key) => delete object[key],
-        get: (key) => object[key],
-        list: () => Object.keys(object).filter((k) => !k.startsWith("!")),
-        listSubstores: () => Object.keys(object)
+        set: (key, value) => (result._raw[key] = value),
+        delete: (key) => delete result._raw[key],
+        get: (key) => result._raw[key],
+        list: () => Object.keys(result._raw).filter((k) => !k.startsWith("!")),
+        listSubstores: () => Object.keys(result._raw)
             .filter((k) => k.startsWith("!"))
             .map((k) => k.slice(1)),
-        deleteSubstore: (key) => delete object["!" + key],
+        deleteSubstore: (key) => delete result._raw["!" + key],
         renameSubstore: (oldname, newname) => {
-            if (oldname === newname || !!object["!" + newname])
+            if (oldname === newname || !!result._raw["!" + newname])
                 return;
-            object["!" + newname] = object["!" + oldname];
-            delete object["!" + oldname];
+            result._raw["!" + newname] = result._raw["!" + oldname];
+            delete result._raw["!" + oldname];
         },
         substore: (key) => {
-            if (!object["!" + key])
-                object["!" + key] = {};
-            return (0, exports.storagify)(object["!" + key], save, destroy);
+            if (!result._raw["!" + key])
+                result._raw["!" + key] = {};
+            return (0, exports.storagify)(result._raw["!" + key], save, destroy);
         },
     };
 };
@@ -63230,8 +58975,13 @@ class VaultysId {
             return new VaultysId(f2m, certificate, type);
         }
         else {
-            if (cleanId.length > 1952) {
-                const pqm = KeyManager_1.PQManager.fromId(cleanId.slice(1));
+            // console.log(cleanId.length);
+            if (cleanId.length === 1998) {
+                const pqm = KeyManager_1.DilithiumManager.fromId(cleanId.slice(1));
+                return new VaultysId(pqm, certificate, type);
+            }
+            else if (cleanId.length === 2030) {
+                const pqm = KeyManager_1.HybridManager.fromId(cleanId.slice(1));
                 return new VaultysId(pqm, certificate, type);
             }
             else {
@@ -63240,10 +58990,14 @@ class VaultysId {
             }
         }
     }
-    static async fromEntropy(entropy, type, pqc = false) {
+    static async fromEntropy(entropy, type, alg = "ed25519") {
         const cleanedEntropy = entropy;
-        if (pqc) {
-            const km = await KeyManager_1.PQManager.createFromEntropy(cleanedEntropy);
+        if (alg === "dilithium") {
+            const km = await KeyManager_1.DilithiumManager.createFromEntropy(cleanedEntropy);
+            return new VaultysId(km, undefined, type);
+        }
+        else if (alg === "dilithium_ed25519") {
+            const km = await KeyManager_1.HybridManager.createFromEntropy(cleanedEntropy);
             return new VaultysId(km, undefined, type);
         }
         else {
@@ -63304,9 +59058,13 @@ class VaultysId {
             return new VaultysId(f2m, undefined, type);
         }
         else {
-            //console.log(secretBuffer.length);
+            // console.log(secretBuffer.length);
             if (secretBuffer.length === 73) {
-                const pqm = KeyManager_1.PQManager.fromSecret(secretBuffer.slice(1));
+                const pqm = KeyManager_1.DilithiumManager.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(pqm, undefined, type);
+            }
+            else if (secretBuffer.length === 84) {
+                const pqm = KeyManager_1.HybridManager.fromSecret(secretBuffer.slice(1));
                 return new VaultysId(pqm, undefined, type);
             }
             else {
@@ -63315,9 +59073,13 @@ class VaultysId {
             }
         }
     }
-    static async generatePerson(pqc = false) {
-        if (pqc) {
-            const km = await KeyManager_1.PQManager.generate();
+    static async generatePerson(alg = "ed25519") {
+        if (alg === "dilithium") {
+            const km = await KeyManager_1.DilithiumManager.generate();
+            return new VaultysId(km, undefined, TYPE_PERSON);
+        }
+        else if (alg === "dilithium_ed25519") {
+            const km = await KeyManager_1.HybridManager.generate();
             return new VaultysId(km, undefined, TYPE_PERSON);
         }
         else {
@@ -63325,9 +59087,13 @@ class VaultysId {
             return new VaultysId(km, undefined, TYPE_PERSON);
         }
     }
-    static async generateOrganization(pqc = false) {
-        if (pqc) {
-            const km = await KeyManager_1.PQManager.generate();
+    static async generateOrganization(alg = "ed25519") {
+        if (alg === "dilithium") {
+            const km = await KeyManager_1.DilithiumManager.generate();
+            return new VaultysId(km, undefined, TYPE_ORGANIZATION);
+        }
+        else if (alg === "dilithium_ed25519") {
+            const km = await KeyManager_1.HybridManager.generate();
             return new VaultysId(km, undefined, TYPE_ORGANIZATION);
         }
         else {
@@ -63335,9 +59101,13 @@ class VaultysId {
             return new VaultysId(km, undefined, TYPE_ORGANIZATION);
         }
     }
-    static async generateMachine(pqc = false) {
-        if (pqc) {
-            const km = await KeyManager_1.PQManager.generate();
+    static async generateMachine(alg = "ed25519") {
+        if (alg === "dilithium") {
+            const km = await KeyManager_1.DilithiumManager.generate();
+            return new VaultysId(km, undefined, TYPE_MACHINE);
+        }
+        else if (alg === "dilithium_ed25519") {
+            const km = await KeyManager_1.HybridManager.generate();
             return new VaultysId(km, undefined, TYPE_MACHINE);
         }
         else {
@@ -64846,7 +60616,7 @@ function migrateVaultysId(oldVid) {
     const data = (0, msgpack_1.decode)(oldVid.slice(1));
     if (data.x?.length === 96)
         data.x = data.x.slice(0, 32);
-    data.p = crypto_1.Buffer.from([]);
+    delete data["p"];
     return crypto_1.Buffer.concat([oldVid.slice(0, 1), (0, msgpack_1.encode)(data)]);
 }
 function migrateIdManager(idManager) {
@@ -64875,6 +60645,28 @@ function migrateIdManager(idManager) {
     idManager.store.save();
 }
 
+
+/***/ }),
+
+/***/ "./test/assets/backup.bin.json":
+/*!*************************************!*\
+  !*** ./test/assets/backup.bin.json ***!
+  \*************************************/
+/***/ ((module) => {
+
+"use strict";
+module.exports = /*#__PURE__*/JSON.parse('{"backup":"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"}');
+
+/***/ }),
+
+/***/ "./test/assets/backup.encrypted.bin.json":
+/*!***********************************************!*\
+  !*** ./test/assets/backup.encrypted.bin.json ***!
+  \***********************************************/
+/***/ ((module) => {
+
+"use strict";
+module.exports = /*#__PURE__*/JSON.parse('{"backup":"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"}');
 
 /***/ }),
 
@@ -64912,7 +60704,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
+const __1 = __webpack_require__(/*! ../ */ "./index.ts");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
 __webpack_require__(/*! ./shims */ "./test/shims.ts");
@@ -65374,7 +61166,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
+const __1 = __webpack_require__(/*! ../ */ "./index.ts");
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
 __webpack_require__(/*! ./shims */ "./test/shims.ts");
@@ -65979,7 +61771,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
-const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
+const __1 = __webpack_require__(/*! ../ */ "./index.ts");
 const utils_1 = __webpack_require__(/*! ./utils */ "./test/utils.ts");
 const MemoryChannel_1 = __webpack_require__(/*! ../src/MemoryChannel */ "./src/MemoryChannel.ts");
 const MemoryStorage_1 = __webpack_require__(/*! ../src/MemoryStorage */ "./src/MemoryStorage.ts");
@@ -66020,6 +61812,32 @@ describe("IdManager with files in browser", () => {
             assert_1.default.equal(hash1.toString("hex"), hash2.toString("hex"));
         }
     });
+    // it("Transfer data over encrypted Channel using MessagePackStorage", async () => {
+    //   for (let i = 0; i < 10; i++) {
+    //     const id1 = await createRandomVaultysId();
+    //     const channel = MemoryChannel.createEncryptedBidirectionnal();
+    //     if (!channel.otherend) assert.fail();
+    //     const s1 = MessagePackStorage();
+    //     const s2 = MessagePackStorage();
+    //     const manager1 = new IdManager(id1, s1);
+    //     const manager2 = new IdManager(await createRandomVaultysId(), s2);
+    //     const inputBuffer = await fetchFile("assets/testfile.png");
+    //     const input = new Blob([inputBuffer], { type: "image/png" });
+    //     const outputChunks: Uint8Array[] = [];
+    //     const outputStream = new WritableStream({
+    //       write(chunk) {
+    //         outputChunks.push(new Uint8Array(chunk));
+    //       },
+    //     });
+    //     const promise = manager2.download(channel, convertWebWritableStreamToNodeWritable(outputStream));
+    //     await manager1.upload(channel.otherend, convertWebReadableStreamToNodeReadable(input.stream()));
+    //     await promise;
+    //     const outputBuffer = Buffer.concat(outputChunks);
+    //     const hash1 = hash("sha256", Buffer.from(inputBuffer));
+    //     const hash2 = hash("sha256", outputBuffer);
+    //     assert.equal(hash1.toString("hex"), hash2.toString("hex"));
+    //   }
+    // });
     it("sign a File over Channel", async () => {
         for (let i = 0; i < 10; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
@@ -66091,6 +61909,73 @@ describe("Channel tests for browser", () => {
 
 /***/ }),
 
+/***/ "./test/hybridManager.web.test.ts":
+/*!****************************************!*\
+  !*** ./test/hybridManager.web.test.ts ***!
+  \****************************************/
+/***/ (function(__unused_webpack_module, exports, __webpack_require__) {
+
+"use strict";
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
+__webpack_require__(/*! ./shims */ "./test/shims.ts");
+const VaultysId_1 = __importDefault(__webpack_require__(/*! ../src/VaultysId */ "./src/VaultysId.ts"));
+const crypto_1 = __webpack_require__(/*! ../src/crypto */ "./src/crypto.ts");
+const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
+const KeyManager_1 = __webpack_require__(/*! ../src/KeyManager */ "./src/KeyManager/index.ts");
+describe("PQC", () => {
+    it("serder a VaultytsID secret - software", async () => {
+        const vaultysId = await VaultysId_1.default.generatePerson("dilithium_ed25519");
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
+        assert_1.default.equal(vaultysId.id.length, 2030);
+        assert_1.default.equal(vaultysId.id.toString("hex").length, 4060);
+        assert_1.default.equal(vaultysId.id.toString("base64").length, 2708);
+        assert_1.default.equal(vaultysId.keyManager.signer.publicKey.length, 1984);
+        const id2 = VaultysId_1.default.fromSecret(vaultysId.getSecret());
+        assert_1.default.equal(vaultysId.keyManager instanceof KeyManager_1.HybridManager, true);
+        assert_1.default.equal(id2.keyManager instanceof KeyManager_1.HybridManager, true);
+        assert_1.default.equal(vaultysId.id.toString("base64"), id2.id.toString("base64"));
+    });
+    it("serder a VaultytsID - software", async () => {
+        const vaultysId = await VaultysId_1.default.generateOrganization("dilithium_ed25519");
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
+        assert_1.default.equal(vaultysId.keyManager.signer.publicKey.length, 1984);
+        assert_1.default.equal(vaultysId.id.length, 2030);
+        const id2 = VaultysId_1.default.fromId(vaultysId.id);
+        assert_1.default.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
+        assert_1.default.equal(vaultysId.keyManager instanceof KeyManager_1.HybridManager, true);
+        assert_1.default.equal(id2.keyManager instanceof KeyManager_1.HybridManager, true);
+    });
+    it("sign/verify with VaultytsID - software", async () => {
+        const vaultysId = await VaultysId_1.default.generateMachine("dilithium_ed25519");
+        if (!vaultysId)
+            assert_1.default.fail("VaultysId creation failed");
+        const challenge = (0, crypto_1.randomBytes)(32);
+        const signature = await vaultysId.signChallenge(challenge);
+        assert_1.default.equal(vaultysId.verifyChallenge(challenge, signature, false), true);
+    });
+    it("sign and verify a message", async () => {
+        const signer = await KeyManager_1.HybridManager.generate();
+        const id = signer.id;
+        const verifier = KeyManager_1.HybridManager.fromId(id);
+        const message = buffer_1.Buffer.from("this is a message to be verified man", "utf-8");
+        const signature = await signer.sign(message);
+        if (!signature)
+            assert_1.default.fail();
+        assert_1.default.notEqual(signature, null);
+        assert_1.default.ok(verifier.verify(message, signature));
+    });
+});
+
+
+/***/ }),
+
 /***/ "./test/idManager.test.ts":
 /*!********************************!*\
   !*** ./test/idManager.test.ts ***!
@@ -66104,16 +61989,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
-const __1 = __webpack_require__(/*! .. */ "./dist/node/index.js");
-const __2 = __webpack_require__(/*! .. */ "./dist/node/index.js");
+const __1 = __webpack_require__(/*! .. */ "./index.ts");
+const __2 = __webpack_require__(/*! .. */ "./index.ts");
 __webpack_require__(/*! ./shims */ "./test/shims.ts");
 const crypto_1 = __webpack_require__(/*! ../src/crypto */ "./src/crypto.ts");
 const utils_1 = __webpack_require__(/*! ./utils */ "./test/utils.ts");
 const wot_v0_json_1 = __importDefault(__webpack_require__(/*! ./assets/wot_v0.json */ "./test/assets/wot_v0.json"));
 const wot_v1_json_1 = __importDefault(__webpack_require__(/*! ./assets/wot_v1.json */ "./test/assets/wot_v1.json"));
+const backup_bin_json_1 = __importDefault(__webpack_require__(/*! ./assets/backup.bin.json */ "./test/assets/backup.bin.json"));
+const backup_encrypted_bin_json_1 = __importDefault(__webpack_require__(/*! ./assets/backup.encrypted.bin.json */ "./test/assets/backup.encrypted.bin.json"));
 const migration_1 = __webpack_require__(/*! ../src/utils/migration */ "./src/utils/migration.ts");
 const KeyManager_1 = __webpack_require__(/*! ../src/KeyManager */ "./src/KeyManager/index.ts");
 const MemoryStorage_1 = __webpack_require__(/*! ../src/MemoryStorage */ "./src/MemoryStorage.ts");
+const passphrase = "deal develop devote mail agree try tide expand indicate poverty chuckle target";
 describe("IdManager", () => {
     it("serder a vaultys secret", async () => {
         for (const id1 of await (0, utils_1.allVaultysIdType)()) {
@@ -66224,8 +62112,8 @@ describe("IdManager", () => {
     //   assert.equal(signatures[0].type, 'LOGIN');
     // });
 });
-describe("backup WoT", () => {
-    it("write Backup", async () => {
+describe("WoT", () => {
+    it("write Web of Trust", async () => {
         const id = await __2.VaultysId.generateMachine();
         const s2 = (0, __2.MemoryStorage)(() => "");
         const manager2 = new __2.IdManager(id, s2);
@@ -66273,7 +62161,7 @@ describe("backup WoT", () => {
         }
         // require("fs").writeFileSync(__dirname + "/assets/wot.json", s2.toString());
     });
-    it("read Backup v0", async () => {
+    it("read Web of Trust v0", async () => {
         // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
         //console.log(data);
         const store = (0, MemoryStorage_1.storagify)((0, MemoryStorage_1.deserialize)(JSON.stringify(wot_v0_json_1.default)), () => "", () => "");
@@ -66323,7 +62211,7 @@ describe("backup WoT", () => {
         }
         assert_1.default.equal(await idManager.verifyWebOfTrust(), true);
     });
-    it("read Backup v1", async () => {
+    it("read Web of Trust v1", async () => {
         // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
         //console.log(data);
         const store = (0, MemoryStorage_1.storagify)((0, MemoryStorage_1.deserialize)(JSON.stringify(wot_v1_json_1.default)), () => "", () => "");
@@ -66364,6 +62252,37 @@ describe("backup WoT", () => {
         }
         assert_1.default.equal(await idManager.verifyWebOfTrust(), true);
     });
+    it("create backup v1", async () => {
+        // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
+        //console.log(data);
+        const store = (0, MemoryStorage_1.storagify)((0, MemoryStorage_1.deserialize)(JSON.stringify(wot_v1_json_1.default)), () => "", () => "");
+        const idManager = await __2.IdManager.fromStore(store);
+        const backup = await idManager.exportBackup();
+        // require("fs").writeFileSync(__dirname + "/assets/backup.bin.json", JSON.stringify({ backup: Buffer.from(backup).toString("base64") }));
+        const id2 = await __2.IdManager.importBackup(backup);
+        assert_1.default.equal(await id2?.verifyWebOfTrust(), true);
+        // console.log(id2?.store.toString());
+        assert_1.default.equal(id2?.store.toString(), idManager.store.toString());
+    });
+    it("read backup v1", async () => {
+        const id2 = await __2.IdManager.importBackup(__1.Buffer.from(backup_bin_json_1.default.backup, "base64"));
+        assert_1.default.equal(await id2?.verifyWebOfTrust(), true);
+    });
+    it("create encrypted backup v1", async () => {
+        // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
+        //console.log(data);
+        const store = (0, MemoryStorage_1.storagify)((0, MemoryStorage_1.deserialize)(JSON.stringify(wot_v1_json_1.default)), () => "", () => "");
+        const idManager = await __2.IdManager.fromStore(store);
+        const backup = await idManager.exportBackup(passphrase);
+        // require("fs").writeFileSync(__dirname + "/assets/backup.encrypted.bin.json", JSON.stringify({ backup: Buffer.from(backup).toString("base64") }));
+        const id2 = await __2.IdManager.importBackup(backup, passphrase);
+        assert_1.default.equal(await id2?.verifyWebOfTrust(), true);
+        assert_1.default.equal(id2?.store.toString(), idManager.store.toString());
+    }).timeout(20000);
+    it("read encrypted backup v1", async () => {
+        const id2 = await __2.IdManager.importBackup(__1.Buffer.from(backup_encrypted_bin_json_1.default.backup, "base64"), passphrase);
+        assert_1.default.equal(await id2?.verifyWebOfTrust(), true);
+    }).timeout(10000);
 });
 describe("SRG v0 challenge with IdManager", () => {
     it("pass a challenge", async () => {
@@ -66513,6 +62432,47 @@ describe("SRG v0 challenge with IdManager", () => {
             assert_1.default.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
         }
     });
+    // it("pass a challenge over encrypted Channel using MessagePackStorage", async () => {
+    //   for (const id1 of await allVaultysIdType()) {
+    //     const channel = MemoryChannel.createBidirectionnal();
+    //     if (!channel.otherend) assert.fail();
+    //     const s1 = MessagePackStorage();
+    //     const s2 = MessagePackStorage();
+    //     const manager1 = new IdManager(id1, s1);
+    //     const manager2 = new IdManager(await VaultysId.generateOrganization(), s2);
+    //     const metadata1 = {
+    //       name: "a",
+    //       email: "b",
+    //     };
+    //     const metadata2 = {
+    //       name: "d",
+    //       phone: "f",
+    //     };
+    //     const contacts = await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2)]);
+    //     assert.equal(contacts[0].did, manager2.vaultysId.did);
+    //     assert.equal(contacts[1].did, manager1.vaultysId.did);
+    //     // assert.deepStrictEqual(s2.substore("contacts").get(manager1.vaultysId.did).metadata, metadata1);
+    //     // assert.deepStrictEqual(s1.substore("contacts").get(manager2.vaultysId.did).metadata, metadata2);
+    //     assert.equal(s1.substore("wot").list().length, 1);
+    //     assert.equal(s2.substore("wot").list().length, 1);
+    //     manager1.setContactMetadata(manager2.vaultysId.did, "name", "salut");
+    //     manager1.setContactMetadata(manager2.vaultysId.did, "group", "pro");
+    //     // assert.deepStrictEqual(
+    //     //   manager1.getCertifiedMetadata(manager2.vaultysId.did),
+    //     //   metadata2
+    //     // );
+    //     // assert.deepStrictEqual(
+    //     //   manager1.getAllMetadata(manager2.vaultysId.did),
+    //     //   {
+    //     //     group: 'pro',
+    //     //     name: 'salut',
+    //     //     phone: 'f'
+    //     //   }
+    //     // );
+    //     assert.ok(await manager1.verifyRelationshipCertificate(manager2.vaultysId.did));
+    //     assert.ok(await manager2.verifyRelationshipCertificate(manager1.vaultysId.did));
+    //   }
+    // });
     it("perform PRF over Channel", async () => {
         for (let i = 0; i < 5; i++) {
             const id1 = await (0, utils_1.createRandomVaultysId)();
@@ -67075,7 +63035,7 @@ const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modul
 const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer@6.0.3/node_modules/buffer/index.js");
 // import { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
 // import * as bip32 from "@stricahq/bip32ed25519";
-const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
+const __1 = __webpack_require__(/*! ../ */ "./index.ts");
 const utils_1 = __webpack_require__(/*! ./utils */ "./test/utils.ts");
 const tweetnacl_1 = __importDefault(__webpack_require__(/*! tweetnacl */ "./node_modules/.pnpm/tweetnacl@1.0.3/node_modules/tweetnacl/nacl-fast.js"));
 const KeyManager_1 = __webpack_require__(/*! ../src/KeyManager */ "./src/KeyManager/index.ts");
@@ -67559,7 +63519,7 @@ const buffer_1 = __webpack_require__(/*! buffer/ */ "./node_modules/.pnpm/buffer
 const KeyManager_1 = __webpack_require__(/*! ../src/KeyManager */ "./src/KeyManager/index.ts");
 describe("PQC", () => {
     it("serder a VaultytsID secret - software", async () => {
-        const vaultysId = await VaultysId_1.default.generatePerson(true);
+        const vaultysId = await VaultysId_1.default.generatePerson("dilithium");
         if (!vaultysId)
             assert_1.default.fail("VaultysId creation failed");
         assert_1.default.equal(vaultysId.id.length, 1998);
@@ -67568,22 +63528,22 @@ describe("PQC", () => {
         assert_1.default.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
         const id2 = VaultysId_1.default.fromSecret(vaultysId.getSecret());
         assert_1.default.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
-        assert_1.default.equal(vaultysId.keyManager instanceof KeyManager_1.PQManager, true);
-        assert_1.default.equal(id2.keyManager instanceof KeyManager_1.PQManager, true);
+        assert_1.default.equal(vaultysId.keyManager instanceof KeyManager_1.DilithiumManager, true);
+        assert_1.default.equal(id2.keyManager instanceof KeyManager_1.DilithiumManager, true);
     });
     it("serder a VaultytsID - software", async () => {
-        const vaultysId = await VaultysId_1.default.generateOrganization(true);
+        const vaultysId = await VaultysId_1.default.generateOrganization("dilithium");
         if (!vaultysId)
             assert_1.default.fail("VaultysId creation failed");
         assert_1.default.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
         assert_1.default.equal(vaultysId.id.length, 1998);
         const id2 = VaultysId_1.default.fromId(vaultysId.id);
         assert_1.default.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
-        assert_1.default.equal(vaultysId.keyManager instanceof KeyManager_1.PQManager, true);
-        assert_1.default.equal(id2.keyManager instanceof KeyManager_1.PQManager, true);
+        assert_1.default.equal(vaultysId.keyManager instanceof KeyManager_1.DilithiumManager, true);
+        assert_1.default.equal(id2.keyManager instanceof KeyManager_1.DilithiumManager, true);
     });
     it("sign/verify with VaultytsID - software", async () => {
-        const vaultysId = await VaultysId_1.default.generateMachine(true);
+        const vaultysId = await VaultysId_1.default.generateMachine("dilithium");
         if (!vaultysId)
             assert_1.default.fail("VaultysId creation failed");
         const challenge = (0, crypto_1.randomBytes)(32);
@@ -67591,9 +63551,9 @@ describe("PQC", () => {
         assert_1.default.equal(vaultysId.verifyChallenge(challenge, signature, false), true);
     });
     it("sign and verify a message", async () => {
-        const signer = await KeyManager_1.PQManager.generate();
+        const signer = await KeyManager_1.DilithiumManager.generate();
         const id = signer.id;
-        const verifier = KeyManager_1.PQManager.fromId(id);
+        const verifier = KeyManager_1.DilithiumManager.fromId(id);
         const message = buffer_1.Buffer.from("this is a message to be verified man", "utf-8");
         const signature = await signer.sign(message);
         if (!signature)
@@ -67867,7 +63827,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.allVaultysIdType = exports.createRandomVaultysId = exports.createContact = exports.createApp = void 0;
-const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
+const __1 = __webpack_require__(/*! ../ */ "./index.ts");
 const SoftCredentials_1 = __importDefault(__webpack_require__(/*! ../src/platform/SoftCredentials */ "./src/platform/SoftCredentials.ts"));
 const pqCrypto_1 = __webpack_require__(/*! ../src/pqCrypto */ "./src/pqCrypto.ts");
 const createApp = async () => {
@@ -67905,21 +63865,22 @@ const createRandomVaultysId = async () => {
         types.push(3);
         types.push(4);
     }
-    const pqc = Math.random() < 0.5;
+    const rand = Math.random();
+    const alg = rand < 0.34 ? "dilithium" : rand < 0.67 ? "ed25519" : "dilithium_ed25519";
     const type = types[Math.floor(Math.random() * types.length)];
     switch (type) {
         case 0:
-            return __1.VaultysId.generateMachine(pqc);
+            return __1.VaultysId.generateMachine(alg);
         case 1:
-            return __1.VaultysId.generatePerson(pqc);
+            return __1.VaultysId.generatePerson(alg);
         case 2:
-            return __1.VaultysId.generateOrganization(pqc);
+            return __1.VaultysId.generateOrganization(alg);
         case 3:
-            const attestation1 = await navigator.credentials.create(SoftCredentials_1.default.createRequest(pqc ? pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, false));
+            const attestation1 = await navigator.credentials.create(SoftCredentials_1.default.createRequest(alg === "dilithium" ? pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, false));
             // @ts-expect-error mockup
             return __1.VaultysId.fido2FromAttestation(attestation1);
         case 4:
-            const attestation2 = await navigator.credentials.create(SoftCredentials_1.default.createRequest(pqc ? pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, true));
+            const attestation2 = await navigator.credentials.create(SoftCredentials_1.default.createRequest(alg === "dilithium" ? pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, true));
             // @ts-expect-error mockup
             return __1.VaultysId.fido2FromAttestation(attestation2);
         default:
@@ -67928,7 +63889,7 @@ const createRandomVaultysId = async () => {
 };
 exports.createRandomVaultysId = createRandomVaultysId;
 const allVaultysIdType = async () => {
-    const result = [await __1.VaultysId.generateMachine(), await __1.VaultysId.generateMachine(true), await __1.VaultysId.generatePerson(), await __1.VaultysId.generatePerson(true)];
+    const result = [await __1.VaultysId.generateMachine(), await __1.VaultysId.generateMachine("dilithium"), await __1.VaultysId.generateMachine("dilithium_ed25519"), await __1.VaultysId.generatePerson(), await __1.VaultysId.generatePerson("dilithium"), await __1.VaultysId.generatePerson("dilithium_ed25519")];
     if (typeof window === "undefined") {
         let attestation = await navigator.credentials.create(SoftCredentials_1.default.createRequest(pqCrypto_1.PQ_COSE_ALG.DILITHIUM2));
         // @ts-expect-error mockup
@@ -67959,7 +63920,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const __1 = __webpack_require__(/*! ../ */ "./dist/node/index.js");
+const __1 = __webpack_require__(/*! ../ */ "./index.ts");
 const assert_1 = __importDefault(__webpack_require__(/*! assert */ "./node_modules/.pnpm/assert@2.1.0/node_modules/assert/build/assert.js"));
 __webpack_require__(/*! ./shims */ "./test/shims.ts");
 const utils_1 = __webpack_require__(/*! ./utils */ "./test/utils.ts");
@@ -68155,9 +64116,7 @@ const IDs = {
             authType: "P256VerificationKey2020",
             encType: "X25519KeyAgreementKey2019",
             ckey: "pQECAyYgASFYIAahPdTq/F42/PU9WcYGaF4k7BQ1gnD9QIwX2wAcfjKoIlggO56gS5dUKbQZSeBrcYZcOZHZF5F568tgRiDLO2mv5/I=",
-            webAuthn: {
-                origin: "test",
-            },
+            webAuthn: {},
         },
     },
 };
@@ -68170,7 +64129,7 @@ describe("Test Vectors", () => {
     });
     it("migrate VaultysID serialization", () => {
         const vid = "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
-        const newvid = "AYShdgGhcMQAoXjEINPOwoLA6gK5RZ3XU+OViBOKuQEhNvcjMtsprWBe8GsqoWXEIHOmbJwQ4CFYLnaMOZSIaHUtv4UvDi9JWofJvVxPUA54";
+        const newvid = "AYOhdgGheMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
         assert_1.default.equal((0, migration_1.migrateVaultysId)(buffer_1.Buffer.from(vid, "base64")).toString("base64"), newvid);
         const id1 = VaultysId_1.default.fromId(vid, undefined, "base64");
         const id2 = VaultysId_1.default.fromId(newvid, undefined, "base64");
@@ -68369,6 +64328,7 @@ describe("Test Vectors", () => {
 /******/ 	__webpack_require__("./test/shims.ts");
 /******/ 	__webpack_require__("./test/pqc.test.ts");
 /******/ 	__webpack_require__("./test/pqcManager.web.test.ts");
+/******/ 	__webpack_require__("./test/hybridManager.web.test.ts");
 /******/ 	__webpack_require__("./test/challenger_v0.test.ts");
 /******/ 	__webpack_require__("./test/challenger.test.ts");
 /******/ 	__webpack_require__("./test/file.browser_test.ts");

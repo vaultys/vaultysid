@@ -1,15 +1,15 @@
 import { Buffer } from "buffer/";
 import CypherManager from "./CypherManager";
-export default class PQManager extends CypherManager {
+export default class DilithiumManager extends CypherManager {
     seed?: Buffer;
     constructor();
-    static createFromEntropy(entropy: Buffer, swapIndex?: number): Promise<PQManager>;
-    static generate(): Promise<PQManager>;
+    static createFromEntropy(entropy: Buffer): Promise<DilithiumManager>;
+    static generate(): Promise<DilithiumManager>;
     getSecret(): Buffer;
     get id(): Buffer;
-    static fromSecret(secret: Buffer): PQManager;
-    static instantiate(obj: any): PQManager;
-    static fromId(id: Buffer): PQManager;
+    static fromSecret(secret: Buffer): DilithiumManager;
+    static instantiate(obj: any): DilithiumManager;
+    static fromId(id: Buffer): DilithiumManager;
     getSigner(): Promise<{
         sign: (data: Buffer) => Promise<Buffer | null>;
     }>;

@@ -3,37 +3,38 @@ import "./shims";
 import VaultysId from "../src/VaultysId";
 import { randomBytes } from "../src/crypto";
 import { Buffer } from "buffer/";
-import { DilithiumManager } from "../src/KeyManager";
+import { HybridManager } from "../src/KeyManager";
 
 describe("PQC", () => {
   it("serder a VaultytsID secret - software", async () => {
-    const vaultysId = await VaultysId.generatePerson("dilithium");
+    const vaultysId = await VaultysId.generatePerson("dilithium_ed25519");
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.id.length, 1998);
-    assert.equal(vaultysId.id.toString("hex").length, 3996);
-    assert.equal(vaultysId.id.toString("base64").length, 2664);
-    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
+    assert.equal(vaultysId.id.length, 2030);
+    assert.equal(vaultysId.id.toString("hex").length, 4060);
+    assert.equal(vaultysId.id.toString("base64").length, 2708);
+    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1984);
     const id2 = VaultysId.fromSecret(vaultysId.getSecret());
 
-    assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
-    assert.equal(vaultysId.keyManager instanceof DilithiumManager, true);
-    assert.equal(id2.keyManager instanceof DilithiumManager, true);
+    assert.equal(vaultysId.keyManager instanceof HybridManager, true);
+    assert.equal(id2.keyManager instanceof HybridManager, true);
+
+    assert.equal(vaultysId.id.toString("base64"), id2.id.toString("base64"));
   });
 
   it("serder a VaultytsID - software", async () => {
-    const vaultysId = await VaultysId.generateOrganization("dilithium");
+    const vaultysId = await VaultysId.generateOrganization("dilithium_ed25519");
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
-    assert.equal(vaultysId.id.length, 1998);
+    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1984);
+    assert.equal(vaultysId.id.length, 2030);
     const id2 = VaultysId.fromId(vaultysId.id);
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
-    assert.equal(vaultysId.keyManager instanceof DilithiumManager, true);
-    assert.equal(id2.keyManager instanceof DilithiumManager, true);
+    assert.equal(vaultysId.keyManager instanceof HybridManager, true);
+    assert.equal(id2.keyManager instanceof HybridManager, true);
   });
 
   it("sign/verify with VaultytsID - software", async () => {
-    const vaultysId = await VaultysId.generateMachine("dilithium");
+    const vaultysId = await VaultysId.generateMachine("dilithium_ed25519");
     if (!vaultysId) assert.fail("VaultysId creation failed");
     const challenge = randomBytes(32);
     const signature = await vaultysId.signChallenge(challenge);
@@ -41,9 +42,9 @@ describe("PQC", () => {
   });
 
   it("sign and verify a message", async () => {
-    const signer = await DilithiumManager.generate();
+    const signer = await HybridManager.generate();
     const id = signer.id;
-    const verifier = DilithiumManager.fromId(id);
+    const verifier = HybridManager.fromId(id);
     const message = Buffer.from("this is a message to be verified man", "utf-8");
     const signature = await signer.sign(message);
     if (!signature) assert.fail();

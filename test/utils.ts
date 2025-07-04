@@ -40,23 +40,24 @@ export const createRandomVaultysId = async (): Promise<VaultysId> => {
     types.push(4);
   }
 
-  const pqc = Math.random() < 0.5;
+  const rand = Math.random();
+  const alg = rand < 0.34 ? "dilithium" : rand < 0.67 ? "ed25519" : "dilithium_ed25519";
 
   const type = types[Math.floor(Math.random() * types.length)];
 
   switch (type) {
     case 0:
-      return VaultysId.generateMachine(pqc);
+      return VaultysId.generateMachine(alg);
     case 1:
-      return VaultysId.generatePerson(pqc);
+      return VaultysId.generatePerson(alg);
     case 2:
-      return VaultysId.generateOrganization(pqc);
+      return VaultysId.generateOrganization(alg);
     case 3:
-      const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(pqc ? PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, false));
+      const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(alg === "dilithium" ? PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, false));
       // @ts-expect-error mockup
       return VaultysId.fido2FromAttestation(attestation1);
     case 4:
-      const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(pqc ? PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, true));
+      const attestation2 = await navigator.credentials.create(SoftCredentials.createRequest(alg === "dilithium" ? PQ_COSE_ALG.DILITHIUM2 : Math.random() < 0.5 ? -8 : -7, true));
       // @ts-expect-error mockup
       return VaultysId.fido2FromAttestation(attestation2);
     default:
@@ -65,7 +66,7 @@ export const createRandomVaultysId = async (): Promise<VaultysId> => {
 };
 
 export const allVaultysIdType = async (): Promise<VaultysId[]> => {
-  const result: VaultysId[] = [await VaultysId.generateMachine(), await VaultysId.generateMachine(true), await VaultysId.generatePerson(), await VaultysId.generatePerson(true)];
+  const result: VaultysId[] = [await VaultysId.generateMachine(), await VaultysId.generateMachine("dilithium"), await VaultysId.generateMachine("dilithium_ed25519"), await VaultysId.generatePerson(), await VaultysId.generatePerson("dilithium"), await VaultysId.generatePerson("dilithium_ed25519")];
 
   if (typeof window === "undefined") {
     let attestation = await navigator.credentials.create(SoftCredentials.createRequest(PQ_COSE_ALG.DILITHIUM2));

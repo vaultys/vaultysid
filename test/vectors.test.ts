@@ -51,9 +51,7 @@ const IDs: Record<string, object> = {
       authType: "P256VerificationKey2020",
       encType: "X25519KeyAgreementKey2019",
       ckey: "pQECAyYgASFYIAahPdTq/F42/PU9WcYGaF4k7BQ1gnD9QIwX2wAcfjKoIlggO56gS5dUKbQZSeBrcYZcOZHZF5F568tgRiDLO2mv5/I=",
-      webAuthn: {
-        origin: "test",
-      },
+      webAuthn: {},
     },
   },
 };
@@ -67,7 +65,7 @@ describe("Test Vectors", () => {
   });
   it("migrate VaultysID serialization", () => {
     const vid = "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
-    const newvid = "AYShdgGhcMQAoXjEINPOwoLA6gK5RZ3XU+OViBOKuQEhNvcjMtsprWBe8GsqoWXEIHOmbJwQ4CFYLnaMOZSIaHUtv4UvDi9JWofJvVxPUA54";
+    const newvid = "AYOhdgGheMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
     assert.equal(migrateVaultysId(Buffer.from(vid, "base64")).toString("base64"), newvid);
 
     const id1 = VaultysId.fromId(vid, undefined, "base64");
