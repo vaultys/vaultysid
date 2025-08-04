@@ -26,9 +26,9 @@ export default class Challenger {
     challenge: ChallengeType | undefined;
     version: 0 | 1;
     constructor(vaultysId: VaultysId, liveliness?: number);
-    static verifyCertificate(certificate: Buffer): Promise<boolean>;
-    static fromCertificate(certificate: Buffer, liveliness?: number): Promise<Challenger | undefined>;
-    static deserializeCertificate: (challenge: Buffer) => ChallengeType;
+    static verifyCertificate(certificate: Buffer | Uint8Array): Promise<boolean>;
+    static fromCertificate(certificate: Buffer | Uint8Array, liveliness?: number): Promise<Challenger | undefined>;
+    static deserializeCertificate: (challenge: Buffer | Uint8Array) => ChallengeType;
     static serializeCertificate_v0: ({ version, protocol, service, timestamp, pk1, pk2, nonce, sign1, sign2, metadata }: {
         version: 0 | 1;
         protocol: string;
@@ -42,7 +42,7 @@ export default class Challenger {
         metadata: object;
     }) => Buffer;
     static serializeCertificate: (challenge: ChallengeType) => Buffer;
-    setChallenge(challengeString: Buffer): Promise<void>;
+    setChallenge(challengeString: Buffer | Uint8Array): Promise<void>;
     getContext(): {
         protocol: string | undefined;
         service: string | undefined;
@@ -59,6 +59,6 @@ export default class Challenger {
     static fromString(vaultysId: VaultysId, challengeString: Buffer): Challenger;
     hasFailed(): boolean;
     isComplete(): boolean;
-    init(challengeString: Buffer): Promise<void>;
-    update(challengeString: Buffer, metadata?: Record<string, string>): Promise<void>;
+    init(challenge: Buffer | Uint8Array): Promise<void>;
+    update(challenge: Buffer | Uint8Array, metadata?: Record<string, string>): Promise<void>;
 }

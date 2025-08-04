@@ -15,7 +15,6 @@ export default class Fido2Manager extends CypherManager {
     get transports(): AuthenticatorTransport[];
     static createFromAttestation(attestation: PublicKeyCredential): Promise<Fido2Manager>;
     get id(): Buffer;
-    get id_v0(): Buffer;
     getSecret(): Buffer;
     static fromSecret(secret: Buffer): Fido2Manager;
     static instantiate(obj: any): Fido2Manager;

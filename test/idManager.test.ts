@@ -7,11 +7,13 @@ import { hash, randomBytes } from "../src/crypto";
 import { allVaultysIdType, createApp, createContact, createRandomVaultysId } from "./utils";
 import wot_v0 from "./assets/wot_v0.json";
 import wot_v1 from "./assets/wot_v1.json";
+import wot_v1_simple from "./assets/wot_v1_simple.json";
 import clear_backup from "./assets/backup.bin.json";
 import encrypted_backup from "./assets/backup.encrypted.bin.json";
 import { migrateIdManager } from "../src/utils/migration";
 import { Ed25519Manager } from "../src/KeyManager";
 import { deserialize, MessagePackStorage, storagify } from "../src/MemoryStorage";
+import DeprecatedKeyManager from "../src/KeyManager/DeprecatedKeyManager";
 
 const passphrase = "deal develop devote mail agree try tide expand indicate poverty chuckle target";
 
@@ -205,8 +207,8 @@ describe("WoT", () => {
     // migration
     migrateIdManager(idManager);
     //await new Promise((r) => setTimeout(r, 300));
-    const newContats = ["did:vaultys:04f9f57c532d525407c4f07c46d5868794dfdb44", "did:vaultys:04fbd2781a354e8d3636c7884ca6d87775fadc6a", "did:vaultys:031ce55a84f388767ee8861b1f52c1faef7047e7", "did:vaultys:028814f629126dba851cc6639b2960d1bbc941e6", "did:vaultys:020fdb7bba1ff3db860ec560acf0518487aa7aea"];
-    const newApps = ["did:vaultys:004790c0e7651084ec26918899b9d0e0b1d5e7a2", "did:vaultys:004ed3d4278aefb5d140b73e15d23e2d6c081529", "did:vaultys:000ae5fcf15c3c5527c96ff2769f0b6b29417941", "did:vaultys:00bc190099ed87fe837bd23f802b96b93c64cf64", "did:vaultys:000bdbee85201b86f4dc89578a03fe81e23148de"];
+    const newContats = ["did:vaultys:0222cf6797fb5d997d9ca9bf650af26e986b8b18", "did:vaultys:04f9f57c532d525407c4f07c46d5868794dfdb44", "did:vaultys:04fbd2781a354e8d3636c7884ca6d87775fadc6a", "did:vaultys:02a3da6fb68019dfd77d8825a254d0e26f13074e", "did:vaultys:031ce55a84f388767ee8861b1f52c1faef7047e7"];
+    const newApps = ["did:vaultys:003813d0639f103023909498b8101424a01ea458", "did:vaultys:007eeed55c703c23db23a3f965a5ca2c26f5c428", "did:vaultys:0062a0efff32c131617115df4525a234e58e5710", "did:vaultys:0033eb847e64d56b6e604eb42fe744d4eec02644", "did:vaultys:001c53a28e606a1c3250b4065df370dc300b26fe"];
     assert.deepEqual(store.substore("contacts").list(), newContats);
     assert.deepEqual(store.substore("registrations").list(), newApps);
     assert.deepEqual(store.substore("wot").list(), ["1750418334298", "1750418334312", "1750418334325", "1750418334341", "1750418334353", "1750418334370", "1750418334385", "1750418334401", "1750418334418", "1750418334433"]);
@@ -230,14 +232,19 @@ describe("WoT", () => {
     }
     assert.equal(idManager.contacts.length, 5);
     for (const contact of newContats) {
-      const c = idManager.getContact(contact);
-      assert.equal(contact, c!.did);
-      assert.equal(await Challenger.verifyCertificate(c!.certificate!), true);
+      const c = idManager.getContact(contact)!;
+      assert.equal(contact, c.did);
+      if (c.did === "did:vaultys:0222cf6797fb5d997d9ca9bf650af26e986b8b18") {
+        const dkm = c.keyManager as DeprecatedKeyManager;
+        assert.equal(dkm.proof!.toString("base64"), "p1jMXsOQfgD6NHIgT0PbY3FBnzTtm7/ud7XGd99GJuc=");
+        assert.equal(dkm.level, 2);
+      }
+      assert.equal(await Challenger.verifyCertificate(c.certificate!), true);
     }
     assert.equal(idManager.apps.length, 5);
     for (const app of newApps) {
-      const c = idManager.getApp(app);
-      assert.equal(app, c!.did);
+      const c = idManager.getApp(app)!;
+      assert.equal(app, c.did);
       assert.equal(await Challenger.verifyCertificate(c!.certificate!), true);
     }
 
@@ -291,6 +298,28 @@ describe("WoT", () => {
     assert.equal(await idManager.verifyWebOfTrust(), true);
   });
 
+  it("create backup v1 simple", async () => {
+    // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
+    //console.log(data);
+    const store = storagify(
+      deserialize(JSON.stringify(wot_v1_simple)),
+      () => "",
+      () => "",
+    );
+    const idManager = await IdManager.fromStore(store);
+
+    const backup = await idManager.exportBackup();
+    // require("fs").writeFileSync(__dirname + "/assets/backup.bin.json", JSON.stringify({ backup: Buffer.from(backup).toString("base64") }));
+    const id2 = await IdManager.importBackup(backup);
+
+    assert.equal(id2?.contacts.length, 1);
+
+    //console.log(id2?.store);
+    assert.equal(id2?.store.toString(), idManager.store.toString());
+    assert.equal(await idManager.verifyWebOfTrust(), true);
+    assert.equal(await id2?.verifyWebOfTrust(), true);
+  });
+
   it("create backup v1", async () => {
     // const data2 = readFileSync(__dirname + "/assets/wot_v0.json");
     //console.log(data);
@@ -305,9 +334,10 @@ describe("WoT", () => {
     // require("fs").writeFileSync(__dirname + "/assets/backup.bin.json", JSON.stringify({ backup: Buffer.from(backup).toString("base64") }));
     const id2 = await IdManager.importBackup(backup);
 
-    assert.equal(await id2?.verifyWebOfTrust(), true);
-    // console.log(id2?.store.toString());
+    //console.log(id2?.store);
     assert.equal(id2?.store.toString(), idManager.store.toString());
+    assert.equal(await idManager.verifyWebOfTrust(), true);
+    assert.equal(await id2?.verifyWebOfTrust(), true);
   });
 
   it("read backup v1", async () => {

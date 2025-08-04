@@ -117,8 +117,8 @@ const encode_v0_full = ({ version, protocol, service, timestamp, pk1, pk2, nonce
   return p;
 };
 
-const deserialize = (challenge: Buffer): ChallengeType => {
-  const unpacked = decode(challenge) as ChallengeType;
+const deserialize = (challenge: Buffer | Uint8Array): ChallengeType => {
+  const unpacked = decode(Buffer.from(challenge)) as ChallengeType;
   const state = {
     state: ERROR,
     error: "",
@@ -162,12 +162,14 @@ const deserialize = (challenge: Buffer): ChallengeType => {
       }
       if (!id1.verifyChallenge(challenge, result.sign1, true) && !id1.verifyChallenge_v0(challenge, result.sign1, true, result.pk1)) {
         result.state = ERROR;
+        //console.log(id1);
         result.error = "[COMPLETE] failed the verification of pk1";
       }
     }
   } catch (error) {
     result.error = "[" + result.state + " -> ERROR] " + error;
     result.state = ERROR;
+    throw error;
   }
   return result;
 };
@@ -241,12 +243,12 @@ export default class Challenger {
     this.liveliness = liveliness;
   }
 
-  static async verifyCertificate(certificate: Buffer) {
+  static async verifyCertificate(certificate: Buffer | Uint8Array) {
     const deser = deserialize(certificate);
     return deser.state === COMPLETE;
   }
 
-  static async fromCertificate(certificate: Buffer, liveliness?: number) {
+  static async fromCertificate(certificate: Buffer | Uint8Array, liveliness?: number) {
     const deser = deserialize(certificate);
     if (!deser.version) {
       deser.version = 0;
@@ -270,7 +272,7 @@ export default class Challenger {
   static serializeCertificate_v0 = encode_v0_full;
   static serializeCertificate = serializeUnsigned;
 
-  async setChallenge(challengeString: Buffer) {
+  async setChallenge(challengeString: Buffer | Uint8Array) {
     if (this.state !== UNINITIALISED) {
       this.state = ERROR;
       throw new Error("Challenger already initialised, can't reset the state");
@@ -377,11 +379,11 @@ export default class Challenger {
     return this.state == COMPLETE;
   }
 
-  async init(challengeString: Buffer) {
+  async init(challenge: Buffer | Uint8Array) {
     if (this.state !== UNINITIALISED) {
       throw new Error("Can't init INITIALISED challenge");
     }
-    const tempchallenge = deserialize(challengeString);
+    const tempchallenge = deserialize(challenge);
     this.version = tempchallenge.version = tempchallenge.version ? 1 : 0;
     this.vaultysId.toVersion(this.version);
     if (tempchallenge.state === INIT) {
@@ -410,13 +412,13 @@ export default class Challenger {
     }
   }
 
-  async update(challengeString: Buffer, metadata?: Record<string, string>) {
+  async update(challenge: Buffer | Uint8Array, metadata?: Record<string, string>) {
     if (this.state === ERROR) {
       throw new Error("Can't update errorneous challenge");
     } else if (this.state === COMPLETE) {
       throw new Error("Can't update COMPLETE challenge");
     } else {
-      const tempchallenge = deserialize(challengeString);
+      const tempchallenge = deserialize(challenge);
       // console.log(this.state, tempchallenge.state);
       if (!tempchallenge) {
         this.state = ERROR;

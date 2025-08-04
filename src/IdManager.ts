@@ -11,6 +11,8 @@ import { Buffer } from "buffer/";
 import nacl from "tweetnacl";
 import { VaultysBackup } from "./platform/abstract";
 import { platformCrypto } from "./platform";
+import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
+import { crypto } from "..";
 
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
@@ -28,7 +30,7 @@ const getSignatureType = (challenge: string) => {
 
 export type StoredContact = {
   type: number;
-  keyManager: KeyManager;
+  keyManager: KeyManager | DeprecatedKeyManager;
   certificate: Buffer;
 };
 
@@ -61,6 +63,9 @@ export const instanciateContact = (c: StoredContact) => {
       vaultysId = new VaultysId(DilithiumManager.instantiate(c.keyManager), c.certificate, c.type);
     } else if (c.keyManager.signer.publicKey.length === 1984) {
       vaultysId = new VaultysId(HybridManager.instantiate(c.keyManager), c.certificate, c.type);
+    } else if ((c.keyManager as DeprecatedKeyManager).proof) {
+      //console.log(c);
+      vaultysId = new VaultysId(DeprecatedKeyManager.instantiate(c.keyManager), c.certificate, c.type);
     } else {
       vaultysId = new VaultysId(Ed25519Manager.instantiate(c.keyManager), c.certificate, c.type);
     }
@@ -221,18 +226,23 @@ export default class IdManager {
     let verified = true;
     for (const certid of this.store.substore("wot").list()) {
       const cert = this.store.substore("wot").get(certid);
-      verified = verified && (await Challenger.verifyCertificate(cert));
+      verified = verified && (await Challenger.verifyCertificate(Buffer.from(cert)));
+      //if (!verified) console.log(Challenger.deserializeCertificate(cert));
     }
+    //console.log("wot", verified);
     for (const appid of this.store.substore("registrations").list()) {
       const app = this.store.substore("registrations").get(appid);
       verified = verified && appid === VaultysId.fromId(app.serverId, undefined, "base64").did;
     }
+    //console.log("registrations", verified);
     for (const contact of this.contacts) {
-      verified = verified && (await Challenger.verifyCertificate(contact!.certificate!));
+      verified = verified && (await Challenger.verifyCertificate(Buffer.from(contact!.certificate!)));
     }
+    //console.log("contacts", verified);
     for (const app of this.apps) {
-      verified = verified && (await Challenger.verifyCertificate(app!.certificate!));
+      verified = verified && (await Challenger.verifyCertificate(Buffer.from(app!.certificate!)));
     }
+    //console.log("apps", verified);
 
     return verified;
   }
@@ -550,6 +560,31 @@ export default class IdManager {
       const { download } = StreamChannel(channel);
       await download(stream);
     } else channel.send(Buffer.from([0]));
+  }
+
+  async requestConnect(channel: Channel, contactdid: string) {
+    let contact = this.getContact(contactdid);
+    if (!contact) contact = this.getApp(contactdid);
+    if (!contact) throw new Error(contactdid + " is not in the Web of Trust");
+    const rand = crypto.randomBytes(16);
+    const dh = await this.vaultysId.performDiffieHellman(contact);
+    if (!dh) throw new Error("Unable to perform DH");
+    channel.send(rand);
+    const result2 = await channel.receive();
+    const result1 = hash("sha256", nacl.scalarMult(rand, dh));
+    if (result1.toString("base64") === result2.toString("base64")) return result1;
+    else throw new Error("Opening session failed with contact " + contactdid);
+  }
+
+  async acceptConnect(channel: Channel, contactdid: string) {
+    let contact = this.getContact(contactdid);
+    if (!contact) contact = this.getApp(contactdid);
+    if (!contact) throw new Error(contactdid + " is not in the Web of Trust");
+    const dh = await this.vaultysId.performDiffieHellman(contact);
+    if (!dh) throw new Error("Unable to perform DH");
+    const rand = await channel.receive();
+    const rand2 = Buffer.concat([rand.slice(0, 16), crypto.randomBytes(16)]);
+    const result1 = hash("sha256", nacl.scalarMult(rand2, dh));
   }
 
   async requestDecrypt(channel: Channel, toDecrypt: Buffer) {

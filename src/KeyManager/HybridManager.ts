@@ -151,7 +151,6 @@ export default class HybridManager extends CypherManager {
       const sign1 = ed25519.sign(data, this.edSigner!.secretKey!);
       const sign2 = signDilithium(Buffer.concat([data, sign1]), this.pqSigner!.secretKey!);
       return Promise.resolve(Buffer.concat([sign1, sign2]));
-      console.log("SIGNATURE", sign1.length, sign2.length);
     };
     return Promise.resolve({ sign });
   }

@@ -43,23 +43,6 @@ const lookup: Record<LookupType, number> = {
   "smart-card": 32,
 };
 
-const encodeBinary = (data: Buffer): Buffer => {
-  if (data.length <= 65535) {
-    // bin16: binary data whose length is upto (2^16)-1 bytes
-    return Buffer.from([0xc5, data.length >> 8, data.length & 0xff, ...data]);
-  } else {
-    // bin32: binary data whose length is upto (2^32)-1 bytes
-    return Buffer.from([0xc6, (data.length >> 24) & 0xff, (data.length >> 16) & 0xff, (data.length >> 8) & 0xff, data.length & 0xff, ...data]);
-  }
-};
-
-const serializeID_v0 = (km: Fido2Manager) => {
-  const version = Buffer.from([0x83, 0xa1, 0x76, km.version]);
-  const cypher = Buffer.concat([Buffer.from([0xa1, 0x65]), encodeBinary(km.cypher.publicKey)]);
-  const ckey = Buffer.concat([Buffer.from([0xa1, 0x63]), encodeBinary(km.ckey)]);
-  return Buffer.concat([version, ckey, cypher]);
-};
-
 const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]) as AuthenticatorTransport[];
 const fromTransports = (transports: string[]): number => transports.reduceRight((memo, i) => memo + (lookup[i as LookupType] ? lookup[i as LookupType] : 0), 0);
 
@@ -125,19 +108,13 @@ export default class Fido2Manager extends CypherManager {
   }
 
   get id() {
-    if (this.version == 0) return serializeID_v0(this);
-    else
-      return Buffer.from(
-        encode({
-          v: this.version,
-          c: this.ckey,
-          e: this.cypher.publicKey,
-        }),
-      );
-  }
-
-  get id_v0() {
-    return serializeID_v0(this);
+    return Buffer.from(
+      encode({
+        v: this.version,
+        c: this.ckey,
+        e: this.cypher.publicKey,
+      }),
+    );
   }
 
   getSecret() {

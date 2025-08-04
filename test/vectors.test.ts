@@ -2,6 +2,7 @@ import assert from "assert";
 import VaultysId from "../src/VaultysId";
 import { migrateVaultysId } from "../src/utils/migration";
 import { Buffer } from "buffer/";
+import DeprecatedKeyManager from "../src/KeyManager/DeprecatedKeyManager";
 
 const serializer = (object: object) => {
   return JSON.stringify(
@@ -25,6 +26,8 @@ const IDs: Record<string, object> = {
     type: 1,
     keyManager: {
       version: 1,
+      level: 2,
+      proof: "AkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv0=",
       capability: "public",
       signer: {
         publicKey: "087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayo=",
@@ -67,10 +70,44 @@ describe("Test Vectors", () => {
     const vid = "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
     const newvid = "AYOhdgGheMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
     assert.equal(migrateVaultysId(Buffer.from(vid, "base64")).toString("base64"), newvid);
-
+    //console.log(vid.length, newvid.length);
     const id1 = VaultysId.fromId(vid, undefined, "base64");
     const id2 = VaultysId.fromId(newvid, undefined, "base64");
-    //id1.keyManager.proof = Buffer.from([]);
+    //console.log(id1, id2);
+    const dkm = id1.keyManager as DeprecatedKeyManager;
+    delete dkm.proof;
+    delete dkm.level;
     assert.equal(serializer(id1), serializer(id2));
+  });
+
+  it("migrate VaultysID serialization from secret", () => {
+    const secret = "AIShdgGhcMQgX1Ypp/enZi4OvMlPyVFZqNnFDOfcwz2mYuzUmtOlM5SheMRg4DwUKviWw6rawQUMi3M62u1JFtq0CmEOX6G71mZ310OSrjI56c1/8kOrkHTXD27L0kjqldZQS+Oc2wbEBAJomsqoF9wwtlBWiZNWpSAoOhCHwW11fE1Z7N1JcMPnikGBoWXEIAxvqP1VncsKcHWTDIkwwOR9q/VdKR+N69V7Ck5HF8ek";
+    const vid = VaultysId.fromSecret(secret, "base64").id.toString("base64");
+    const newvid = "AIOhdgGheMQg86Srbk1vxDJv4wqv0Hb7jp1v/NEPEQH5ny2xwb4MlP6hZcQg8HyAjvBjWl+lhsOxm+ILaOcNP19jiPSxOuscgYA9kSw=";
+    assert.equal(migrateVaultysId(Buffer.from(vid, "base64")).toString("base64"), newvid);
+    //console.log(vid.length, newvid.length);
+    const id1 = VaultysId.fromId(vid, undefined, "base64");
+    const id2 = VaultysId.fromId(newvid, undefined, "base64");
+    const dkm = id1.keyManager as DeprecatedKeyManager;
+    delete dkm.proof;
+    delete dkm.level;
+    assert.equal(serializer(id1), serializer(id2));
+  });
+
+  it("deprecated ID type 1 backward compatibility", async () => {
+    const km = await DeprecatedKeyManager.generate_Id25519();
+    const vid = new VaultysId(km, undefined, 1);
+    //console.log(vid);
+
+    const message = "test random message not so random";
+    const verifyID = VaultysId.fromId(vid.id);
+    //console.log(verifyID);
+    //console.log(vid.id.toString("base64"));
+    //console.log(vid.getSecret("base64"));
+
+    assert.deepEqual(km.proof, (verifyID.keyManager as DeprecatedKeyManager).proof);
+
+    assert.equal(verifyID.verifyChallenge(message, await vid.signChallenge(message), true), true);
+    assert.equal(verifyID.verifyChallenge_v0(message, await vid.signChallenge_v0(message, vid.id), true, vid.id), true);
   });
 });

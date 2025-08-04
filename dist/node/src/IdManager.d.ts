@@ -5,9 +5,10 @@ import { Channel } from "./MemoryChannel";
 import { Store } from "./MemoryStorage";
 import VaultysId from "./VaultysId";
 import { Buffer } from "buffer/";
+import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 export type StoredContact = {
     type: number;
-    keyManager: KeyManager;
+    keyManager: KeyManager | DeprecatedKeyManager;
     certificate: Buffer;
 };
 export type StoredApp = {
@@ -81,6 +82,8 @@ export default class IdManager {
     verifyChallenge(challenge: Buffer, signature: Buffer): Promise<boolean>;
     upload(channel: Channel, stream: Readable): Promise<void>;
     download(channel: Channel, stream: Writable): Promise<void>;
+    requestConnect(channel: Channel, contactdid: string): Promise<Buffer>;
+    acceptConnect(channel: Channel, contactdid: string): Promise<void>;
     requestDecrypt(channel: Channel, toDecrypt: Buffer): Promise<Buffer | null | undefined>;
     acceptDecrypt(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>): Promise<void>;
     requestDecryptFile(channel: Channel, toDecrypt: File): Promise<File>;
