@@ -92,7 +92,7 @@ export default class IdManager {
     acceptEncryptFile: (channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) => Promise<null>;
     requestSignFile(channel: Channel, file: File): Promise<FileSignature | undefined>;
     acceptSignFile(channel: Channel, accept?: (contact: VaultysId, file: File) => Promise<boolean>): Promise<void>;
-    requestPRF(channel: Channel, appid: string): Promise<Buffer | undefined>;
+    requestPRF(channel: Channel, appid: string, accept?: (contact: VaultysId) => Promise<boolean>): Promise<Buffer | undefined>;
     acceptPRF(channel: Channel, accept?: (contact: VaultysId, appid: string) => Promise<boolean>): Promise<void>;
     /***************************/
     /***************************/

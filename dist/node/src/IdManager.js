@@ -607,14 +607,14 @@ class IdManager {
         else
             channel.send(buffer_1.Buffer.from([0]));
     }
-    async requestPRF(channel, appid) {
+    async requestPRF(channel, appid, accept) {
         if (appid.length < 3) {
             throw new Error("appid is too short, less than 3 characters");
         }
         if (appid.split("|").length > 1) {
             throw new Error("appid contains illegal character |");
         }
-        const challenger = await this.acceptSRP(channel, "p2p", "prf");
+        const challenger = await this.acceptSRP(channel, "p2p", "prf", undefined, accept);
         if (challenger.isComplete()) {
             channel.send(buffer_1.Buffer.from(appid, "utf-8"));
             const prf = await channel.receive();
