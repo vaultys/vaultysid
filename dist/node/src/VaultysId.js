@@ -160,7 +160,7 @@ class VaultysId {
             return new VaultysId(f2m, undefined, type);
         }
         else {
-            // console.log(secretBuffer.length);
+            //console.log(secretBuffer.length);
             if (secretBuffer.length === 73) {
                 const pqm = KeyManager_1.DilithiumManager.fromSecret(secretBuffer.slice(1));
                 return new VaultysId(pqm, undefined, type);
@@ -169,8 +169,12 @@ class VaultysId {
                 const pqm = KeyManager_1.HybridManager.fromSecret(secretBuffer.slice(1));
                 return new VaultysId(pqm, undefined, type);
             }
-            else {
+            else if (secretBuffer.length === 77) {
                 const km = KeyManager_1.Ed25519Manager.fromSecret(secretBuffer.slice(1));
+                return new VaultysId(km, undefined, type);
+            }
+            else {
+                const km = DeprecatedKeyManager_1.default.fromSecret(secretBuffer.slice(1));
                 return new VaultysId(km, undefined, type);
             }
         }
