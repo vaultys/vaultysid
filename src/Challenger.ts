@@ -297,7 +297,7 @@ export default class Challenger {
       this.challenge.nonce = Buffer.concat([this.challenge.nonce || new Uint8Array(), randomBytes(16)]);
       const serialized = this.getUnsignedChallenge();
       if (!serialized) throw new Error("Error processing Challenge");
-      this.challenge.sign2 = (await this.vaultysId.signChallenge(serialized)) || undefined;
+      this.challenge.sign2 = this.version === 0 ? await this.vaultysId.signChallenge_v0(serialized, this.mykey) : await this.vaultysId.signChallenge(serialized);
       this.challenge.state = this.state = STEP1;
     } else if (this.challenge.state === COMPLETE) {
       //this.vaultysId.toVersion(this.challenge.version);
@@ -496,7 +496,7 @@ export default class Challenger {
           this.state = ERROR;
           throw new Error("Error processing Challenge");
         }
-        tempchallenge.sign1 = await this.vaultysId.signChallenge(serialized);
+        tempchallenge.sign1 = this.version === 0 ? await this.vaultysId.signChallenge_v0(serialized, this.mykey) : await this.vaultysId.signChallenge(serialized);
         this.challenge = tempchallenge;
         this.hisKey = tempchallenge.pk2;
         this.state = this.challenge.state = COMPLETE;

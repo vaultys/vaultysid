@@ -102,7 +102,7 @@ describe("Test Vectors", () => {
       timestamp: 1756929814984,
     };
     const id = VaultysId.fromId(data.serverId, undefined, "base64");
-    console.log(id);
+    //console.log(id);
     assert.equal(id.verifyChallenge_v0("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false, Buffer.from(data.serverId, "base64")), true);
   });
 
