@@ -83,7 +83,8 @@ describe("Test Vectors", () => {
   it("migrate VaultysID serialization from secret", () => {
     const secret = "AIShdgGhcMQgX1Ypp/enZi4OvMlPyVFZqNnFDOfcwz2mYuzUmtOlM5SheMRg4DwUKviWw6rawQUMi3M62u1JFtq0CmEOX6G71mZ310OSrjI56c1/8kOrkHTXD27L0kjqldZQS+Oc2wbEBAJomsqoF9wwtlBWiZNWpSAoOhCHwW11fE1Z7N1JcMPnikGBoWXEIAxvqP1VncsKcHWTDIkwwOR9q/VdKR+N69V7Ck5HF8ek";
     const vid = VaultysId.fromSecret(secret, "base64").id.toString("base64");
-    const newvid = "AIOhdgGheMQg86Srbk1vxDJv4wqv0Hb7jp1v/NEPEQH5ny2xwb4MlP6hZcQg8HyAjvBjWl+lhsOxm+ILaOcNP19jiPSxOuscgYA9kSw=";
+    const newvid = "AIOhdgGheMQgcLKV+bymQ35KYDhFe7Lwh+8ircJiwhQATyKI7PcxPx+hZcQg8HyAjvBjWl+lhsOxm+ILaOcNP19jiPSxOuscgYA9kSw=";
+    //console.log(VaultysId.fromSecret(secret, "base64"));
     assert.equal(migrateVaultysId(Buffer.from(vid, "base64")).toString("base64"), newvid);
     //console.log(vid.length, newvid.length);
     const id1 = VaultysId.fromId(vid, undefined, "base64");

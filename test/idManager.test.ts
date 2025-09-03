@@ -499,6 +499,7 @@ describe("SRG v0 challenge with IdManager", () => {
 
       const contacts = await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2)]);
 
+      console.log(contacts[0], manager2.vaultysId);
       assert.equal(contacts[0].did, manager2.vaultysId.did);
       assert.equal(contacts[1].did, manager1.vaultysId.did);
 

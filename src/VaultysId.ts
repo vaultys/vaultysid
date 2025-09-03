@@ -270,15 +270,18 @@ export default class VaultysId {
       const f2m = Fido2PRFManager.fromSecret(secretBuffer.slice(1));
       return new VaultysId(f2m, undefined, type);
     } else {
-      // console.log(secretBuffer.length);
+      //console.log(secretBuffer.length);
       if (secretBuffer.length === 73) {
         const pqm = DilithiumManager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(pqm, undefined, type);
       } else if (secretBuffer.length === 84) {
         const pqm = HybridManager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(pqm, undefined, type);
-      } else {
+      } else if (secretBuffer.length === 77) {
         const km = Ed25519Manager.fromSecret(secretBuffer.slice(1));
+        return new VaultysId(km, undefined, type);
+      } else {
+        const km = DeprecatedKeyManager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(km, undefined, type);
       }
     }
