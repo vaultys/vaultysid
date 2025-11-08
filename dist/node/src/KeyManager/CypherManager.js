@@ -36,11 +36,12 @@ class DHIES {
         // Convert message to Buffer if it's a string
         const messageBuffer = typeof message === "string" ? buffer_1.Buffer.from(message, "utf8") : message;
         try {
-            const ephemeralKey = (0, crypto_1.randomBytes)(32); // Generate a random 32-byte key for ephemeral key
-            // Derive shared secret using recipient's public key and sender secret key
-            const dh = await cypher.diffieHellman(recipientPublicKey);
-            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKey, dh));
+            // Generate ephemeral keypair for this encryption
+            const ephemeralKeypair = tweetnacl_1.default.box.keyPair();
+            // Derive shared secret using ephemeral private key and recipient's public key
+            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKeypair.secretKey, recipientPublicKey));
             // Key derivation: derive encryption and MAC keys from shared secret
+            // Using sender's public key (not ephemeral) for authentication
             const kdfOutput = this.kdf(sharedSecret, this.keyManager.cypher.publicKey, recipientPublicKey);
             const encryptionKey = kdfOutput.encryptionKey;
             const macKey = kdfOutput.macKey;
@@ -50,11 +51,11 @@ class DHIES {
             // Compute MAC (Message Authentication Code)
             const dataToAuthenticate = buffer_1.Buffer.concat([this.keyManager.cypher.publicKey, nonce, ciphertext]);
             const mac = this.computeMAC(macKey, dataToAuthenticate);
-            // Construct the final encrypted message: nonce + ephemeralKey + ciphertext + MAC
-            const encryptedMessage = buffer_1.Buffer.concat([nonce, ephemeralKey, ciphertext, mac]);
+            // Construct the final encrypted message: nonce + ephemeralPublicKey + ciphertext + MAC
+            const encryptedMessage = buffer_1.Buffer.concat([nonce, ephemeralKeypair.publicKey, ciphertext, mac]);
             // Securely erase sensitive data
             (0, crypto_1.secureErase)(sharedSecret);
-            (0, crypto_1.secureErase)(dh);
+            (0, crypto_1.secureErase)(ephemeralKeypair.secretKey);
             (0, crypto_1.secureErase)(encryptionKey);
             (0, crypto_1.secureErase)(macKey);
             return encryptedMessage;
@@ -77,15 +78,14 @@ class DHIES {
         }
         try {
             // Extract components from the encrypted message
-            // Format: nonce (24 bytes) + ephemeralKey (32 bytes) + ciphertext + MAC (32 bytes)
+            // Format: nonce (24 bytes) + ephemeralPublicKey (32 bytes) + ciphertext + MAC (32 bytes)
             const nonce = encryptedMessage.slice(0, 24);
-            const ephemeralKey = encryptedMessage.slice(24, 56);
+            const ephemeralPublicKey = encryptedMessage.slice(24, 56);
             const mac = encryptedMessage.slice(encryptedMessage.length - 32);
             const ciphertext = encryptedMessage.slice(56, encryptedMessage.length - 32);
             const cypher = await this.keyManager.getCypher();
-            // Derive shared secret using sender public key and recipient secret key
-            const dh = await cypher.diffieHellman(senderPublicKey);
-            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(ephemeralKey, dh));
+            // Derive shared secret using recipient's private key and ephemeral public key
+            const sharedSecret = buffer_1.Buffer.from(tweetnacl_1.default.scalarMult(this.keyManager.cypher.secretKey, ephemeralPublicKey));
             // Key derivation: derive encryption and MAC keys
             const kdfOutput = this.kdf(sharedSecret, senderPublicKey, this.keyManager.cypher.publicKey);
             const encryptionKey = kdfOutput.encryptionKey;

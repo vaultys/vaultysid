@@ -1,8 +1,10 @@
 node_modules
 .DS_Store
-rust
+rust/target
 stats.json
 test/assets/streamed_file.png
 test/assets/streamed_file_encrypted.png
 test/assets/streamed_file_signcrypted.png
 vaultysbox/
+/test/interops/compatibility-data
+/test/interops/tmp

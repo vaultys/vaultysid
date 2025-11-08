@@ -64,7 +64,7 @@ const instanciateApp = (a) => {
 exports.instanciateApp = instanciateApp;
 class IdManager {
     constructor(vaultysId, store) {
-        this.protocol_version = 0;
+        this.protocol_version = 1;
         // alias since this is symetric key encryption
         this.acceptEncryptFile = this.acceptDecryptFile;
         this.vaultysId = vaultysId;
@@ -748,12 +748,12 @@ class IdManager {
         // console.log("acceptSRP sending 2")
         try {
             const message = await channel.receive();
-            // console.log("acceptSRP 2", message)
+            console.log("acceptSRP 2", message);
             await challenger.update(message);
         }
         catch (error) {
             await channel.close();
-            //console.log(challenger);
+            console.log(challenger);
             throw new Error(error);
         }
         if (challenger.isComplete()) {

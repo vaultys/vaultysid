@@ -132,6 +132,7 @@ const deserialize = (challenge) => {
             result.state = STEP1;
             const id2 = VaultysId_1.default.fromId(result.pk2);
             const challenge = serializeUnsigned(result);
+            console.log("serialized Unsigned", challenge.toString("hex"));
             if (!id2.verifyChallenge(challenge, result.sign2, true) && !id2.verifyChallenge_v0(challenge, result.sign2, true, result.pk2)) {
                 result.state = ERROR;
                 result.error = "[STEP1] failed the verification of pk2";
@@ -148,6 +149,7 @@ const deserialize = (challenge) => {
                 result.error = "[COMPLETE] pk1 and pk2 are using different serialization version";
             }
             const challenge = serializeUnsigned(result);
+            console.log("serialized Unsigned", challenge.toString("hex"));
             if (!id2.verifyChallenge(challenge, result.sign2, true) && !id2.verifyChallenge_v0(challenge, result.sign2, true, result.pk2)) {
                 result.state = ERROR;
                 result.error = "[COMPLETE] failed the verification of pk2";
@@ -437,6 +439,7 @@ class Challenger {
                     throw new Error("challenge is not corresponding to the right id");
                 }
                 const serialized = serializeUnsigned(tempchallenge);
+                console.log("serialized Unsigned", serialized.toString("hex"));
                 tempchallenge.sign1 = await this.vaultysId.signChallenge(serialized);
                 this.challenge = tempchallenge;
                 this.mykey = this.challenge.pk1;
@@ -467,6 +470,7 @@ class Challenger {
                     throw new Error(`The challenge has been tampered with. Received pk1 = '${tempchallenge.pk1}', expected pk1 = '${this.mykey}'`);
                 }
                 const serialized = serializeUnsigned(tempchallenge);
+                console.log("serialized Unsigned", serialized.toString("hex"));
                 if (!serialized) {
                     this.state = ERROR;
                     throw new Error("Error processing Challenge");

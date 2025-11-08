@@ -65,13 +65,14 @@ export class DHIES {
     const messageBuffer = typeof message === "string" ? Buffer.from(message, "utf8") : message;
 
     try {
-      const ephemeralKey = randomBytes(32); // Generate a random 32-byte key for ephemeral key
+      // Generate ephemeral keypair for this encryption
+      const ephemeralKeypair = nacl.box.keyPair();
 
-      // Derive shared secret using recipient's public key and sender secret key
-      const dh = await cypher.diffieHellman(recipientPublicKey);
-      const sharedSecret = Buffer.from(nacl.scalarMult(ephemeralKey, dh));
+      // Derive shared secret using ephemeral private key and recipient's public key
+      const sharedSecret = Buffer.from(nacl.scalarMult(ephemeralKeypair.secretKey, recipientPublicKey));
 
       // Key derivation: derive encryption and MAC keys from shared secret
+      // Using sender's public key (not ephemeral) for authentication
       const kdfOutput = this.kdf(sharedSecret, this.keyManager.cypher.publicKey, recipientPublicKey);
       const encryptionKey = kdfOutput.encryptionKey;
       const macKey = kdfOutput.macKey;
@@ -84,12 +85,12 @@ export class DHIES {
       const dataToAuthenticate = Buffer.concat([this.keyManager.cypher.publicKey, nonce, ciphertext]);
       const mac = this.computeMAC(macKey, dataToAuthenticate);
 
-      // Construct the final encrypted message: nonce + ephemeralKey + ciphertext + MAC
-      const encryptedMessage = Buffer.concat([nonce, ephemeralKey, ciphertext, mac]);
+      // Construct the final encrypted message: nonce + ephemeralPublicKey + ciphertext + MAC
+      const encryptedMessage = Buffer.concat([nonce, ephemeralKeypair.publicKey, ciphertext, mac]);
 
       // Securely erase sensitive data
       secureErase(sharedSecret);
-      secureErase(dh);
+      secureErase(ephemeralKeypair.secretKey);
       secureErase(encryptionKey);
       secureErase(macKey);
 
@@ -114,16 +115,15 @@ export class DHIES {
 
     try {
       // Extract components from the encrypted message
-      // Format: nonce (24 bytes) + ephemeralKey (32 bytes) + ciphertext + MAC (32 bytes)
+      // Format: nonce (24 bytes) + ephemeralPublicKey (32 bytes) + ciphertext + MAC (32 bytes)
       const nonce = encryptedMessage.slice(0, 24);
-      const ephemeralKey = encryptedMessage.slice(24, 56);
+      const ephemeralPublicKey = encryptedMessage.slice(24, 56);
       const mac = encryptedMessage.slice(encryptedMessage.length - 32);
       const ciphertext = encryptedMessage.slice(56, encryptedMessage.length - 32);
       const cypher = await this.keyManager.getCypher();
 
-      // Derive shared secret using sender public key and recipient secret key
-      const dh = await cypher.diffieHellman(senderPublicKey);
-      const sharedSecret = Buffer.from(nacl.scalarMult(ephemeralKey, dh));
+      // Derive shared secret using recipient's private key and ephemeral public key
+      const sharedSecret = Buffer.from(nacl.scalarMult(this.keyManager.cypher.secretKey!, ephemeralPublicKey));
 
       // Key derivation: derive encryption and MAC keys
       const kdfOutput = this.kdf(sharedSecret, senderPublicKey, this.keyManager.cypher.publicKey);

@@ -17,14 +17,19 @@
   "description": "the most advanced decentralised id framework",
   "scripts": {
     "build": "npm run build:node && npm run build:browser",
-    "build:node": "tsc -p tsconfig.json",
+    "build:node": "rm -fr ./dist && tsc -p tsconfig.json",
     "build:browser": "webpack --config webpack.config.js",
     "prettier": "find src -name \"*.ts\" | xargs prettier --write",
     "test": "mocha ./test/*.test.[jt]s",
     "test:pqc": "mocha ./test/pqc.test.ts ",
     "test:server": "http-server . -p 8080",
     "test:web": "pnpm build:browser && webpack --config webpack.test.config.js && mocha --require tsx test/runner.ts",
-    "visualize": "webpack --config webpack.config.js --json > stats.json"
+    "visualize": "webpack --config webpack.config.js --json > stats.json",
+    "test:compatibility:export": "pnpm run build:node && tsx test/interops/compatibility-export.ts",
+    "test:compatibility:rust": "cd rust && cargo test --test typescript_compatibility",
+    "test:compatibility": "pnpm run test:compatibility:export && npm run test:compatibility:rust",
+    "test:interops:reverse": "test/interops/run-cross-language-test.sh reverse",
+    "test:interops": "test/interops/run-cross-language-test.sh"
   },
   "keywords": [],
   "author": "",
