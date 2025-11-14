@@ -1,6 +1,6 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -263,10 +263,10 @@ async fn run_test(role: &str, channel_name: &str) -> Result<()> {
         println!("[Rust] Connecting to TypeScript acceptor...\n");
 
         // Create metadata for the ask request
-        let metadata = HashMap::new();
-        // metadata.insert("name".to_string(), name.to_string());
-        // metadata.insert("email".to_string(), email.to_string());
-        // metadata.insert("role".to_string(), "asker".to_string());
+        let mut metadata = BTreeMap::new();
+        metadata.insert("name".to_string(), name.to_string());
+        metadata.insert("email".to_string(), email.to_string());
+        metadata.insert("role".to_string(), "asker".to_string());
 
         // Ask contact from TypeScript
         let _result = match manager.ask_contact(&mut channel, metadata).await {
@@ -311,10 +311,10 @@ async fn run_test(role: &str, channel_name: &str) -> Result<()> {
         println!("[Rust] Waiting for connection request from TypeScript...\n");
 
         // Create metadata for the accept request
-        let metadata = HashMap::new();
-        // metadata.insert("name".to_string(), name.to_string());
-        // metadata.insert("email".to_string(), email.to_string());
-        // metadata.insert("role".to_string(), "acceptor".to_string());
+        let mut metadata = BTreeMap::new();
+        metadata.insert("name".to_string(), name.to_string());
+        metadata.insert("email".to_string(), email.to_string());
+        metadata.insert("role".to_string(), "acceptor".to_string());
 
         // Accept contact from TypeScript
         let result = manager.accept_contact(&mut channel, metadata).await?;

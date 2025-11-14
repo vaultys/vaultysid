@@ -1,7 +1,33 @@
 [package]
 name = "vaultysid"
 version = "0.1.0"
+authors = ["Vaultys"]
 edition = "2021"
+rust-version = "1.70"
+description = "Cryptographic identity library providing Ed25519 signing, X25519 key exchange, and DID-based identity management"
+documentation = "https://docs.rs/vaultysid"
+readme = "README.md"
+homepage = "https://github.com/vaultys/vaultysid"
+repository = "https://github.com/vaultys/vaultysid"
+license = "MIT"
+keywords = ["cryptography", "identity", "ed25519", "x25519", "did"]
+categories = ["cryptography", "authentication", "encoding"]
+exclude = [
+    "target/*",
+    ".github/*",
+    "*.sh",
+]
+
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[badges]
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 # Async support
@@ -27,7 +53,7 @@ hex = "0.4"
 serde_json = "1.0"
 
 # Error handling
-thiserror = "1.0"
+thiserror = "2.0"
 anyhow = "1.0"
 
 # Memory safety
@@ -38,7 +64,7 @@ tokio = { version = "1.35", features = ["full"] }
 
 [dev-dependencies]
 tempfile = "3.8"
-criterion = "0.5"
+criterion = "0.7"
 proptest = "1.4"
 tokio = { version = "1.35", features = ["full", "test-util"] }
 
@@ -50,13 +76,31 @@ name = "crypto_bench"
 harness = false
 
 [[bin]]
-name = "protocol_interop"
-path = "src/bin/protocol_interop.rs"
-
-[[bin]]
 name = "cross_language_test"
 path = "src/bin/cross_language_test.rs"
+required-features = []
 
 [[bin]]
 name = "debug_channel"
 path = "src/bin/debug_channel.rs"
+required-features = []
+
+[[example]]
+name = "basic_usage"
+
+[[example]]
+name = "dhies_example"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.wasm]
+inherits = "release"
+opt-level = "s"
+lto = true
+
+[profile.bench]
+inherits = "release"

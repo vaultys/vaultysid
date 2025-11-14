@@ -1,0 +1,189 @@
+name: Rust Release
+
+on:
+  push:
+    tags:
+      - 'rust-v*'
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          VERSION=${VERSION#rust-v}
+          VERSION=${VERSION#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: VaultysId Rust ${{ steps.get_version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(steps.get_version.outputs.version, '-') }}
+          body: |
+            ## VaultysId Rust Library ${{ steps.get_version.outputs.version }}
+
+            ### Installation
+            ```toml
+            [dependencies]
+            vaultysid = "${{ steps.get_version.outputs.version }}"
+            ```
+
+            ### Changelog
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref }}/rust/CHANGELOG.md) for details.
+
+  build-artifacts:
+    name: Build Release Artifacts
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: vaultysid-linux-amd64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            artifact_name: vaultysid-linux-musl-amd64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: vaultysid-windows-amd64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: vaultysid-macos-amd64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: vaultysid-macos-aarch64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools (Linux)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build release binary
+        working-directory: ./rust
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Create tarball (Unix)
+        if: runner.os != 'Windows'
+        working-directory: ./rust
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.artifact_name }}.tar.gz \
+            protocol_interop \
+            cross_language_test \
+            debug_channel
+          cd ../../../
+          sha256sum ${{ matrix.artifact_name }}.tar.gz > ${{ matrix.artifact_name }}.tar.gz.sha256
+
+      - name: Create zip (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ./rust
+        shell: powershell
+        run: |
+          cd target\${{ matrix.target }}\release
+          Compress-Archive -Path protocol_interop.exe,cross_language_test.exe,debug_channel.exe `
+            -DestinationPath ..\..\..\${{ matrix.artifact_name }}.zip
+          cd ..\..\..\
+          (Get-FileHash ${{ matrix.artifact_name }}.zip -Algorithm SHA256).Hash | Out-File -FilePath "${{ matrix.artifact_name }}.zip.sha256"
+
+      - name: Upload tarball
+        if: runner.os != 'Windows'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./rust/${{ matrix.artifact_name }}.tar.gz
+          asset_name: ${{ matrix.artifact_name }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload tarball checksum
+        if: runner.os != 'Windows'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./rust/${{ matrix.artifact_name }}.tar.gz.sha256
+          asset_name: ${{ matrix.artifact_name }}.tar.gz.sha256
+          asset_content_type: text/plain
+
+      - name: Upload zip
+        if: runner.os == 'Windows'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./rust/${{ matrix.artifact_name }}.zip
+          asset_name: ${{ matrix.artifact_name }}.zip
+          asset_content_type: application/zip
+
+      - name: Upload zip checksum
+        if: runner.os == 'Windows'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./rust/${{ matrix.artifact_name }}.zip.sha256
+          asset_name: ${{ matrix.artifact_name }}.zip.sha256
+          asset_content_type: text/plain
+
+  publish-crate:
+    name: Publish to crates.io
+    needs: [create-release, build-artifacts]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify version matches
+        working-directory: ./rust
+        run: |
+          CARGO_VERSION=$(grep "^version" Cargo.toml | head -1 | cut -d'"' -f2)
+          TAG_VERSION="${{ needs.create-release.outputs.version }}"
+          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
+            echo "Error: Cargo.toml version ($CARGO_VERSION) doesn't match tag version ($TAG_VERSION)"
+            exit 1
+          fi
+
+      - name: Login to crates.io
+        working-directory: ./rust
+        run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+
+      - name: Publish to crates.io
+        working-directory: ./rust
+        run: cargo publish --verbose
+        continue-on-error: true  # Don't fail if crate was already published
+
+      - name: Verify publication
+        run: |
+          sleep 30  # Give crates.io time to update
+          cargo search vaultysid --limit 1

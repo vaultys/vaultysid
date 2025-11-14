@@ -38,7 +38,7 @@ case "$MODE" in
 
         # Start TypeScript acceptor in background
         echo -e "${CYAN}[1/2] Starting TypeScript IdManager (acceptContact)...${NC}"
-        pnpx ts-node test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" > test/interops/tmp/ts-acceptor.log 2>&1 &
+        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" > test/interops/tmp/ts-acceptor.log 2>&1 &
         TS_PID=$!
 
         # Give TypeScript time to initialize
@@ -92,7 +92,7 @@ case "$MODE" in
         echo -e "${CYAN}[2/2] Starting TypeScript IdManager (askContact)...${NC}\n"
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
-        pnpx ts-node test/interops/cross-language-channel.ts asker "$CHANNEL_NAME"
+        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts asker "$CHANNEL_NAME"
         TS_EXIT=$?
 
         # Wait for Rust to complete

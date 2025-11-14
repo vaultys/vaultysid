@@ -3,6 +3,7 @@ use crate::error::{Error, Result};
 use crate::key_manager::{Capability, KeyPairImpl};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
+use rand::rngs::OsRng;
 use x25519_dalek::{PublicKey, StaticSecret};
 use zeroize::Zeroize;
 
@@ -23,7 +24,7 @@ impl<'a> DHIES<'a> {
         }
 
         // Generate ephemeral keypair for this encryption
-        let ephemeral_secret = StaticSecret::random_from_rng(rand::thread_rng());
+        let ephemeral_secret = StaticSecret::random_from_rng(OsRng);
         let ephemeral_public = PublicKey::from(&ephemeral_secret);
 
         // Parse recipient's public key
