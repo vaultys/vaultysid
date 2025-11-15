@@ -210,10 +210,10 @@ async fn test_srp_challenge_success() {
     manager2.set_name("Bob").await.unwrap();
 
     // Create a bidirectional channel
-    let mut channel = MemoryChannel::new();
+    let _channel = MemoryChannel::new();
 
     // Run SRP challenge
-    let id2_hex = to_hex(&manager2.vaultys_id.lock().await.id());
+    let _id2_hex = to_hex(&manager2.vaultys_id.lock().await.id());
 
     // Note: In a real scenario, these would run concurrently
     // For testing, we'd need proper async coordination and separate channels

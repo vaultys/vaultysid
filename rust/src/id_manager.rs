@@ -422,7 +422,7 @@ impl IdManager {
         // Generate decryption key using PRF
         // Generate decryption key using PRF (simplified for now)
         let secret = vaultys_id.get_secret()?;
-        let mut secret_key = vec![0u8; 32];
+        let mut secret_key = [0u8; 32];
         for i in 0..32 {
             secret_key[i] = secret[i % secret.len()] ^ prf_nonce_bytes[i % prf_nonce_bytes.len()];
         }
@@ -542,7 +542,7 @@ impl IdManager {
         channel: &mut dyn crate::memory_channel::Channel,
     ) -> Result<Vec<u8>> {
         let vaultys_id = self.vaultys_id.lock().await;
-        let mut challenger = Challenger::new(vaultys_id.clone(), Some(60_000));
+        let mut challenger = Challenger::new(vaultys_id.duplicate(), Some(60_000));
 
         // Create challenge
         challenger.create_challenge(
@@ -583,7 +583,7 @@ impl IdManager {
         channel: &mut dyn crate::memory_channel::Channel,
     ) -> Result<Vec<u8>> {
         let vaultys_id = self.vaultys_id.lock().await;
-        let mut challenger = Challenger::new(vaultys_id.clone(), Some(60_000));
+        let mut challenger = Challenger::new(vaultys_id.duplicate(), Some(60_000));
 
         // Receive initial challenge
         let message = channel.receive().await?;
@@ -619,7 +619,7 @@ impl IdManager {
         metadata: BTreeMap<String, String>,
     ) -> Result<VaultysId> {
         let vaultys_id = self.vaultys_id.lock().await;
-        let mut challenger = Challenger::new(vaultys_id.clone(), Some(60_000));
+        let mut challenger = Challenger::new(vaultys_id.duplicate(), Some(60_000));
 
         // Create challenge with p2p protocol and auth service
         challenger.create_challenge(
@@ -698,7 +698,7 @@ impl IdManager {
         metadata: BTreeMap<String, String>,
     ) -> Result<VaultysId> {
         let vaultys_id = self.vaultys_id.lock().await;
-        let mut challenger = Challenger::new(vaultys_id.clone(), Some(60_000));
+        let mut challenger = Challenger::new(vaultys_id.duplicate(), Some(60_000));
 
         // Receive initial challenge
         let message = match channel.receive().await {

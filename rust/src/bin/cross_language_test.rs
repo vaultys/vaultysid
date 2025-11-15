@@ -359,7 +359,6 @@ async fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[tokio::test]
     #[ignore] // This test requires coordination with TypeScript

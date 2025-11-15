@@ -179,7 +179,7 @@ fn test_deprecated_key_manager_generation() {
     assert_eq!(manager.signer.public_key.len(), 32);
     assert_eq!(manager.cypher.public_key.len(), 32);
     assert!(manager.proof.is_some());
-    assert!(manager.proof_key.public_key.len() > 0);
+    assert!(!manager.proof_key.public_key.is_empty());
 }
 
 #[test]
@@ -341,8 +341,8 @@ async fn test_id_compatibility() {
     let ed25519_manager = Ed25519Manager::generate().unwrap();
     let deprecated_manager = DeprecatedKeyManager::generate_id25519().unwrap();
 
-    let ed_id = ed25519_manager.id();
-    let dep_id = deprecated_manager.id();
+    let _ed_id = ed25519_manager.id();
+    let _dep_id = deprecated_manager.id();
 
     // Create VaultysIds from these
     let machine = VaultysId::generate_machine().await.unwrap();
@@ -452,7 +452,7 @@ fn test_dhies_message_tampering_detected() {
 
     let message = b"Do not tamper";
 
-    let mut encrypted = sender.dhies_encrypt(message, &recipient.id()).unwrap();
+    let encrypted = sender.dhies_encrypt(message, &recipient.id()).unwrap();
 
     // Tamper with different parts of the message
 
@@ -530,7 +530,7 @@ fn test_dhies_with_binary_data() {
     let patterns = vec![
         vec![0x00; 32],                                // All zeros
         vec![0xFF; 32],                                // All ones
-        vec![0xAA, 0x55].repeat(8),                    // Alternating pattern
+        [0xAA, 0x55].repeat(8),                        // Alternating pattern
         (0..256).map(|i| i as u8).collect::<Vec<_>>(), // All byte values
     ];
 

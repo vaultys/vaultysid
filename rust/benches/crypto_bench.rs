@@ -1,4 +1,5 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 use vaultysid::crypto::{hash, hmac, random_bytes};
 use vaultysid::key_manager::DHIES;
 use vaultysid::{DeprecatedKeyManager, Ed25519Manager, VaultysId};
@@ -132,7 +133,7 @@ fn bench_vaultys_id(c: &mut Criterion) {
 
     c.bench_function("vaultys_id_sign_challenge", |b| {
         b.iter(|| {
-            let id = id.clone();
+            let id = id.duplicate();
             runtime.block_on(async move { id.sign_challenge(black_box(challenge)).await.unwrap() })
         });
     });

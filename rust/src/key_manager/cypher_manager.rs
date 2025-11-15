@@ -257,6 +257,12 @@ pub struct CypherManager {
     pub signer: KeyPairImpl,
 }
 
+impl Default for CypherManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CypherManager {
     pub fn new() -> Self {
         Self {

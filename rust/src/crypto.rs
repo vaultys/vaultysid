@@ -1,6 +1,7 @@
 use hmac::{Hmac, Mac};
 use rand::{thread_rng, RngCore};
 use sha2::{Digest, Sha224, Sha256, Sha512};
+use std::str::FromStr;
 use zeroize::Zeroize;
 
 use crate::error::{Error, Result};
@@ -12,14 +13,16 @@ pub enum HashAlgorithm {
     Sha512,
 }
 
-impl HashAlgorithm {
-    pub fn from_str(s: &str) -> Self {
+impl FromStr for HashAlgorithm {
+    type Err = ();
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let clean = s.replace('-', "").to_lowercase();
-        match clean.as_str() {
+        Ok(match clean.as_str() {
             "sha224" => HashAlgorithm::Sha224,
             "sha512" => HashAlgorithm::Sha512,
             _ => HashAlgorithm::Sha256,
-        }
+        })
     }
 }
 
@@ -51,13 +54,13 @@ impl Hash for HashAlgorithm {
 
 /// Hash data using the specified algorithm
 pub fn hash(alg: &str, data: &[u8]) -> Vec<u8> {
-    let algorithm = HashAlgorithm::from_str(alg);
+    let algorithm = HashAlgorithm::from_str(alg).unwrap_or(HashAlgorithm::Sha256);
     algorithm.hash(data)
 }
 
 /// HMAC using the specified algorithm
 pub fn hmac(alg: &str, key: &[u8], data: &[u8]) -> Result<Vec<u8>> {
-    let algorithm = HashAlgorithm::from_str(alg);
+    let algorithm = HashAlgorithm::from_str(alg).unwrap_or(HashAlgorithm::Sha256);
 
     match algorithm {
         HashAlgorithm::Sha256 => {

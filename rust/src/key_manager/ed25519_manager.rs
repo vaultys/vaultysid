@@ -33,6 +33,12 @@ pub struct Ed25519Manager {
     pub cypher: KeyPairImpl,
 }
 
+impl Default for Ed25519Manager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ed25519Manager {
     pub fn new() -> Self {
         Self {

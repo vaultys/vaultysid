@@ -59,7 +59,7 @@ case "$MODE" in
 
         # Show TypeScript output
         echo -e "\n${CYAN}TypeScript Output:${NC}"
-        cat test/interops/tmp/ts-acceptor.log
+        cat typescript/test/interops/tmp/ts-acceptor.log
 
         if [ $TS_EXIT -eq 0 ] && [ $RUST_EXIT -eq 0 ]; then
             echo -e "\n${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
@@ -103,7 +103,7 @@ case "$MODE" in
 
         # Show Rust output
         echo -e "\n${CYAN}Rust Output:${NC}"
-        cat test/interops/tmp/rust-acceptor.log
+        cat ../test/interops/tmp/rust-acceptor.log
 
         if [ $TS_EXIT -eq 0 ] && [ $RUST_EXIT -eq 0 ]; then
             echo -e "\n${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"

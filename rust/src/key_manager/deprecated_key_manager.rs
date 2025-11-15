@@ -23,6 +23,12 @@ pub struct DeprecatedKeyManager {
     pub swap_index: u32,
 }
 
+impl Default for DeprecatedKeyManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DeprecatedKeyManager {
     pub fn new() -> Self {
         Self {
@@ -146,7 +152,7 @@ impl DeprecatedKeyManager {
             .secret_key
             .as_ref()
             .ok_or(Error::KeyNotAvailable)
-            .map(|s| s.clone())
+            .cloned()
     }
 
     /// Get the secret for this key manager

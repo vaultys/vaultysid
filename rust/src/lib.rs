@@ -20,13 +20,3 @@ pub use id_manager::{File, FileSignature, IdManager, StoredApp, StoredContact};
 
 // Re-export commonly used types
 pub use crypto::{hash, hmac, random_bytes, secure_erase, Hash, HashAlgorithm};
-
-#[cfg(test)]
-mod tests {
-
-    #[test]
-    fn test_basic_functionality() {
-        // Basic test to ensure the library compiles
-        assert!(true);
-    }
-}

@@ -1,7 +1,9 @@
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use vaultysid::{crypto, Challenger, DeprecatedKeyManager, Ed25519Manager, VaultysId};
 
 #[derive(Debug, Deserialize, Serialize)]

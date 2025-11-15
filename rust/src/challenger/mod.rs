@@ -860,13 +860,14 @@ impl Challenger {
             // Verify nonce hasn't been tampered with (first 16 bytes should match)
             if let (Some(temp_nonce), Some(current_nonce)) = (&temp_challenge.nonce, &current.nonce)
             {
-                if temp_nonce.len() >= 16 && current_nonce.len() >= 16 {
-                    if temp_nonce[..16] != current_nonce[..16] {
-                        self.state = ERROR;
-                        return Err(Error::ValidationError(
-                            "Nonce has been tampered with".into(),
-                        ));
-                    }
+                if temp_nonce.len() >= 16
+                    && current_nonce.len() >= 16
+                    && temp_nonce[..16] != current_nonce[..16]
+                {
+                    self.state = ERROR;
+                    return Err(Error::ValidationError(
+                        "Nonce has been tampered with".into(),
+                    ));
                 }
             }
 
@@ -982,9 +983,9 @@ pub struct ChallengeContext {
 impl VaultysId {
     /// Convert to a specific version
     pub fn to_version(&self, _version: u8) -> Result<VaultysId> {
-        // For now, we just return a clone as version handling might be more complex
+        // For now, we just return a duplicate as version handling might be more complex
         // This would need to be implemented based on your specific version requirements
-        Ok(self.clone())
+        Ok(self.duplicate())
     }
 }
 

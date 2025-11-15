@@ -4,6 +4,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use tokio::sync::{Mutex, Notify};
 
+// Type aliases to reduce complexity
+type ConnectedCallback = Box<dyn FnOnce() + Send>;
+type Logger = Box<dyn Fn(&[u8]) + Send + Sync>;
+type Injector = Box<dyn Fn(Vec<u8>) -> Vec<u8> + Send + Sync>;
+
 /// Trait defining a communication channel interface
 #[async_trait]
 pub trait Channel: Send + Sync {
@@ -37,7 +42,7 @@ pub struct MemoryChannel {
     name: Option<String>,
     other_end: Option<Arc<Mutex<MemoryChannelInner>>>,
     inner: Arc<Mutex<MemoryChannelInner>>,
-    connected_callbacks: Arc<Mutex<Vec<Box<dyn FnOnce() + Send>>>>,
+    connected_callbacks: Arc<Mutex<Vec<ConnectedCallback>>>,
 }
 
 struct MemoryChannelInner {
@@ -45,8 +50,14 @@ struct MemoryChannelInner {
     waiting_receivers: Vec<Arc<Notify>>,
     connected: bool,
     closed: bool,
-    logger: Option<Box<dyn Fn(&[u8]) + Send + Sync>>,
-    injector: Option<Box<dyn Fn(Vec<u8>) -> Vec<u8> + Send + Sync>>,
+    logger: Option<Logger>,
+    injector: Option<Injector>,
+}
+
+impl Default for MemoryChannel {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemoryChannel {

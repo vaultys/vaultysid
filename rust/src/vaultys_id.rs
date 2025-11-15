@@ -392,8 +392,8 @@ impl VaultysId {
         self.key_manager.verify(data, signature, None)
     }
 
-    /// Clone the VaultysId by re-importing from secret
-    pub fn clone(&self) -> Self {
+    /// Duplicate the VaultysId by re-importing from secret
+    pub fn duplicate(&self) -> Self {
         let secret = self.get_secret().unwrap();
         Self::from_secret(&secret, self.certificate.clone()).unwrap()
     }
@@ -513,7 +513,7 @@ impl VaultysId {
         let signature = self
             .key_manager
             .sign(&result)?
-            .ok_or_else(|| Error::InvalidCapability)?;
+            .ok_or(Error::InvalidCapability)?;
 
         Ok(SignedChallenge { result, signature })
     }
@@ -529,7 +529,7 @@ impl VaultysId {
         let signature = self
             .key_manager
             .sign(&result)?
-            .ok_or_else(|| Error::InvalidCapability)?;
+            .ok_or(Error::InvalidCapability)?;
 
         Ok(SignedChallenge { result, signature })
     }

@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
     // Example 10: Working with DeprecatedKeyManager
     println!("\n10. Using DeprecatedKeyManager for backwards compatibility...");
     let deprecated = DeprecatedKeyManager::generate_id25519()?;
-    let dep_id = deprecated.id();
+    let _dep_id = deprecated.id();
     println!("   DeprecatedKeyManager created");
     println!("   ID includes proof: {}", deprecated.proof.is_some());
 

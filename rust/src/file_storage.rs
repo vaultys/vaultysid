@@ -71,6 +71,12 @@ enum StoreValue {
     Substore(HashMap<String, StoreValue>),
 }
 
+impl Default for MemoryStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MemoryStore {
     /// Create a new memory store
     pub fn new() -> Self {
@@ -428,6 +434,12 @@ impl Store for FileStore {
 /// MessagePack-based storage implementation
 pub struct MessagePackStore {
     inner: MemoryStore,
+}
+
+impl Default for MessagePackStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MessagePackStore {
