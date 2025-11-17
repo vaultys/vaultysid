@@ -1,7 +1,7 @@
 import nacl, { randomBytes } from "tweetnacl";
 import { Buffer } from "buffer/";
-import { sha224, sha256, sha512 } from "@noble/hashes/sha2";
-import { hmac } from "@noble/hashes/hmac";
+import { sha224, sha256, sha512 } from "@noble/hashes/sha2.js";
+import { hmac } from "@noble/hashes/hmac.js";
 
 const getAlgorithm = (alg: string) => {
   const cleanAlg = alg.replaceAll("-", "").toLowerCase();
@@ -14,7 +14,7 @@ const getAlgorithm = (alg: string) => {
 const _randomBytes = (size: number) => Buffer.from(randomBytes(size));
 
 const hash = (alg: string, buffer: Buffer | Uint8Array) => Buffer.from(getAlgorithm(alg).create().update(buffer).digest());
-const _hmac = (alg: string, key: Buffer | Uint8Array, data: string | Buffer | Uint8Array) => Buffer.from(hmac(getAlgorithm(alg), key, data));
+const _hmac = (alg: string, key: Buffer | Uint8Array, data: string | Buffer | Uint8Array) => Buffer.from(hmac(getAlgorithm(alg), key, typeof data === "string" ? Buffer.from(data, "utf8") : data));
 
 const secretbox = nacl.secretbox;
 const toBase64 = (bufferLike: Buffer) => Buffer.from(bufferLike).toString("base64");

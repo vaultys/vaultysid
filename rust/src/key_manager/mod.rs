@@ -1,11 +1,13 @@
 pub mod abstract_key_manager;
 pub mod cypher_manager;
 pub mod deprecated_key_manager;
+pub mod dilithium_manager;
 pub mod ed25519_manager;
 
 pub use abstract_key_manager::{AbstractKeyManager, KeyManager, KeyPair};
 pub use cypher_manager::{CypherManager, CypherOperations, DHIES};
 pub use deprecated_key_manager::DeprecatedKeyManager;
+pub use dilithium_manager::DilithiumManager;
 pub use ed25519_manager::Ed25519Manager;
 
 use serde::{Deserialize, Serialize};

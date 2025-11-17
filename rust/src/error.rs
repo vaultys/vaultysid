@@ -20,8 +20,11 @@ pub enum Error {
     #[error("Key derivation failed: {0}")]
     KeyDerivationFailed(String),
 
-    #[error("Invalid capability: cannot perform operation with public key")]
-    InvalidCapability,
+    #[error("Invalid capability: {0}")]
+    InvalidCapability(String),
+
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
 
     #[error("Serialization error: {0}")]
     SerializationError(String),

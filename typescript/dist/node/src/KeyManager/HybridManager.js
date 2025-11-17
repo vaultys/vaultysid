@@ -9,7 +9,7 @@ const tweetnacl_1 = __importDefault(require("tweetnacl"));
 const msgpack_1 = require("@msgpack/msgpack");
 const pqCrypto_1 = require("../pqCrypto");
 const CypherManager_1 = __importDefault(require("./CypherManager"));
-const ed25519_1 = require("@noble/curves/ed25519");
+const ed25519_js_1 = require("@noble/curves/ed25519.js");
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
 class HybridManager extends CypherManager_1.default {
     constructor() {
@@ -24,7 +24,7 @@ class HybridManager extends CypherManager_1.default {
         const signerSeed = sha512(km.seed.slice(0, 32));
         km.pqSigner = (0, pqCrypto_1.generateDilithiumKeyPair)(signerSeed.slice(0, 32));
         km.edSigner = {
-            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(signerSeed.slice(32, 64))),
+            publicKey: buffer_1.Buffer.from(ed25519_js_1.ed25519.getPublicKey(signerSeed.slice(32, 64))),
             secretKey: signerSeed.slice(32, 64),
         };
         km.signer = {
@@ -66,7 +66,7 @@ class HybridManager extends CypherManager_1.default {
         const signerSeed = sha512(km.seed.slice(0, 32));
         km.pqSigner = (0, pqCrypto_1.generateDilithiumKeyPair)(signerSeed.slice(0, 32));
         km.edSigner = {
-            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(signerSeed.slice(32, 64))),
+            publicKey: buffer_1.Buffer.from(ed25519_js_1.ed25519.getPublicKey(signerSeed.slice(32, 64))),
             secretKey: signerSeed.slice(32, 64),
         };
         km.signer = {
@@ -121,7 +121,7 @@ class HybridManager extends CypherManager_1.default {
     getSigner() {
         // todo fetch secretKey here
         const sign = (data) => {
-            const sign1 = ed25519_1.ed25519.sign(data, this.edSigner.secretKey);
+            const sign1 = ed25519_js_1.ed25519.sign(data, this.edSigner.secretKey);
             const sign2 = (0, pqCrypto_1.signDilithium)(buffer_1.Buffer.concat([data, sign1]), this.pqSigner.secretKey);
             return Promise.resolve(buffer_1.Buffer.concat([sign1, sign2]));
         };
@@ -130,7 +130,7 @@ class HybridManager extends CypherManager_1.default {
     verify(data, signature, userVerificationIgnored) {
         const sign1 = signature.slice(0, 64);
         const sign2 = signature.slice(64);
-        const verify1 = ed25519_1.ed25519.verify(sign1, data, this.edSigner.publicKey);
+        const verify1 = ed25519_js_1.ed25519.verify(sign1, data, this.edSigner.publicKey);
         if (!verify1)
             return false;
         return (0, pqCrypto_1.verifyDilithium)(buffer_1.Buffer.concat([data, sign1]), sign2, this.pqSigner.publicKey);

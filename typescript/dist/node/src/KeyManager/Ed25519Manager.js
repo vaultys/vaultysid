@@ -8,20 +8,21 @@ const crypto_1 = require("../crypto");
 const buffer_1 = require("buffer/");
 const tweetnacl_1 = __importDefault(require("tweetnacl"));
 const msgpack_1 = require("@msgpack/msgpack");
-const ed25519_1 = require("@noble/curves/ed25519");
+const ed25519_js_1 = require("@noble/curves/ed25519.js");
 const CypherManager_1 = __importDefault(require("./CypherManager"));
-ed25519_1.ed25519.CURVE = { ...ed25519_1.ed25519.CURVE };
-// @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
-ed25519_1.ed25519.CURVE.adjustScalarBytes = (bytes) => {
-    // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
-    // set the three least significant bits of the first byte
-    bytes[0] &= 248; // 0b1111_1000
-    // and the most significant bit of the last to zero,
-    bytes[31] &= 63; // 0b0001_1111
-    // set the second most significant bit of the last byte to 1
-    bytes[31] |= 64; // 0b0100_0000
-    return bytes;
-};
+// // @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
+// ed25519.CURVE = { ...ed25519.CURVE };
+// // @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
+// ed25519.CURVE.adjustScalarBytes = (bytes: Uint8Array): Uint8Array => {
+//   // Section 5: For X25519, in order to decode 32 random bytes as an integer scalar,
+//   // set the three least significant bits of the first byte
+//   bytes[0] &= 248; // 0b1111_1000
+//   // and the most significant bit of the last to zero,
+//   bytes[31] &= 63; // 0b0001_1111
+//   // set the second most significant bit of the last byte to 1
+//   bytes[31] |= 64; // 0b0100_0000
+//   return bytes;
+// };
 const sha512 = (data) => (0, crypto_1.hash)("sha512", data);
 class Ed25519Manager extends CypherManager_1.default {
     constructor() {
@@ -42,7 +43,7 @@ class Ed25519Manager extends CypherManager_1.default {
         //km.proof = hash("sha256", km.proofKey.publicKey);
         // const privateKey = privateDerivePath(derivedKey, "/0'");
         km.signer = {
-            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(seed.slice(0, 32))),
+            publicKey: buffer_1.Buffer.from(ed25519_js_1.ed25519.getPublicKey(seed.slice(0, 32))),
             secretKey: seed.slice(0, 32),
         };
         const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(seed.slice(32, 64));
@@ -75,7 +76,7 @@ class Ed25519Manager extends CypherManager_1.default {
     getSigner() {
         // todo fetch secretKey here
         const secretKey = this.signer.secretKey;
-        const sign = (data) => Promise.resolve(buffer_1.Buffer.from(ed25519_1.ed25519.sign(data, secretKey)));
+        const sign = (data) => Promise.resolve(buffer_1.Buffer.from(ed25519_js_1.ed25519.sign(data, secretKey)));
         //console.log(secretKey.toString("hex"), new bip32.PrivateKey(secretKey).toPublicKey().toBytes().toString("hex"), Buffer.from(ed25519.getPublicKey(secretKey)).toString("hex"));
         return Promise.resolve({ sign });
     }
@@ -93,7 +94,7 @@ class Ed25519Manager extends CypherManager_1.default {
         km.capability = "private";
         km.signer = {
             secretKey: data.x.slice(0, 32),
-            publicKey: buffer_1.Buffer.from(ed25519_1.ed25519.getPublicKey(data.x.slice(0, 32))),
+            publicKey: buffer_1.Buffer.from(ed25519_js_1.ed25519.getPublicKey(data.x.slice(0, 32))),
         };
         const cypher = tweetnacl_1.default.box.keyPair.fromSecretKey(data.e);
         km.cypher = {
@@ -127,7 +128,7 @@ class Ed25519Manager extends CypherManager_1.default {
         return km;
     }
     verify(data, signature, userVerificationIgnored) {
-        return ed25519_1.ed25519.verify(signature, data, this.signer.publicKey);
+        return ed25519_js_1.ed25519.verify(signature, data, this.signer.publicKey);
     }
     cleanSecureData() {
         if (this.cypher?.secretKey) {

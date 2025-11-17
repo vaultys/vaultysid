@@ -3,10 +3,8 @@
 import { Buffer } from "buffer/";
 import { randomBytes, hash as myhash, fromUTF8 } from "../crypto";
 import cbor from "cbor";
-import { ed25519 } from "@noble/curves/ed25519";
-import { p256 } from "@noble/curves/p256";
-import { p384 } from "@noble/curves/p384";
-import { p521 } from "@noble/curves/p521";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import { p256, p384, p521 } from "@noble/curves/nist.js";
 // import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
 import { PQ_COSE_ALG, PQ_COSE_KEY_TYPE, PQ_COSE_KEY_PARAMS, signDilithium, verifyDilithium, createDilithiumCoseKey, generateDilithiumKeyPair } from "../pqCrypto";
 
@@ -61,7 +59,7 @@ const COSEALGHASH = {
   "-261": "SHA-512",
   "-7": "SHA-256",
   "-36": "SHA-512",
-  [PQ_COSE_ALG.DILITHIUM2.toString()]: "SHA-256", // DILITHIUM2 uses SHA-256 for hashing
+  [PQ_COSE_ALG.DILITHIUM5.toString()]: "SHA-256", // DILITHIUM5 uses SHA-256 for hashing
 };
 
 const hash = (alg: string, message: Buffer) => myhash(alg.replace("-", ""), message);
@@ -201,8 +199,7 @@ const verifyPackedAttestation = (response: AuthenticatorAttestationResponse, use
       const y = pubKeyCose.get(COSEKEYS.y);
       const pubKey = Buffer.concat([Buffer.from([0x04]), x, y]);
       const ec = COSECRV[pubKeyCose.get(COSEKEYS.crv) as 1 | 2 | 3];
-      const sig = ec.Signature.fromDER(signature);
-      signatureIsValid = ec.verify(sig, data, pubKey);
+      signatureIsValid = ec.verify(signature, data, pubKey, { format: "der" });
     } else if (pubKeyCose.get(COSEKEYS.kty) === COSEKTY.OKP) {
       // EdDSA
       const x = pubKeyCose.get(COSEKEYS.x);
@@ -238,7 +235,7 @@ class MyPublicKeyCredential {
 }
 
 const verifyECDSA = (data: Buffer, publicKey: Buffer, signature: Buffer) => {
-  return p256.verify(p256.Signature.fromDER(signature).toCompactHex(), data, publicKey);
+  return p256.verify(signature, data, publicKey, { format: signature.length === 64 ? "compact" : "der" });
 };
 
 const verifyEdDSA = (data: Buffer, publicKey: Buffer, signature: Buffer) => {
@@ -322,18 +319,18 @@ export default class SoftCredentials {
 
     // Get the algorithm from pubKeyCredParams
     const pubKeyCredParams = publicKey.pubKeyCredParams;
-    // Check if DILITHIUM is supported (look for PQ_COSE_ALG.DILITHIUM2 in the params)
-    const supportsDilithium = pubKeyCredParams.some((param) => param.alg === PQ_COSE_ALG.DILITHIUM2);
+    // Check if DILITHIUM is supported (look for PQ_COSE_ALG.DILITHIUM5 in the params)
+    const supportsDilithium = pubKeyCredParams.some((param) => param.alg === PQ_COSE_ALG.DILITHIUM5);
 
     // Set algorithm, prioritizing DILITHIUM if it's supported
     if (supportsDilithium) {
-      credential.alg = PQ_COSE_ALG.DILITHIUM2;
+      credential.alg = PQ_COSE_ALG.DILITHIUM5;
     } else {
       credential.alg = publicKey.pubKeyCredParams[0].alg;
     }
 
     if (credential.alg === -8) {
-      const random = ed25519.utils.randomPrivateKey();
+      const random = ed25519.utils.randomSecretKey();
       credential.keyPair = {
         privateKey: random,
         publicKey: ed25519.getPublicKey(random),
@@ -346,7 +343,7 @@ export default class SoftCredentials {
       const x = credential.keyPair.publicKey.slice(0, 32);
       credential.coseKey.set(-2, x);
     } else if (credential.alg === -7) {
-      const random = p256.utils.randomPrivateKey();
+      const random = p256.utils.randomSecretKey();
       credential.keyPair = {
         privateKey: random,
         publicKey: p256.getPublicKey(random, false),
@@ -361,7 +358,7 @@ export default class SoftCredentials {
       credential.coseKey.set(-2, x);
       credential.coseKey.set(-3, y);
       // console.log(extpk,x,y)
-    } else if (credential.alg === PQ_COSE_ALG.DILITHIUM2) {
+    } else if (credential.alg === PQ_COSE_ALG.DILITHIUM5) {
       // Generate DILITHIUM key pair
       const { publicKey: dilithiumPk, secretKey: dilithiumSk } = generateDilithiumKeyPair();
       //console.log("PQC", dilithiumPk, dilithiumSk);
@@ -433,9 +430,9 @@ export default class SoftCredentials {
 
     const hash = myhash("sha256", Buffer.from(response.clientDataJSON));
     let data = Buffer.concat([Buffer.from(response.authenticatorData), hash]);
-    if (ckey.get(3) == -7) {
-      data = myhash("sha256", data);
-    }
+    // if (data.length !== 64) {
+    //   data = myhash("sha256", data);
+    // }
     if (ckey.get(1) == 1) {
       // EdDSA
       const x = ckey.get(-2);
@@ -541,10 +538,10 @@ export default class SoftCredentials {
     let signature: Uint8Array = new Uint8Array();
 
     if (credential.alg === -7) {
-      signature = p256.sign(toSign, credential.keyPair.privateKey, { prehash: true }).toDERRawBytes();
+      signature = p256.sign(toSign, credential.keyPair.privateKey, { prehash: true });
     } else if (credential.alg === -8) {
       signature = ed25519.sign(toSign, credential.keyPair.privateKey);
-    } else if (credential.alg === PQ_COSE_ALG.DILITHIUM2) {
+    } else if (credential.alg === PQ_COSE_ALG.DILITHIUM5) {
       // DILITHIUM signing - this returns a Promise so we need to await it
       signature = signDilithium(toSign, credential.keyPair.privateKey);
     }

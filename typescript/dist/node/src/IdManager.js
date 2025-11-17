@@ -40,11 +40,11 @@ const instanciateContact = (c) => {
         vaultysId = new VaultysId_1.default(KeyManager_1.Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
     }
     else {
-        // console.log(c.keyManager.signer.publicKey.length);
-        if (c.keyManager.signer.publicKey.length === 1952) {
+        //console.log(c.keyManager.signer.publicKey.length);
+        if (c.keyManager.signer.publicKey.length === 2592) {
             vaultysId = new VaultysId_1.default(KeyManager_1.DilithiumManager.instantiate(c.keyManager), c.certificate, c.type);
         }
-        else if (c.keyManager.signer.publicKey.length === 1984) {
+        else if (c.keyManager.signer.publicKey.length === 2592 + 32) {
             vaultysId = new VaultysId_1.default(KeyManager_1.HybridManager.instantiate(c.keyManager), c.certificate, c.type);
         }
         else if (c.keyManager.proof) {
@@ -64,7 +64,7 @@ const instanciateApp = (a) => {
 exports.instanciateApp = instanciateApp;
 class IdManager {
     constructor(vaultysId, store) {
-        this.protocol_version = 1;
+        this.protocol_version = 0;
         // alias since this is symetric key encryption
         this.acceptEncryptFile = this.acceptDecryptFile;
         this.vaultysId = vaultysId;
@@ -748,12 +748,12 @@ class IdManager {
         // console.log("acceptSRP sending 2")
         try {
             const message = await channel.receive();
-            console.log("acceptSRP 2", message);
+            // console.log("acceptSRP 2", message)
             await challenger.update(message);
         }
         catch (error) {
             await channel.close();
-            console.log(challenger);
+            //console.log(challenger);
             throw new Error(error);
         }
         if (challenger.isComplete()) {

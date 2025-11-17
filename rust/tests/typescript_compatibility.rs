@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use vaultysid::{crypto, Challenger, DeprecatedKeyManager, Ed25519Manager, VaultysId};
+use vaultysid::{
+    crypto, AbstractKeyManager, Challenger, DeprecatedKeyManager, DilithiumManager, Ed25519Manager,
+    VaultysId,
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 struct TestData {
@@ -53,6 +56,50 @@ struct DeprecatedManagerData {
     cypher_public_key: String,
     proof: Option<String>,
     version: u8,
+}
+
+#[derive(Debug, Deserialize)]
+struct DilithiumManagerData {
+    id: String,
+    secret: String,
+    #[serde(rename = "signerPublicKey")]
+    signer_public_key: String,
+    #[serde(rename = "signerPublicKeyLength")]
+    signer_public_key_length: usize,
+    #[serde(rename = "cypherPublicKey")]
+    cypher_public_key: String,
+    version: u8,
+}
+
+#[derive(Debug, Deserialize)]
+struct DilithiumChallengeData {
+    challenge: String,
+    #[serde(rename = "challengeText")]
+    challenge_text: String,
+    result: String,
+    signature: String,
+    #[serde(rename = "signatureLength")]
+    signature_length: usize,
+    #[serde(rename = "idUsed")]
+    id_used: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CrossAlgorithmDHData {
+    #[serde(rename = "ed25519Id")]
+    ed25519_id: String,
+    #[serde(rename = "ed25519Secret")]
+    ed25519_secret: String,
+    #[serde(rename = "dilithiumId")]
+    dilithium_id: String,
+    #[serde(rename = "dilithiumSecret")]
+    dilithium_secret: String,
+    #[serde(rename = "sharedSecretEd25519ToDilithium")]
+    shared_secret_ed25519_to_dilithium: String,
+    #[serde(rename = "sharedSecretDilithiumToEd25519")]
+    shared_secret_dilithium_to_ed25519: String,
+    #[serde(rename = "secretsMatch")]
+    secrets_match: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -243,7 +290,7 @@ struct SignatureFormatsData {
 }
 
 fn load_test_data<T: for<'de> Deserialize<'de>>(filename: &str) -> Option<T> {
-    let base_path = Path::new("../test/compatibility-data");
+    let base_path = Path::new("../typescript/test/interops/compatibility-data");
     let file_path = base_path.join(filename);
 
     if !file_path.exists() {
@@ -521,13 +568,13 @@ fn test_diffie_hellman_compatibility() {
     );
 
     // Perform DH key exchange
-    let alice_cypher = alice.get_cypher_ops().unwrap();
+    let alice_cypher = alice.get_cypher().unwrap();
     let shared_secret = alice_cypher.diffie_hellman(&bob.cypher.public_key).unwrap();
 
     let rust_shared = crypto::to_hex(&shared_secret);
 
     // Also verify Bob's perspective
-    let bob_cypher = bob.get_cypher_ops().unwrap();
+    let bob_cypher = bob.get_cypher().unwrap();
     let shared_secret_bob = bob_cypher.diffie_hellman(&alice.cypher.public_key).unwrap();
     let rust_shared_bob = crypto::to_hex(&shared_secret_bob);
 
@@ -545,6 +592,245 @@ fn test_diffie_hellman_compatibility() {
         println!("    Rust:       {}", rust_shared);
         println!("    TypeScript: {}", data.shared_secret);
     }
+}
+
+// Test for Dilithium Person ID
+#[tokio::test]
+async fn test_dilithium_person_id() {
+    let data = match load_test_data::<TestData>("person-dilithium.json") {
+        Some(d) => d,
+        None => {
+            eprintln!("Skipping test - no Dilithium test data available");
+            return;
+        }
+    };
+
+    println!("Testing Dilithium Person ID compatibility:");
+
+    // Import from TypeScript secret
+    let secret_bytes = crypto::from_hex(&data.secret).unwrap();
+    let imported = VaultysId::from_secret(&secret_bytes, None).unwrap();
+
+    // Check type
+    assert!(imported.is_person(), "Should be a person ID");
+
+    // Check fingerprint matches
+    let rust_fp = imported.fingerprint_formatted();
+    assert_eq!(rust_fp, data.fingerprint, "Fingerprints should match");
+
+    // Check DID
+    assert_eq!(imported.did(), data.did, "DIDs should match");
+
+    println!("  ✓ Dilithium Person ID imported successfully");
+    println!("    DID: {}", imported.did());
+    println!("    ID length: {} bytes", imported.id().len());
+}
+
+// Test for Dilithium Machine ID
+#[tokio::test]
+async fn test_dilithium_machine_id() {
+    let data = match load_test_data::<TestData>("machine-dilithium.json") {
+        Some(d) => d,
+        None => {
+            eprintln!("Skipping test - no Dilithium test data available");
+            return;
+        }
+    };
+
+    println!("Testing Dilithium Machine ID compatibility:");
+
+    // Import from TypeScript secret
+    let secret_bytes = crypto::from_hex(&data.secret).unwrap();
+    let imported = VaultysId::from_secret(&secret_bytes, None).unwrap();
+
+    // Check type
+    assert!(imported.is_machine(), "Should be a machine ID");
+
+    // Check DID
+    assert_eq!(imported.did(), data.did, "DIDs should match");
+
+    println!("  ✓ Dilithium Machine ID imported successfully");
+    println!("    DID: {}", imported.did());
+}
+
+// Test for Dilithium Organization ID
+#[tokio::test]
+async fn test_dilithium_organization_id() {
+    let data = match load_test_data::<TestData>("organization-dilithium.json") {
+        Some(d) => d,
+        None => {
+            eprintln!("Skipping test - no Dilithium test data available");
+            return;
+        }
+    };
+
+    println!("Testing Dilithium Organization ID compatibility:");
+
+    // Import from TypeScript secret
+    let secret_bytes = crypto::from_hex(&data.secret).unwrap();
+    let imported = VaultysId::from_secret(&secret_bytes, None).unwrap();
+
+    // Check type
+    assert!(imported.is_organization(), "Should be an organization ID");
+
+    // Check DID
+    assert_eq!(imported.did(), data.did, "DIDs should match");
+
+    println!("  ✓ Dilithium Organization ID imported successfully");
+    println!("    DID: {}", imported.did());
+}
+
+// Test for Dilithium signature verification
+#[tokio::test]
+async fn test_dilithium_signature_verification() {
+    let data = match load_test_data::<DilithiumChallengeData>("challenge-signature-dilithium.json")
+    {
+        Some(d) => d,
+        None => {
+            eprintln!("Skipping test - no Dilithium signature test data available");
+            return;
+        }
+    };
+
+    println!("Testing Dilithium signature verification:");
+
+    // Import the VaultysId from the ID used
+    let id_bytes = crypto::from_hex(&data.id_used).unwrap();
+    let vaultys_id = VaultysId::from_id(&id_bytes, None, None).unwrap();
+
+    // Get challenge and signature
+    let challenge = crypto::from_hex(&data.challenge).unwrap();
+    let signature = crypto::from_hex(&data.signature).unwrap();
+    let result = crypto::from_hex(&data.result).unwrap();
+
+    // Verify Dilithium signature
+    let is_valid = vaultys_id.verify_challenge(&challenge, &signature).unwrap();
+
+    assert!(is_valid, "Dilithium signature should be valid");
+
+    // Verify signature length
+    assert!(
+        signature.len() > 2000,
+        "Dilithium signatures should be ~2420 bytes"
+    );
+
+    println!("  ✓ Dilithium signature verified successfully");
+    println!("    Challenge: {}", data.challenge_text);
+    println!("    Signature length: {} bytes", signature.len());
+
+    // Verify result computation
+    let rust_result = crypto::hash("sha256", &[b"VAULTYS_SIGN", challenge.as_slice()].concat());
+    assert_eq!(rust_result, result, "Challenge result hash should match");
+}
+
+// Test for direct DilithiumManager compatibility
+#[tokio::test]
+async fn test_dilithium_manager_direct() {
+    let data = match load_test_data::<DilithiumManagerData>("dilithium-manager.json") {
+        Some(d) => d,
+        None => {
+            eprintln!("Skipping test - no DilithiumManager test data available");
+            return;
+        }
+    };
+
+    println!("Testing DilithiumManager direct compatibility:");
+
+    // Import from secret
+    let secret_bytes = crypto::from_hex(&data.secret).unwrap();
+    let manager = DilithiumManager::from_secret(&secret_bytes).unwrap();
+
+    // Verify the ID matches
+    let rust_id = crypto::to_hex(&manager.id());
+    assert_eq!(rust_id, data.id, "Manager IDs should match");
+
+    // Check public keys
+    let rust_signer_pub = crypto::to_hex(&manager.signer.public_key);
+    let rust_cypher_pub = crypto::to_hex(&manager.cypher.public_key);
+
+    assert_eq!(
+        rust_signer_pub, data.signer_public_key,
+        "Signer public keys should match"
+    );
+    assert_eq!(
+        rust_cypher_pub, data.cypher_public_key,
+        "Cypher public keys should match"
+    );
+
+    // Verify key sizes
+    assert!(
+        manager.signer.public_key.len() > 1300,
+        "Dilithium public key should be large"
+    );
+
+    println!("  ✓ DilithiumManager imported successfully");
+    println!(
+        "    Signer public key length: {} bytes",
+        manager.signer.public_key.len()
+    );
+    println!("    Version: {}", manager.base.version);
+}
+
+// Test for cross-algorithm Diffie-Hellman (Ed25519 <-> Dilithium)
+#[tokio::test]
+async fn test_cross_algorithm_diffie_hellman() {
+    let data = match load_test_data::<CrossAlgorithmDHData>("cross-algorithm-dh.json") {
+        Some(d) => d,
+        None => {
+            eprintln!("Skipping test - no cross-algorithm DH test data available");
+            return;
+        }
+    };
+
+    println!("Testing cross-algorithm Diffie-Hellman (Ed25519 <-> Dilithium):");
+
+    // Import Ed25519 and Dilithium managers
+    let ed25519_secret = crypto::from_hex(&data.ed25519_secret).unwrap();
+    let dilithium_secret = crypto::from_hex(&data.dilithium_secret).unwrap();
+
+    let ed25519_manager = Ed25519Manager::from_secret(&ed25519_secret).unwrap();
+    let dilithium_manager = DilithiumManager::from_secret(&dilithium_secret).unwrap();
+
+    // Verify IDs match
+    assert_eq!(
+        crypto::to_hex(&ed25519_manager.id()),
+        data.ed25519_id,
+        "Ed25519 ID should match"
+    );
+    assert_eq!(
+        crypto::to_hex(&dilithium_manager.id()),
+        data.dilithium_id,
+        "Dilithium ID should match"
+    );
+
+    // Perform DH key exchange (both use X25519 for encryption)
+    let ed25519_cypher = ed25519_manager.get_cypher().unwrap();
+    let dilithium_cypher = dilithium_manager.get_cypher().unwrap();
+
+    let shared_ed_to_dil = ed25519_cypher
+        .diffie_hellman(&dilithium_manager.cypher.public_key)
+        .unwrap();
+    let shared_dil_to_ed = dilithium_cypher
+        .diffie_hellman(&ed25519_manager.cypher.public_key)
+        .unwrap();
+
+    // Both should produce the same shared secret
+    assert_eq!(
+        crypto::to_hex(&shared_ed_to_dil),
+        crypto::to_hex(&shared_dil_to_ed),
+        "Cross-algorithm DH should produce same shared secret"
+    );
+
+    println!("  ✓ Cross-algorithm Diffie-Hellman works correctly");
+    println!(
+        "    Ed25519 ID length: {} bytes",
+        ed25519_manager.id().len()
+    );
+    println!(
+        "    Dilithium ID length: {} bytes",
+        dilithium_manager.id().len()
+    );
+    println!("    Shared secrets match: true");
 }
 
 // Test for Challenger INIT state compatibility

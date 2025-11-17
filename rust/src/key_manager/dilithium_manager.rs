@@ -1,24 +1,24 @@
-use crate::crypto::{hash, random_bytes, secure_erase};
+use crate::crypto::{hash, random_bytes};
 use crate::error::{Error, Result};
 use crate::key_manager::{
     abstract_key_manager::{AbstractKeyManager, CypherOps, SignerOps},
     cypher_manager::{CypherManager, CypherOpsImpl},
     Capability, KeyPairImpl,
 };
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use libcrux_ml_dsa::ml_dsa_87;
+use rand::{rngs::StdRng, RngCore, SeedableRng};
 use rmp_serde::from_slice;
 use serde::ser::{SerializeMap, Serializer};
 use serde::Deserialize;
-use x25519_dalek::{PublicKey, StaticSecret};
+use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
+use zeroize::Zeroize;
 
 // Structs for deserializing MessagePack data from TypeScript
 #[derive(Deserialize)]
 struct SecretData {
     v: u8,
     #[serde(with = "serde_bytes")]
-    x: Vec<u8>,
-    #[serde(with = "serde_bytes")]
-    e: Vec<u8>,
+    s: Vec<u8>,
 }
 
 #[derive(Deserialize)]
@@ -30,33 +30,47 @@ struct IdData {
     e: Vec<u8>,
 }
 
-/// Ed25519 Key Manager implementation
-pub struct Ed25519Manager {
+/// Dilithium Key Manager implementation for post-quantum cryptography
+pub struct DilithiumManager {
     pub base: crate::key_manager::abstract_key_manager::BaseKeyManager,
     pub signer: KeyPairImpl,
     pub cypher: KeyPairImpl,
+    seed: Option<Vec<u8>>,
 }
 
-impl Default for Ed25519Manager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Drop for Ed25519Manager {
+impl Drop for DilithiumManager {
     fn drop(&mut self) {
         self.clean_secure_data();
     }
 }
 
-impl Ed25519Manager {
+impl Default for DilithiumManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// Helper function to generate randomness array from seed
+fn random_array_from_seed<const L: usize>(seed: &[u8]) -> [u8; L] {
+    let mut rng = StdRng::from_seed({
+        let mut seed_32 = [0u8; 32];
+        let len = seed.len().min(32);
+        seed_32[..len].copy_from_slice(&seed[..len]);
+        seed_32
+    });
+    let mut array = [0u8; L];
+    rng.fill_bytes(&mut array);
+    array
+}
+
+impl DilithiumManager {
     pub fn new() -> Self {
         Self {
             base: crate::key_manager::abstract_key_manager::BaseKeyManager::new(
-                1,
+                3,
                 Capability::Private,
             )
-            .with_auth_type("Ed25519VerificationKey2020".to_string())
+            .with_auth_type("DilithiumVerificationKey".to_string())
             .with_enc_type("X25519KeyAgreementKey2019".to_string()),
             signer: KeyPairImpl {
                 public_key: Vec::new(),
@@ -66,7 +80,19 @@ impl Ed25519Manager {
                 public_key: Vec::new(),
                 secret_key: None,
             },
+            seed: None,
         }
+    }
+
+    /// Generate keypair from 32-byte seed using libcrux ML-DSA-87
+    fn keypair_from_seed_32(seed_32: &[u8; 32]) -> Result<ml_dsa_87::MLDSA87KeyPair> {
+        // ML-DSA-87 requires 32 bytes of randomness for key generation
+        // let randomness = random_array_from_seed::<32>(seed_32);
+
+        // Generate keypair using ML-DSA-87
+        let key_pair = ml_dsa_87::generate_key_pair(*seed_32);
+
+        Ok(key_pair)
     }
 
     /// Create from entropy
@@ -78,25 +104,27 @@ impl Ed25519Manager {
         // Hash the entropy to get seed material (matching TypeScript sha512)
         let seed = hash("sha512", entropy);
 
-        // Use first 32 bytes for signing key
-        let signing_key = SigningKey::from_bytes(
-            &seed[0..32]
-                .try_into()
-                .map_err(|_| Error::InvalidKeyFormat("Failed to create signing key".into()))?,
-        );
-        let verifying_key = signing_key.verifying_key();
+        // Use first 32 bytes as main seed for deterministic operations
+        let seed_32: [u8; 32] = seed[0..32]
+            .try_into()
+            .map_err(|_| Error::InvalidKeyFormat("Invalid seed length".into()))?;
+        km.seed = Some(seed.to_vec());
 
+        // Generate ML-DSA-87 keypair from the seed
+        let key_pair = Self::keypair_from_seed_32(&seed_32)?;
+
+        // Store the keys in our format
         km.signer = KeyPairImpl {
-            public_key: verifying_key.to_bytes().to_vec(),
-            secret_key: Some(signing_key.to_bytes().to_vec()),
+            public_key: key_pair.verification_key.as_ref().to_vec(),
+            secret_key: Some(key_pair.signing_key.as_ref().to_vec()),
         };
 
-        // Use next 32 bytes for X25519 encryption key
+        // Use next 32 bytes for X25519 encryption key (compatible with Ed25519Manager)
         let cypher_secret_bytes: [u8; 32] = seed[32..64]
             .try_into()
             .map_err(|_| Error::InvalidKeyFormat("Failed to create cypher key".into()))?;
         let cypher_secret = StaticSecret::from(cypher_secret_bytes);
-        let cypher_public = PublicKey::from(&cypher_secret);
+        let cypher_public = X25519PublicKey::from(&cypher_secret);
 
         km.cypher = KeyPairImpl {
             public_key: cypher_public.as_bytes().to_vec(),
@@ -137,83 +165,77 @@ impl Ed25519Manager {
 
     /// Get the secret for this key manager
     pub fn get_secret(&self) -> Result<Vec<u8>> {
-        let secret_key = self
-            .signer
-            .secret_key
-            .as_ref()
-            .ok_or(Error::KeyNotAvailable)?;
-        let cypher_secret = self
-            .cypher
-            .secret_key
-            .as_ref()
-            .ok_or(Error::KeyNotAvailable)?;
+        let seed = self.seed.as_ref().ok_or(Error::KeyNotAvailable)?;
 
         // Match TypeScript MessagePack format exactly
         let mut buf = Vec::new();
         let mut se = rmp_serde::Serializer::new(&mut buf);
 
-        // Create a map with 3 entries
-        let mut map = se.serialize_map(Some(3)).unwrap();
+        // Create a map with 2 entries
+        let mut map = se.serialize_map(Some(2)).unwrap();
 
         // "v" -> version (as integer)
         map.serialize_entry("v", &self.base.version).unwrap();
 
-        // "x" -> signer secret key (as bytes)
-        map.serialize_entry("x", &serde_bytes::Bytes::new(secret_key))
-            .unwrap();
-
-        // "e" -> cypher secret key (as bytes)
-        map.serialize_entry("e", &serde_bytes::Bytes::new(cypher_secret))
+        // "s" -> seed (as bytes)
+        map.serialize_entry("s", &serde_bytes::Bytes::new(seed))
             .unwrap();
 
         map.end().unwrap();
         Ok(buf)
     }
 
-    /// Create from secret
+    /// Create from secret (MessagePack format from TypeScript)
     pub fn from_secret(secret: &[u8]) -> Result<Self> {
-        // Deserialize TypeScript MessagePack format
-        let data: SecretData = from_slice(secret)?;
+        // Parse the MessagePack data
+        let data: SecretData = from_slice(secret)
+            .map_err(|e| Error::InvalidKeyFormat(format!("Failed to parse secret: {}", e)))?;
 
         let version = data.v;
-        let x_bytes = &data.x;
-        let e_bytes = &data.e;
+        let seed_bytes = &data.s;
+
+        if seed_bytes.len() != 64 {
+            return Err(Error::InvalidKeyFormat(
+                "Seed must be 64 bytes for Dilithium".into(),
+            ));
+        }
+
         let mut km = Self::new();
         km.base.version = version;
         km.base.capability = Capability::Private;
+        km.seed = Some(seed_bytes.to_vec());
 
-        // Reconstruct signing key
-        let signing_key = SigningKey::from_bytes(
-            &x_bytes[0..32]
-                .try_into()
-                .map_err(|_| Error::InvalidKeyFormat("Invalid signing key in secret".into()))?,
-        );
-        let verifying_key = signing_key.verifying_key();
+        // Generate ML-DSA-87 keypair from seed
+        let seed_32: [u8; 32] = seed_bytes[0..32]
+            .try_into()
+            .map_err(|_| Error::InvalidKeyFormat("Invalid seed in secret".into()))?;
+        let key_pair = Self::keypair_from_seed_32(&seed_32)?;
 
         km.signer = KeyPairImpl {
-            public_key: verifying_key.to_bytes().to_vec(),
-            secret_key: Some(x_bytes.to_vec()),
+            public_key: key_pair.verification_key.as_ref().to_vec(),
+            secret_key: Some(key_pair.signing_key.as_ref().to_vec()),
         };
 
-        // Reconstruct cypher key
-        let cypher_secret_bytes: [u8; 32] = e_bytes[0..32]
+        // Generate X25519 keys from seed for cypher (deterministic)
+        let cypher_secret_bytes: [u8; 32] = seed_bytes[32..64]
             .try_into()
-            .map_err(|_| Error::InvalidKeyFormat("Invalid cypher key in secret".into()))?;
+            .map_err(|_| Error::InvalidKeyFormat("Failed to create cypher key".into()))?;
         let cypher_secret = StaticSecret::from(cypher_secret_bytes);
-        let cypher_public = PublicKey::from(&cypher_secret);
+        let cypher_public = X25519PublicKey::from(&cypher_secret);
 
         km.cypher = KeyPairImpl {
             public_key: cypher_public.as_bytes().to_vec(),
-            secret_key: Some(e_bytes.to_vec()),
+            secret_key: Some(cypher_secret.to_bytes().to_vec()),
         };
 
         Ok(km)
     }
 
-    /// Create from ID (public keys only)
+    /// Create from ID (MessagePack format from TypeScript)
     pub fn from_id(id: &[u8]) -> Result<Self> {
-        // Deserialize TypeScript MessagePack format
-        let data: IdData = from_slice(id)?;
+        // Parse the MessagePack data
+        let data: IdData = from_slice(id)
+            .map_err(|e| Error::InvalidKeyFormat(format!("Failed to parse ID: {}", e)))?;
 
         let version = data.v;
         let x_bytes = &data.x;
@@ -293,71 +315,120 @@ impl Ed25519Manager {
         Ok(km)
     }
 
-    /// Sign data
+    /// Sign data using ML-DSA-87
     pub fn sign(&self, data: &[u8]) -> Result<Option<Vec<u8>>> {
-        if let Some(ref secret_key) = self.signer.secret_key {
-            let signing_key = SigningKey::from_bytes(
-                &secret_key[0..32]
-                    .try_into()
-                    .map_err(|_| Error::InvalidKeyFormat("Invalid signing key".into()))?,
-            );
-            let signature = signing_key.sign(data);
-            Ok(Some(signature.to_bytes().to_vec()))
+        if let Some(ref secret_key_bytes) = self.signer.secret_key {
+            // ML-DSA-87 signing key is 4896 bytes
+            if secret_key_bytes.len() != 4896 {
+                return Err(Error::InvalidKeyFormat(format!(
+                    "Invalid ML-DSA-87 signing key length: expected 4896, got {}",
+                    secret_key_bytes.len()
+                )));
+            }
+
+            let mut signing_key_array = [0u8; 4896];
+            signing_key_array.copy_from_slice(secret_key_bytes);
+            let signing_key = ml_dsa_87::MLDSA87SigningKey::new(signing_key_array);
+
+            // Generate randomness for signing (ML-DSA-87 needs 32 bytes)
+            let randomness = if let Some(ref seed) = self.seed {
+                // Use deterministic randomness from seed for reproducibility
+                random_array_from_seed::<32>(seed)
+            } else {
+                // Use random bytes
+                let mut rng_bytes = [0u8; 32];
+                rng_bytes.copy_from_slice(&random_bytes(32));
+                rng_bytes
+            };
+
+            // Sign the message with empty context
+            let context = b"";
+            let signature = ml_dsa_87::sign(&signing_key, data, context, randomness);
+
+            // ML-DSA-87 signature is 4627 bytes
+            // For compatibility with the old format, we return signature + message
+            match signature {
+                Ok(sig) => {
+                    let mut signed_message = Vec::with_capacity(4627 + data.len());
+                    signed_message.extend_from_slice(sig.as_ref());
+                    signed_message.extend_from_slice(data);
+                    Ok(Some(signed_message))
+                }
+                Err(_) => Err(Error::SigningError("Failed to sign message".into())),
+            }
         } else {
             Ok(None)
         }
     }
 
-    /// Verify a signature
-    pub fn verify(
-        &self,
-        data: &[u8],
-        signature: &[u8],
-        _user_verification_ignored: Option<bool>,
-    ) -> bool {
-        if self.signer.public_key.len() != 32 || signature.len() != 64 {
+    /// Verify a signature using ML-DSA-87
+    pub fn verify(&self, data: &[u8], signature: &[u8]) -> bool {
+        // ML-DSA-87 verification key is 2592 bytes
+        if self.signer.public_key.len() != 2592 {
             return false;
         }
 
-        let verifying_key = match VerifyingKey::from_bytes(
-            &self.signer.public_key[0..32]
-                .try_into()
-                .unwrap_or([0u8; 32]),
-        ) {
-            Ok(key) => key,
-            Err(_) => return false,
-        };
+        let mut verification_key_array = [0u8; 2592];
+        verification_key_array.copy_from_slice(&self.signer.public_key);
+        let verification_key = ml_dsa_87::MLDSA87VerificationKey::new(verification_key_array);
 
-        let sig_bytes: [u8; 64] = match signature[0..64].try_into() {
-            Ok(bytes) => bytes,
-            Err(_) => return false,
-        };
-        let sig = Signature::from_bytes(&sig_bytes);
+        // Check if we have the old format (signature + message)
+        if signature.len() > 4627 {
+            // Extract just the signature part (first 4627 bytes)
+            if signature.len() >= 4627 + data.len() {
+                let sig_bytes = &signature[..4627];
+                let included_message = &signature[4627..];
 
-        verifying_key.verify(data, &sig).is_ok()
+                // Verify the message matches
+                if included_message != data {
+                    return false;
+                }
+
+                let mut signature_array = [0u8; 4627];
+                signature_array.copy_from_slice(sig_bytes);
+                let sig = ml_dsa_87::MLDSA87Signature::new(signature_array);
+
+                let context = b"";
+                ml_dsa_87::verify(&verification_key, data, context, &sig).is_ok()
+            } else {
+                false
+            }
+        } else if signature.len() == 4627 {
+            // Just the signature
+            let mut signature_array = [0u8; 4627];
+            signature_array.copy_from_slice(signature);
+            let sig = ml_dsa_87::MLDSA87Signature::new(signature_array);
+
+            let context = b"";
+            ml_dsa_87::verify(&verification_key, data, context, &sig).is_ok()
+        } else {
+            false
+        }
     }
 
     /// Clean secure data
     pub fn clean_secure_data(&mut self) {
-        if let Some(ref mut secret) = self.cypher.secret_key {
-            secure_erase(secret);
+        if let Some(ref mut secret_key) = self.signer.secret_key {
+            secret_key.zeroize();
         }
-        self.cypher.secret_key = None;
-
-        if let Some(ref mut secret) = self.signer.secret_key {
-            secure_erase(secret);
+        if let Some(ref mut secret_key) = self.cypher.secret_key {
+            secret_key.zeroize();
+        }
+        if let Some(ref mut entropy) = self.base.entropy {
+            entropy.zeroize();
+        }
+        if let Some(ref mut seed) = self.seed {
+            seed.zeroize();
         }
         self.signer.secret_key = None;
-
-        if let Some(ref mut entropy) = self.base.entropy {
-            secure_erase(entropy);
-        }
+        self.cypher.secret_key = None;
         self.base.entropy = None;
+        self.seed = None;
     }
 }
 
-// Implementation of AbstractKeyManager trait
-impl AbstractKeyManager for Ed25519Manager {
+// AbstractKeyManager implementation
+impl AbstractKeyManager for DilithiumManager {
     fn version(&self) -> u8 {
         self.base.version
     }
@@ -381,27 +452,34 @@ impl AbstractKeyManager for Ed25519Manager {
     }
 
     fn get_signer(&self) -> Result<std::sync::Arc<dyn SignerOps>> {
-        struct Ed25519Signer {
+        struct DilithiumSigner {
             signer_keypair: KeyPairImpl,
         }
 
-        impl SignerOps for Ed25519Signer {
+        impl SignerOps for DilithiumSigner {
             fn sign(&self, data: &[u8]) -> Result<Option<Vec<u8>>> {
-                if let Some(ref secret_key) = self.signer_keypair.secret_key {
-                    let signing_key = SigningKey::from_bytes(
-                        &secret_key[0..32]
-                            .try_into()
-                            .map_err(|_| Error::InvalidKeyFormat("Invalid signing key".into()))?,
-                    );
-                    let signature = signing_key.sign(data);
-                    Ok(Some(signature.to_bytes().to_vec()))
+                if let Some(ref secret_key_bytes) = self.signer_keypair.secret_key {
+                    // ML-DSA-87 signing key is 4896 bytes
+                    let mut signing_key_array = [0u8; 4896];
+                    signing_key_array.copy_from_slice(secret_key_bytes);
+                    let signing_key = ml_dsa_87::MLDSA87SigningKey::new(signing_key_array);
+
+                    // Generate randomness for signing
+                    let mut randomness = [0u8; 32];
+                    randomness.copy_from_slice(&random_bytes(32));
+
+                    let context = b"";
+                    match ml_dsa_87::sign(&signing_key, data, context, randomness) {
+                        Ok(signature) => Ok(Some(signature.as_ref().to_vec())),
+                        Err(_) => Ok(None),
+                    }
                 } else {
                     Ok(None)
                 }
             }
         }
 
-        Ok(std::sync::Arc::new(Ed25519Signer {
+        Ok(std::sync::Arc::new(DilithiumSigner {
             signer_keypair: self.signer.clone(),
         }))
     }
@@ -418,13 +496,13 @@ impl AbstractKeyManager for Ed25519Manager {
         &self,
         data: &[u8],
         signature: &[u8],
-        user_verification_ignored: Option<bool>,
+        _user_verification_ignored: Option<bool>,
     ) -> bool {
-        self.verify(data, signature, user_verification_ignored)
+        self.verify(data, signature)
     }
 
     fn clean_secure_data(&mut self) {
-        self.clean_secure_data()
+        self.clean_secure_data();
     }
 
     fn perform_diffie_hellman(&self, other: &dyn AbstractKeyManager) -> Result<Vec<u8>> {
@@ -472,16 +550,16 @@ impl AbstractKeyManager for Ed25519Manager {
     }
 
     fn auth_type(&self) -> &str {
-        &self.base.auth_type
+        "DilithiumVerificationKey"
     }
 
     fn enc_type(&self) -> &str {
-        &self.base.enc_type
+        "X25519KeyAgreementKey2019"
     }
 }
 
-// Implementation of KeyManager trait
-impl crate::key_manager::abstract_key_manager::KeyManager for Ed25519Manager {
+// KeyManager trait implementation
+impl crate::key_manager::abstract_key_manager::KeyManager for DilithiumManager {
     fn from_entropy(entropy: &[u8]) -> Result<Box<dyn AbstractKeyManager>> {
         Ok(Box::new(Self::from_entropy(entropy)?))
     }
@@ -509,8 +587,8 @@ impl crate::key_manager::abstract_key_manager::KeyManager for Ed25519Manager {
     }
 }
 
-// Implementation of CypherOperations for compatibility
-impl crate::key_manager::CypherOperations for Ed25519Manager {
+// CypherOperations implementation
+impl crate::key_manager::CypherOperations for DilithiumManager {
     fn has_private_capability(&self) -> bool {
         self.base.capability == Capability::Private
     }
@@ -530,40 +608,36 @@ mod tests {
 
     #[test]
     fn test_generate() {
-        let km = Ed25519Manager::generate().unwrap();
+        let km = DilithiumManager::generate().unwrap();
         assert_eq!(km.base.capability, Capability::Private);
-        assert_eq!(km.signer.public_key.len(), 32);
-        assert_eq!(km.cypher.public_key.len(), 32);
+        assert!(!km.signer.public_key.is_empty());
         assert!(km.signer.secret_key.is_some());
-        assert!(km.cypher.secret_key.is_some());
     }
 
     #[test]
     fn test_from_entropy() {
         let entropy = random_bytes(32);
-        let km = Ed25519Manager::from_entropy(&entropy).unwrap();
+        let km = DilithiumManager::from_entropy(&entropy).unwrap();
         assert_eq!(km.base.capability, Capability::Private);
-        assert_eq!(km.signer.public_key.len(), 32);
+        assert!(!km.signer.public_key.is_empty());
         assert_eq!(km.cypher.public_key.len(), 32);
     }
 
     #[test]
     fn test_round_trip_secret() {
-        let km1 = Ed25519Manager::generate().unwrap();
+        let km1 = DilithiumManager::generate().unwrap();
         let secret = km1.get_secret().unwrap();
-        let km2 = Ed25519Manager::from_secret(&secret).unwrap();
+        let km2 = DilithiumManager::from_secret(&secret).unwrap();
 
         assert_eq!(km1.signer.public_key, km2.signer.public_key);
-        assert_eq!(km1.cypher.public_key, km2.cypher.public_key);
         assert_eq!(km1.base.version, km2.base.version);
     }
 
     #[test]
     fn test_round_trip_id() {
-        let km1 = Ed25519Manager::generate().unwrap();
+        let km1 = DilithiumManager::generate().unwrap();
         let id = km1.id();
-        let km2 = Ed25519Manager::from_id(&id).unwrap();
-
+        let km2 = DilithiumManager::from_id(&id).unwrap();
         assert_eq!(km1.signer.public_key, km2.signer.public_key);
         assert_eq!(km1.cypher.public_key, km2.cypher.public_key);
         assert_eq!(km2.base.capability, Capability::Public);
@@ -571,42 +645,39 @@ mod tests {
 
     #[test]
     fn test_sign_verify() {
-        let km = Ed25519Manager::generate().unwrap();
-        let data = b"test message";
-
+        let km = DilithiumManager::generate().unwrap();
+        let data = b"Test message";
         let signature = km.sign(data).unwrap().unwrap();
-
-        assert!(km.verify(data, &signature, None));
-        assert!(!km.verify(b"wrong message", &signature, None));
-    }
-
-    #[test]
-    fn test_secret_sizes() {
-        let km = Ed25519Manager::generate().unwrap();
-        let secret = km.get_secret().unwrap();
-        println!("Ed25519Manager secret size: {} bytes", secret.len());
-
-        // The secret is MessagePack encoded with:
-        // - Map header (1-2 bytes)
-        // - "v" key (1-2 bytes) + version value (1 byte)
-        // - "x" key (1-2 bytes) + binary header (1-2 bytes) + 32 bytes signing key
-        // - "e" key (1-2 bytes) + binary header (1-2 bytes) + 32 bytes cypher key
-        // Total should be around 70-76 bytes
-        assert!(
-            secret.len() >= 70 && secret.len() <= 80,
-            "Unexpected secret size: {}",
-            secret.len()
-        );
+        assert!(km.verify(data, &signature));
+        assert!(!km.verify(b"Wrong message", &signature));
     }
 
     #[test]
     fn test_diffie_hellman() {
-        let km1 = Ed25519Manager::generate().unwrap();
-        let km2 = Ed25519Manager::generate().unwrap();
+        let km1 = DilithiumManager::generate().unwrap();
+        let km2 = DilithiumManager::generate().unwrap();
 
         let shared1 = km1.perform_diffie_hellman(&km2).unwrap();
         let shared2 = km2.perform_diffie_hellman(&km1).unwrap();
 
         assert_eq!(shared1, shared2);
+    }
+
+    #[test]
+    fn test_secret_sizes() {
+        let km = DilithiumManager::generate().unwrap();
+        let secret = km.get_secret().unwrap();
+        println!("DilithiumManager secret size: {} bytes", secret.len());
+
+        // The secret is MessagePack encoded with:
+        // - Map header (1-2 bytes)
+        // - "v" key (1-2 bytes) + version value (1 byte)
+        // - "s" key (1-2 bytes) + binary header (1-2 bytes) + 64 bytes seed
+        // Total should be around 70-75 bytes
+        assert!(
+            secret.len() == 72,
+            "Unexpected secret size: {}",
+            secret.len()
+        );
     }
 }

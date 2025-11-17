@@ -8,10 +8,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const buffer_1 = require("buffer/");
 const crypto_1 = require("../crypto");
 const cbor_1 = __importDefault(require("cbor"));
-const ed25519_1 = require("@noble/curves/ed25519");
-const p256_1 = require("@noble/curves/p256");
-const p384_1 = require("@noble/curves/p384");
-const p521_1 = require("@noble/curves/p521");
+const ed25519_js_1 = require("@noble/curves/ed25519.js");
+const nist_js_1 = require("@noble/curves/nist.js");
 // import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
 const pqCrypto_1 = require("../pqCrypto");
 const credentials = {};
@@ -41,9 +39,9 @@ const COSERSASCHEME = {
     "-259": "pkcs1-sha512",
 };
 const COSECRV = {
-    1: p256_1.p256,
-    2: p384_1.p384,
-    3: p521_1.p521,
+    1: nist_js_1.p256,
+    2: nist_js_1.p384,
+    3: nist_js_1.p521,
 };
 const COSEALGHASH = {
     "-257": "SHA-256",
@@ -57,7 +55,7 @@ const COSEALGHASH = {
     "-261": "SHA-512",
     "-7": "SHA-256",
     "-36": "SHA-512",
-    [pqCrypto_1.PQ_COSE_ALG.DILITHIUM2.toString()]: "SHA-256", // DILITHIUM2 uses SHA-256 for hashing
+    [pqCrypto_1.PQ_COSE_ALG.DILITHIUM5.toString()]: "SHA-256", // DILITHIUM5 uses SHA-256 for hashing
 };
 const hash = (alg, message) => (0, crypto_1.hash)(alg.replace("-", ""), message);
 const base64ToPem = (b64cert) => {
@@ -180,13 +178,12 @@ const verifyPackedAttestation = (response, userVerification = false) => {
             const y = pubKeyCose.get(COSEKEYS.y);
             const pubKey = buffer_1.Buffer.concat([buffer_1.Buffer.from([0x04]), x, y]);
             const ec = COSECRV[pubKeyCose.get(COSEKEYS.crv)];
-            const sig = ec.Signature.fromDER(signature);
-            signatureIsValid = ec.verify(sig, data, pubKey);
+            signatureIsValid = ec.verify(signature, data, pubKey, { format: "der" });
         }
         else if (pubKeyCose.get(COSEKEYS.kty) === COSEKTY.OKP) {
             // EdDSA
             const x = pubKeyCose.get(COSEKEYS.x);
-            signatureIsValid = ed25519_1.ed25519.verify(signature, data, x);
+            signatureIsValid = ed25519_js_1.ed25519.verify(signature, data, x);
         }
         else {
             return false;
@@ -211,10 +208,10 @@ class MyPublicKeyCredential {
     }
 }
 const verifyECDSA = (data, publicKey, signature) => {
-    return p256_1.p256.verify(p256_1.p256.Signature.fromDER(signature).toCompactHex(), data, publicKey);
+    return nist_js_1.p256.verify(signature, data, publicKey, { format: signature.length === 64 ? "compact" : "der" });
 };
 const verifyEdDSA = (data, publicKey, signature) => {
-    return ed25519_1.ed25519.verify(signature, data, publicKey);
+    return ed25519_js_1.ed25519.verify(signature, data, publicKey);
 };
 // Webauthn Partial Implementation for testing
 class SoftCredentials {
@@ -269,20 +266,20 @@ class SoftCredentials {
         credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
         // Get the algorithm from pubKeyCredParams
         const pubKeyCredParams = publicKey.pubKeyCredParams;
-        // Check if DILITHIUM is supported (look for PQ_COSE_ALG.DILITHIUM2 in the params)
-        const supportsDilithium = pubKeyCredParams.some((param) => param.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2);
+        // Check if DILITHIUM is supported (look for PQ_COSE_ALG.DILITHIUM5 in the params)
+        const supportsDilithium = pubKeyCredParams.some((param) => param.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM5);
         // Set algorithm, prioritizing DILITHIUM if it's supported
         if (supportsDilithium) {
-            credential.alg = pqCrypto_1.PQ_COSE_ALG.DILITHIUM2;
+            credential.alg = pqCrypto_1.PQ_COSE_ALG.DILITHIUM5;
         }
         else {
             credential.alg = publicKey.pubKeyCredParams[0].alg;
         }
         if (credential.alg === -8) {
-            const random = ed25519_1.ed25519.utils.randomPrivateKey();
+            const random = ed25519_js_1.ed25519.utils.randomSecretKey();
             credential.keyPair = {
                 privateKey: random,
-                publicKey: ed25519_1.ed25519.getPublicKey(random),
+                publicKey: ed25519_js_1.ed25519.getPublicKey(random),
                 algorithm: "EdDSA",
             };
             credential.coseKey = new Map();
@@ -293,10 +290,10 @@ class SoftCredentials {
             credential.coseKey.set(-2, x);
         }
         else if (credential.alg === -7) {
-            const random = p256_1.p256.utils.randomPrivateKey();
+            const random = nist_js_1.p256.utils.randomSecretKey();
             credential.keyPair = {
                 privateKey: random,
-                publicKey: p256_1.p256.getPublicKey(random, false),
+                publicKey: nist_js_1.p256.getPublicKey(random, false),
                 algorithm: "ES256",
             };
             credential.coseKey = new Map();
@@ -309,7 +306,7 @@ class SoftCredentials {
             credential.coseKey.set(-3, y);
             // console.log(extpk,x,y)
         }
-        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2) {
+        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM5) {
             // Generate DILITHIUM key pair
             const { publicKey: dilithiumPk, secretKey: dilithiumSk } = (0, pqCrypto_1.generateDilithiumKeyPair)();
             //console.log("PQC", dilithiumPk, dilithiumSk);
@@ -375,9 +372,9 @@ class SoftCredentials {
             return false;
         const hash = (0, crypto_1.hash)("sha256", buffer_1.Buffer.from(response.clientDataJSON));
         let data = buffer_1.Buffer.concat([buffer_1.Buffer.from(response.authenticatorData), hash]);
-        if (ckey.get(3) == -7) {
-            data = (0, crypto_1.hash)("sha256", data);
-        }
+        // if (data.length !== 64) {
+        //   data = myhash("sha256", data);
+        // }
         if (ckey.get(1) == 1) {
             // EdDSA
             const x = ckey.get(-2);
@@ -479,12 +476,12 @@ class SoftCredentials {
         const toSign = buffer_1.Buffer.concat([authenticatorData, clientDataHash]);
         let signature = new Uint8Array();
         if (credential.alg === -7) {
-            signature = p256_1.p256.sign(toSign, credential.keyPair.privateKey, { prehash: true }).toDERRawBytes();
+            signature = nist_js_1.p256.sign(toSign, credential.keyPair.privateKey, { prehash: true });
         }
         else if (credential.alg === -8) {
-            signature = ed25519_1.ed25519.sign(toSign, credential.keyPair.privateKey);
+            signature = ed25519_js_1.ed25519.sign(toSign, credential.keyPair.privateKey);
         }
-        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM2) {
+        else if (credential.alg === pqCrypto_1.PQ_COSE_ALG.DILITHIUM5) {
             // DILITHIUM signing - this returns a Promise so we need to await it
             signature = (0, pqCrypto_1.signDilithium)(toSign, credential.keyPair.privateKey);
         }

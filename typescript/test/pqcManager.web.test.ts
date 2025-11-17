@@ -4,15 +4,16 @@ import VaultysId from "../src/VaultysId";
 import { randomBytes } from "../src/crypto";
 import { Buffer } from "buffer/";
 import { DilithiumManager } from "../src/KeyManager";
+import { getDilithiumKeyInfo } from "../src/pqCrypto";
 
 describe("PQC", () => {
   it("serder a VaultytsID secret - software", async () => {
     const vaultysId = await VaultysId.generatePerson("dilithium");
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.id.length, 1998);
-    assert.equal(vaultysId.id.toString("hex").length, 3996);
-    assert.equal(vaultysId.id.toString("base64").length, 2664);
-    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
+    assert.equal(vaultysId.id.length, 2638);
+    assert.equal(vaultysId.id.toString("hex").length, 5276);
+    assert.equal(vaultysId.id.toString("base64").length, 3520);
+    assert.equal(vaultysId.keyManager.signer.publicKey.length, getDilithiumKeyInfo().publicKeySize);
     const id2 = VaultysId.fromSecret(vaultysId.getSecret());
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));
@@ -23,8 +24,8 @@ describe("PQC", () => {
   it("serder a VaultytsID - software", async () => {
     const vaultysId = await VaultysId.generateOrganization("dilithium");
     if (!vaultysId) assert.fail("VaultysId creation failed");
-    assert.equal(vaultysId.keyManager.signer.publicKey.length, 1952);
-    assert.equal(vaultysId.id.length, 1998);
+    assert.equal(vaultysId.keyManager.signer.publicKey.length, 2592);
+    assert.equal(vaultysId.id.length, 2638);
     const id2 = VaultysId.fromId(vaultysId.id);
 
     assert.equal(vaultysId.id.toString("hex"), id2.id.toString("hex"));

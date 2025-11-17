@@ -126,6 +126,7 @@ pub trait KeyManager: AbstractKeyManager {
 }
 
 /// Base implementation helper for key managers
+#[derive(Clone)]
 pub struct BaseKeyManager {
     pub version: u8,
     pub capability: crate::key_manager::Capability,

@@ -46,7 +46,7 @@ exports.PQ_COSE_KEY_PARAMS = {
 function generateDilithiumKeyPair(seed) {
     if (!seed)
         seed = (0, crypto_1.randomBytes)(32);
-    const keyPair = ml_dsa_js_1.ml_dsa65.keygen(seed);
+    const keyPair = ml_dsa_js_1.ml_dsa87.keygen(seed);
     return {
         publicKey: buffer_1.Buffer.from(keyPair.publicKey),
         secretKey: buffer_1.Buffer.from(keyPair.secretKey),
@@ -59,7 +59,7 @@ function generateDilithiumKeyPair(seed) {
  * @returns Promise resolving to signature as Uint8Array
  */
 function signDilithium(message, secretKey) {
-    return buffer_1.Buffer.from(ml_dsa_js_1.ml_dsa65.sign(secretKey, message));
+    return buffer_1.Buffer.from(ml_dsa_js_1.ml_dsa87.sign(message, secretKey));
 }
 /**
  * Verify a DILITHIUM Level 2 signature
@@ -69,7 +69,7 @@ function signDilithium(message, secretKey) {
  * @returns Promise resolving to boolean indicating if signature is valid
  */
 function verifyDilithium(message, signature, publicKey) {
-    return ml_dsa_js_1.ml_dsa65.verify(publicKey, message, signature);
+    return ml_dsa_js_1.ml_dsa87.verify(signature, message, publicKey);
 }
 /**
  * Create a COSE key representation for a DILITHIUM public key
@@ -80,9 +80,9 @@ function createDilithiumCoseKey(publicKey) {
     const coseKey = new Map();
     // Standard COSE key parameters
     coseKey.set(1, exports.PQ_COSE_KEY_TYPE.DILITHIUM); // kty: Key Type
-    coseKey.set(3, exports.PQ_COSE_ALG.DILITHIUM2); // alg: Algorithm
+    coseKey.set(3, exports.PQ_COSE_ALG.DILITHIUM5); // alg: Algorithm
     // DILITHIUM-specific parameters
-    coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_MODE, 2); // Level 2
+    coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_MODE, 5); // Level 2
     coseKey.set(exports.PQ_COSE_KEY_PARAMS.DILITHIUM_PK, publicKey);
     return coseKey;
 }
@@ -92,8 +92,8 @@ function createDilithiumCoseKey(publicKey) {
  */
 function getDilithiumKeyInfo() {
     return {
-        publicKeySize: 1952, // Size in bytes for DILITHIUM2 public key
-        secretKeySize: 4032, // Size in bytes for DILITHIUM2 private key
-        signatureSize: 3309, // Size in bytes for DILITHIUM2 signature
+        publicKeySize: 2592, // Size in bytes for DILITHIUM2 public key
+        secretKeySize: 4896, // Size in bytes for DILITHIUM5 private key
+        signatureSize: 4627, // Size in bytes for DILITHIUM2 signature
     };
 }

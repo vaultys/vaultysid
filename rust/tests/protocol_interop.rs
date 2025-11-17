@@ -301,7 +301,8 @@ async fn run_rust_side(role: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🦀 Rust IdManager Interop Test - Role: {}\n", role);
 
     // Create IdManager
-    let vaultys_id = VaultysId::generate_person().await?;
+    let vaultys_id =
+        VaultysId::generate_person_with_alg(vaultysid::vaultys_id::Algorithm::Dilithium).await?;
     let store = Box::new(MemoryStore::new());
     let manager = Arc::new(IdManager::new(vaultys_id, store).await?);
 

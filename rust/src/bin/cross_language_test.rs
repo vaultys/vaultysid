@@ -232,11 +232,15 @@ impl Channel for CrossLanguageChannel {
     }
 }
 
-async fn run_test(role: &str, channel_name: &str) -> Result<()> {
+async fn run_test(role: &str, channel_name: &str, algorithm: &str) -> Result<()> {
     println!("\n=== Rust IdManager Cross-Language Test ===\n");
 
-    // Create IdManager
-    let vaultys_id = VaultysId::generate_person().await?;
+    // Create IdManager with specified algorithm
+    let vaultys_id = if algorithm == "dilithium" {
+        VaultysId::generate_person_with_alg(vaultysid::vaultys_id::Algorithm::Dilithium).await?
+    } else {
+        VaultysId::generate_person_with_alg(vaultysid::vaultys_id::Algorithm::Ed25519).await?
+    };
     let store = Box::new(MemoryStore::new());
     let manager = IdManager::new(vaultys_id, store).await?;
 
@@ -251,9 +255,20 @@ async fn run_test(role: &str, channel_name: &str) -> Result<()> {
 
     println!("Rust IdManager created:");
     println!("  Role: {}", role);
+    println!("  Algorithm: {}", algorithm);
     println!("  DID: {}", manager.vaultys_id.lock().await.did());
     println!("  Name: {}", name);
     println!("  Email: {}", email);
+    let id_len = manager.vaultys_id.lock().await.id().len();
+    println!(
+        "  ID length: {} bytes{}",
+        id_len,
+        if algorithm == "dilithium" {
+            " (Dilithium has larger keys)"
+        } else {
+            ""
+        }
+    );
 
     // Create cross-language channel
     let mut channel = CrossLanguageChannel::new(channel_name);
@@ -337,21 +352,31 @@ async fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Usage: {} [asker|acceptor] [channel-name]", args[0]);
+        eprintln!(
+            "Usage: {} [asker|acceptor] [channel-name] [algorithm]",
+            args[0]
+        );
         eprintln!("  asker    - Initiates the protocol (calls askContact)");
         eprintln!("  acceptor - Accepts the protocol (calls acceptContact)");
+        eprintln!("  algorithm - 'ed25519' (default) or 'dilithium'");
         std::process::exit(1);
     }
 
     let role = &args[1];
     let channel_name = args.get(2).map(|s| s.as_str()).unwrap_or("test-channel");
+    let algorithm = args.get(3).map(|s| s.as_str()).unwrap_or("ed25519");
 
     if role != "asker" && role != "acceptor" {
         eprintln!("Error: Role must be either 'asker' or 'acceptor'");
         std::process::exit(1);
     }
 
-    if let Err(e) = run_test(role, channel_name).await {
+    if algorithm != "ed25519" && algorithm != "dilithium" {
+        eprintln!("Error: Algorithm must be either 'ed25519' or 'dilithium'");
+        std::process::exit(1);
+    }
+
+    if let Err(e) = run_test(role, channel_name, algorithm).await {
         eprintln!("[Rust] Error: {}", e);
         std::process::exit(1);
     }

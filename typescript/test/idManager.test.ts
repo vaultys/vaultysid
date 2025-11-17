@@ -49,6 +49,7 @@ describe("IdManager", () => {
   it("serder to public Idmanager", async () => {
     for (const id1 of await allVaultysIdType()) {
       const id2 = VaultysId.fromId(id1.id);
+      // console.log(id2.keyManager.authType, id1.keyManager.authType);
       assert.equal(id2.fingerprint, id1.fingerprint);
       assert.equal(id2.id.toString("base64"), id1.id.toString("base64"));
       assert.deepStrictEqual(id2.didDocument, id1.didDocument);
@@ -499,7 +500,7 @@ describe("SRG v0 challenge with IdManager", () => {
 
       const contacts = await Promise.all([manager1.askContact(channel, metadata1), manager2.acceptContact(channel.otherend, metadata2)]);
 
-      console.log(contacts[0], manager2.vaultysId);
+      //console.log(contacts[0], manager2.vaultysId);
       assert.equal(contacts[0].did, manager2.vaultysId.did);
       assert.equal(contacts[1].did, manager1.vaultysId.did);
 

@@ -111,8 +111,8 @@ describe("Post-Quantum Cryptography", () => {
       const coseKey = createDilithiumCoseKey(keyPair.publicKey);
 
       assert.equal(coseKey.get(1), PQ_COSE_KEY_TYPE.DILITHIUM);
-      assert.equal(coseKey.get(3), PQ_COSE_ALG.DILITHIUM2);
-      assert.equal(coseKey.get(PQ_COSE_KEY_PARAMS.DILITHIUM_MODE), 2);
+      assert.equal(coseKey.get(3), PQ_COSE_ALG.DILITHIUM5);
+      assert.equal(coseKey.get(PQ_COSE_KEY_PARAMS.DILITHIUM_MODE), 5);
       assert.deepEqual(coseKey.get(PQ_COSE_KEY_PARAMS.DILITHIUM_PK), keyPair.publicKey);
     });
 
@@ -128,9 +128,9 @@ describe("Post-Quantum Cryptography", () => {
     it("should return correct key size information", () => {
       const keyInfo = getDilithiumKeyInfo();
 
-      assert.equal(keyInfo.publicKeySize, 1952);
-      assert.equal(keyInfo.secretKeySize, 4032);
-      assert.equal(keyInfo.signatureSize, 3309);
+      assert.equal(keyInfo.publicKeySize, 2592);
+      assert.equal(keyInfo.secretKeySize, 4896);
+      assert.equal(keyInfo.signatureSize, 4627);
     });
 
     it("should match actual generated key sizes", async () => {

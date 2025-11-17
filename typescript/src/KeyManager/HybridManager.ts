@@ -5,7 +5,7 @@ import { decode, encode } from "@msgpack/msgpack";
 import { generateDilithiumKeyPair, signDilithium, verifyDilithium } from "../pqCrypto";
 import CypherManager from "./CypherManager";
 import { KeyPair } from ".";
-import { ed25519 } from "@noble/curves/ed25519";
+import { ed25519 } from "@noble/curves/ed25519.js";
 
 const sha512 = (data: Buffer) => hash("sha512", data);
 

@@ -5,7 +5,7 @@
  * starting with DILITHIUM for digital signatures.
  */
 
-import { ml_dsa65 } from "@noble/post-quantum/ml-dsa.js";
+import { ml_dsa87 } from "@noble/post-quantum/ml-dsa.js";
 import { Buffer } from "buffer/";
 import { randomBytes } from "./crypto";
 
@@ -45,7 +45,7 @@ export function generateDilithiumKeyPair(seed?: Buffer): {
   secretKey: Buffer;
 } {
   if (!seed) seed = randomBytes(32);
-  const keyPair = ml_dsa65.keygen(seed);
+  const keyPair = ml_dsa87.keygen(seed);
   return {
     publicKey: Buffer.from(keyPair.publicKey),
     secretKey: Buffer.from(keyPair.secretKey),
@@ -59,7 +59,7 @@ export function generateDilithiumKeyPair(seed?: Buffer): {
  * @returns Promise resolving to signature as Uint8Array
  */
 export function signDilithium(message: Uint8Array | Buffer, secretKey: Uint8Array | Buffer): Buffer {
-  return Buffer.from(ml_dsa65.sign(secretKey, message));
+  return Buffer.from(ml_dsa87.sign(message, secretKey));
 }
 
 /**
@@ -70,7 +70,7 @@ export function signDilithium(message: Uint8Array | Buffer, secretKey: Uint8Arra
  * @returns Promise resolving to boolean indicating if signature is valid
  */
 export function verifyDilithium(message: Uint8Array | Buffer, signature: Uint8Array | Buffer, publicKey: Uint8Array | Buffer): boolean {
-  return ml_dsa65.verify(publicKey, message, signature);
+  return ml_dsa87.verify(signature, message, publicKey);
 }
 
 /**
@@ -83,10 +83,10 @@ export function createDilithiumCoseKey(publicKey: Uint8Array | Buffer): Map<numb
 
   // Standard COSE key parameters
   coseKey.set(1, PQ_COSE_KEY_TYPE.DILITHIUM); // kty: Key Type
-  coseKey.set(3, PQ_COSE_ALG.DILITHIUM2); // alg: Algorithm
+  coseKey.set(3, PQ_COSE_ALG.DILITHIUM5); // alg: Algorithm
 
   // DILITHIUM-specific parameters
-  coseKey.set(PQ_COSE_KEY_PARAMS.DILITHIUM_MODE, 2); // Level 2
+  coseKey.set(PQ_COSE_KEY_PARAMS.DILITHIUM_MODE, 5); // Level 2
   coseKey.set(PQ_COSE_KEY_PARAMS.DILITHIUM_PK, publicKey);
 
   return coseKey;
@@ -102,8 +102,8 @@ export function getDilithiumKeyInfo(): {
   signatureSize: number;
 } {
   return {
-    publicKeySize: 1952, // Size in bytes for DILITHIUM2 public key
-    secretKeySize: 4032, // Size in bytes for DILITHIUM2 private key
-    signatureSize: 3309, // Size in bytes for DILITHIUM2 signature
+    publicKeySize: 2592, // Size in bytes for DILITHIUM2 public key
+    secretKeySize: 4896, // Size in bytes for DILITHIUM5 private key
+    signatureSize: 4627, // Size in bytes for DILITHIUM2 signature
   };
 }

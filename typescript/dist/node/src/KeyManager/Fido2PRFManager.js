@@ -41,8 +41,8 @@ const getSignerFromCkey = (ckey) => {
         publicKey = buffer_1.Buffer.concat([buffer_1.Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
     else if (k.get(3) == -8)
         publicKey = k.get(-2);
-    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM2)
-        publicKey = k.get(-101);
+    else if (k.get(3) == pqCrypto_1.PQ_COSE_ALG.DILITHIUM5)
+        publicKey = k.get(pqCrypto_1.PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
     return { publicKey };
 };
 class Fido2PRFManager extends Fido2Manager_1.default {

@@ -1,5 +1,4 @@
-use vaultysid::vaultys_id::KeyManagerTrait;
-use vaultysid::{DeprecatedKeyManager, Ed25519Manager, VaultysId};
+use vaultysid::{AbstractKeyManager, DeprecatedKeyManager, Ed25519Manager, VaultysId};
 
 #[tokio::test]
 async fn test_vaultys_id_generation() {
@@ -120,8 +119,7 @@ fn test_ed25519_signing_and_verification() {
     let data = b"message to sign";
 
     // Sign the data
-    let signer = manager.get_signer_ops().unwrap();
-    let signature = signer.sign(data).unwrap();
+    let signature = manager.sign(data).unwrap().unwrap();
 
     // Verify with correct data
     assert!(manager.verify(data, &signature, None));
@@ -140,8 +138,8 @@ fn test_diffie_hellman_key_exchange() {
     let alice = Ed25519Manager::generate().unwrap();
     let bob = Ed25519Manager::generate().unwrap();
 
-    let alice_cypher = alice.get_cypher_ops().unwrap();
-    let bob_cypher = bob.get_cypher_ops().unwrap();
+    let alice_cypher = alice.get_cypher().unwrap();
+    let bob_cypher = bob.get_cypher().unwrap();
 
     // Perform DH from both sides
     let shared_alice = alice_cypher.diffie_hellman(&bob.cypher.public_key).unwrap();
@@ -155,7 +153,7 @@ fn test_diffie_hellman_key_exchange() {
 #[test]
 fn test_hmac_generation() {
     let manager = Ed25519Manager::generate().unwrap();
-    let cypher = manager.get_cypher_ops().unwrap();
+    let cypher = manager.get_cypher().unwrap();
 
     // Test HMAC generation
     let message = "test/message";

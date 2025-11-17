@@ -3,7 +3,7 @@ name = "vaultysid"
 version = "0.1.0"
 authors = ["Vaultys"]
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.91"
 description = "Cryptographic identity library providing Ed25519 signing, X25519 key exchange, and DID-based identity management"
 documentation = "https://docs.rs/vaultysid"
 readme = "README.md"
@@ -41,6 +41,13 @@ sha2 = "0.10"
 hmac = "0.12"
 chacha20poly1305 = "0.10"
 rand = "0.8"
+rand_core = "=0.6.4"
+rand_chacha = "0.3"
+# Additional rand_core version for ml-dsa compatibility
+getrandom = "0.2"
+
+# Post-quantum cryptography
+libcrux-ml-dsa = "0.0.4"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -61,6 +68,8 @@ zeroize = { version = "1.7", features = ["derive"] }
 
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
+zerocopy = "0.8.27"
+pqc_dilithium = "0.2.0"
 
 [dev-dependencies]
 tempfile = "3.8"
@@ -90,6 +99,12 @@ name = "basic_usage"
 
 [[example]]
 name = "dhies_example"
+
+[[example]]
+name = "dilithium_example"
+
+[[example]]
+name = "vaultysid_dilithium_example"
 
 [profile.release]
 opt-level = 3

@@ -1,6 +1,6 @@
 use crate::crypto::{constant_time_eq, hash, hmac, random_bytes, secure_erase};
 use crate::error::{Error, Result};
-use crate::key_manager::{Capability, KeyPairImpl};
+use crate::key_manager::{AbstractKeyManager, Capability, KeyPairImpl};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use rand::rngs::OsRng;
@@ -20,7 +20,9 @@ impl<'a> DHIES<'a> {
     /// Encrypts a message for a recipient using DHIES
     pub fn encrypt(&self, message: &[u8], recipient_public_key: &[u8]) -> Result<Vec<u8>> {
         if !self.key_manager.has_private_capability() {
-            return Err(Error::InvalidCapability);
+            return Err(Error::InvalidCapability(
+                "Sender key manager lacks private capability".into(),
+            ));
         }
 
         // Generate ephemeral keypair for this encryption
@@ -90,7 +92,9 @@ impl<'a> DHIES<'a> {
     /// Decrypts a message encrypted with DHIES
     pub fn decrypt(&self, encrypted_message: &[u8], sender_public_key: &[u8]) -> Result<Vec<u8>> {
         if !self.key_manager.has_private_capability() {
-            return Err(Error::InvalidCapability);
+            return Err(Error::InvalidCapability(
+                "Recipient key manager lacks private capability".into(),
+            ));
         }
 
         // Extract components: nonce (24) + ephemeral_public (32) + ciphertext + mac (32)
@@ -289,10 +293,23 @@ impl CypherManager {
         })
     }
 
-    /// Perform Diffie-Hellman key exchange
-    pub fn perform_diffie_hellman(&self, other_public_key: &[u8]) -> Result<Vec<u8>> {
+    /// Perform Diffie-Hellman key exchange with another key manager
+    pub fn perform_diffie_hellman(
+        &self,
+        other: &dyn super::abstract_key_manager::AbstractKeyManager,
+    ) -> Result<Vec<u8>> {
+        // Get the cypher public key from the other key manager
+        let other_id = other.id();
+        let other_public_key = get_cypher_public_key_from_id(&other_id)?;
+        self.perform_diffie_hellman_with_key(&other_public_key)
+    }
+
+    /// Perform Diffie-Hellman key exchange with a public key
+    pub fn perform_diffie_hellman_with_key(&self, other_public_key: &[u8]) -> Result<Vec<u8>> {
         if self.base.capability != Capability::Private {
-            return Err(Error::InvalidCapability);
+            return Err(Error::InvalidCapability(
+                "Private capability required for Diffie-Hellman".into(),
+            ));
         }
 
         let secret_key = self
@@ -389,7 +406,48 @@ impl CypherOperations for CypherManager {
 
 /// Implementation of cypher operations
 pub struct CypherOpsImpl {
-    cypher_keypair: KeyPairImpl,
+    pub cypher_keypair: KeyPairImpl,
+}
+
+impl super::abstract_key_manager::CypherOps for CypherOpsImpl {
+    fn hmac(&self, message: &str) -> Result<Option<Vec<u8>>> {
+        if let Some(secret_key) = &self.cypher_keypair.secret_key {
+            use crate::crypto::hmac;
+            let result = hmac("sha256", secret_key, message.as_bytes())?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn signcrypt(&self, _plaintext: &str, _public_keys: &[Vec<u8>]) -> Result<String> {
+        Err(Error::NotImplemented("Signcrypt not implemented".into()))
+    }
+
+    fn decrypt(&self, _encrypted_message: &str, _sender_key: Option<&[u8]>) -> Result<String> {
+        Err(Error::NotImplemented("Decrypt not implemented".into()))
+    }
+
+    fn diffie_hellman(&self, public_key: &[u8]) -> Result<Vec<u8>> {
+        if let Some(secret_key_bytes) = &self.cypher_keypair.secret_key {
+            let secret_key_array: [u8; 32] = secret_key_bytes[..32]
+                .try_into()
+                .map_err(|_| Error::InvalidKeyFormat("Invalid secret key size".into()))?;
+            let secret = StaticSecret::from(secret_key_array);
+
+            let public_key_array: [u8; 32] = public_key[..32]
+                .try_into()
+                .map_err(|_| Error::InvalidKeyFormat("Invalid public key size".into()))?;
+            let their_public = PublicKey::from(public_key_array);
+
+            let shared_secret = secret.diffie_hellman(&their_public);
+            Ok(shared_secret.to_bytes().to_vec())
+        } else {
+            Err(Error::InvalidCapability(
+                "No secret key for Diffie-Hellman".into(),
+            ))
+        }
+    }
 }
 
 impl CypherOpsImpl {
@@ -451,7 +509,6 @@ impl CypherOpsImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vaultys_id::KeyManagerTrait;
     use crate::Ed25519Manager;
 
     #[test]

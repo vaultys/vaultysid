@@ -58,10 +58,10 @@ export const instanciateContact = (c: StoredContact) => {
   } else if (c.type === 4) {
     vaultysId = new VaultysId(Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
   } else {
-    // console.log(c.keyManager.signer.publicKey.length);
-    if (c.keyManager.signer.publicKey.length === 1952) {
+    //console.log(c.keyManager.signer.publicKey.length);
+    if (c.keyManager.signer.publicKey.length === 2592) {
       vaultysId = new VaultysId(DilithiumManager.instantiate(c.keyManager), c.certificate, c.type);
-    } else if (c.keyManager.signer.publicKey.length === 1984) {
+    } else if (c.keyManager.signer.publicKey.length === 2592 + 32) {
       vaultysId = new VaultysId(HybridManager.instantiate(c.keyManager), c.certificate, c.type);
     } else if ((c.keyManager as DeprecatedKeyManager).proof) {
       //console.log(c);

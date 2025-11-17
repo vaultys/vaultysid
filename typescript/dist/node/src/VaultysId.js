@@ -73,12 +73,12 @@ class VaultysId {
             return new VaultysId(f2m, certificate, type);
         }
         else {
-            // console.log(cleanId.length);
-            if (cleanId.length === 1998) {
+            //console.log(cleanId.length);
+            if (cleanId.length === 2638) {
                 const pqm = KeyManager_1.DilithiumManager.fromId(cleanId.slice(1));
                 return new VaultysId(pqm, certificate, type);
             }
-            else if (cleanId.length === 2030) {
+            else if (cleanId.length === 2638 + 32) {
                 const pqm = KeyManager_1.HybridManager.fromId(cleanId.slice(1));
                 return new VaultysId(pqm, certificate, type);
             }
@@ -160,7 +160,7 @@ class VaultysId {
             return new VaultysId(f2m, undefined, type);
         }
         else {
-            //console.log(secretBuffer.length);
+            // console.log(secretBuffer.length);
             if (secretBuffer.length === 73) {
                 const pqm = KeyManager_1.DilithiumManager.fromSecret(secretBuffer.slice(1));
                 return new VaultysId(pqm, undefined, type);
@@ -438,7 +438,7 @@ VaultysId.createPublicKeyCredentialOptionsPQC = () => {
                 },
             },
         },
-        pubKeyCredParams: [{ type: "public-key", alg: pqCrypto_1.PQ_COSE_ALG.DILITHIUM2 }],
+        pubKeyCredParams: [{ type: "public-key", alg: pqCrypto_1.PQ_COSE_ALG.DILITHIUM5 }],
     };
     return options;
 };

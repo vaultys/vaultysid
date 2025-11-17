@@ -1,4 +1,4 @@
-use vaultysid::{DeprecatedKeyManager, Ed25519Manager, VaultysId};
+use vaultysid::{AbstractKeyManager, Ed25519Manager, VaultysId};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -52,9 +52,9 @@ async fn main() -> anyhow::Result<()> {
     println!("   Manager ID length: {} bytes", ed_id.len());
 
     // Example 7: Sign data with Ed25519Manager
+    println!("\n7. Signing and verifying data...");
     let data = b"Test message for signing";
-    let signer = ed_manager.get_signer_ops()?;
-    let signature = signer.sign(data)?;
+    let signature = ed_manager.sign(data)?.expect("Failed to sign");
     println!("   Data signed with Ed25519");
 
     let verified = ed_manager.verify(data, &signature, None);
@@ -65,35 +65,28 @@ async fn main() -> anyhow::Result<()> {
     let alice = Ed25519Manager::generate()?;
     let bob = Ed25519Manager::generate()?;
 
-    let alice_cypher = alice.get_cypher_ops()?;
-    let bob_cypher = bob.get_cypher_ops()?;
+    let alice_shared = alice.perform_diffie_hellman(&bob)?;
+    let bob_shared = bob.perform_diffie_hellman(&alice)?;
 
-    let shared_secret_alice = alice_cypher.diffie_hellman(&bob.cypher.public_key)?;
-    let shared_secret_bob = bob_cypher.diffie_hellman(&alice.cypher.public_key)?;
+    println!("   Shared secrets match: {}", alice_shared == bob_shared);
+    println!("   Shared secret length: {} bytes", alice_shared.len());
 
-    println!(
-        "   Shared secrets match: {}",
-        shared_secret_alice == shared_secret_bob
-    );
-    println!(
-        "   Shared secret length: {} bytes",
-        shared_secret_alice.len()
-    );
+    // Example 9: DHIES encryption
+    println!("\n9. Testing DHIES encryption...");
+    let message = b"Secret message";
+    let encrypted = alice.dhies_encrypt(message, &bob.id())?;
+    println!("   Message encrypted ({} bytes)", encrypted.len());
 
-    // Example 9: HMAC generation
-    println!("\n9. Generating HMAC...");
-    let hmac_message = "test/path/123";
-    let hmac = alice_cypher.hmac(hmac_message)?;
-    if let Some(hmac_value) = hmac {
-        println!("   HMAC generated: {}", hex::encode(&hmac_value));
-    }
+    let decrypted = bob.dhies_decrypt(&encrypted, &alice.id())?;
+    println!("   Message decrypted successfully");
+    println!("   Decryption correct: {}", decrypted == message);
 
-    // Example 10: Working with DeprecatedKeyManager
-    println!("\n10. Using DeprecatedKeyManager for backwards compatibility...");
-    let deprecated = DeprecatedKeyManager::generate_id25519()?;
-    let _dep_id = deprecated.id();
-    println!("   DeprecatedKeyManager created");
-    println!("   ID includes proof: {}", deprecated.proof.is_some());
+    // Example 10: Clean up secure data
+    println!("\n10. Cleaning up secure data...");
+    let mut temp_manager = Ed25519Manager::generate()?;
+    println!("   Manager created with private keys");
+    temp_manager.clean_secure_data();
+    println!("   Secure data cleaned from memory");
 
     // Example 11: Round-trip with secret
     println!("\n11. Secret export and import...");

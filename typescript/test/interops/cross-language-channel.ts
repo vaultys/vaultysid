@@ -183,9 +183,10 @@ if (require.main === module) {
     const args = process.argv.slice(2);
     const role = args[0] || "acceptor";
     const channelName = args[1] || "test-channel";
+    const algorithm = args[2] || "dilithium"; // Can be "ed25519" or "dilithium"
 
-    // Create IdManager
-    const vaultysId = await VaultysId.generatePerson();
+    // Create IdManager with specified algorithm
+    const vaultysId = await VaultysId.generatePerson(algorithm as "ed25519" | "dilithium");
     const manager = new IdManager(vaultysId, MemoryStorage());
     manager.setProtocolVersion(1);
     manager.name = role === "acceptor" ? "Bob (TypeScript)" : "Alice (TypeScript)";
@@ -193,9 +194,11 @@ if (require.main === module) {
 
     console.log("TypeScript IdManager created:");
     console.log(`  Role: ${role}`);
+    console.log(`  Algorithm: ${algorithm}`);
     console.log(`  DID: ${manager.vaultysId.did}`);
     console.log(`  Name: ${manager.name}`);
     console.log(`  Email: ${manager.email}`);
+    console.log(`  ID length: ${manager.vaultysId.id.length} bytes${algorithm === "dilithium" ? " (Dilithium has larger keys)" : ""}`);
 
     // Create cross-language channel
     const channel = new CrossLanguageChannel(channelName);

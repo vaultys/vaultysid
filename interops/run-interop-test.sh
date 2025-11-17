@@ -28,14 +28,17 @@ case "$MODE" in
         echo -e "${YELLOW}Running compatibility tests...${NC}"
 
         # First generate TypeScript test data
-        echo -e "${BLUE}Step 1: Generating TypeScript test data...${NC}"
+        echo -e "${BLUE}Step 1: Generating TypeScript test data (Ed25519 & Dilithium)...${NC}"
         cd typescript && pnpx ts-node ./test/interops/compatibility-export.ts
 
         # Then run Rust compatibility tests
-        echo -e "${BLUE}Step 2: Running Rust compatibility tests...${NC}"
-        cd ../rust && cargo test --test typescript_compatibility
+        echo -e "${BLUE}Step 2: Running Rust compatibility tests (Ed25519)...${NC}"
+        cd ../rust && cargo test --test typescript_compatibility -- --nocapture test_person_id test_machine_id test_organization_id test_challenge_verification test_ed25519_manager test_deprecated_manager test_diffie_hellman
 
-        echo -e "${GREEN}✅ All compatibility tests passed${NC}"
+        echo -e "${BLUE}Step 3: Running Rust compatibility tests (Dilithium)...${NC}"
+        cargo test --test typescript_compatibility -- --nocapture test_dilithium_person_id test_dilithium_machine_id test_dilithium_organization_id test_dilithium_signature_verification test_dilithium_manager_direct test_cross_algorithm_diffie_hellman
+
+        echo -e "${GREEN}✅ All compatibility tests passed (Ed25519 & Dilithium)${NC}"
         ;;
 
     *)
@@ -44,10 +47,8 @@ case "$MODE" in
         echo "Usage: ./run-interop-test.sh [mode]"
         echo
         echo "Modes:"
-        echo "  ts-initiator   - TypeScript initiates, Rust responds (default)"
-        echo "  rust-initiator - Rust initiates, TypeScript responds"
-        echo "  generate-data  - Generate TypeScript test data only"
-        echo "  run-compat     - Run full compatibility test suite"
+        echo "  generate-data  - Generate TypeScript test data only (Ed25519 & Dilithium)"
+        echo "  run-compat     - Run full compatibility test suite (Ed25519 & Dilithium)"
         echo
         exit 1
         ;;

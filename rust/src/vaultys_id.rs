@@ -1,6 +1,8 @@
 use crate::crypto::{hash, random_bytes};
 use crate::error::{Error, Result};
-use crate::key_manager::{Capability, DeprecatedKeyManager, Ed25519Manager};
+use crate::key_manager::{
+    abstract_key_manager::AbstractKeyManager, DilithiumManager, Ed25519Manager,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -13,28 +15,25 @@ const TYPE_FIDO2PRF: u8 = 4;
 
 const SIGN_INCIPIT: &[u8] = b"VAULTYS_SIGN";
 
+/// Supported cryptographic algorithms
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Algorithm {
+    Ed25519,
+    Dilithium,
+}
+
 /// Represents a VaultysId with its associated key manager
+/// VaultysId struct that holds a key manager
 pub struct VaultysId {
     pub id_type: u8,
-    pub key_manager: Box<dyn KeyManagerTrait>,
+    pub key_manager: Box<dyn AbstractKeyManager + 'static>,
     pub certificate: Option<Vec<u8>>,
 }
 
 /// Trait that all key managers must implement for use with VaultysId
 pub trait KeyManagerTrait: Send + Sync {
-    fn id(&self) -> Vec<u8>;
-    fn get_secret(&self) -> Result<Vec<u8>>;
-    fn sign(&self, data: &[u8]) -> Result<Option<Vec<u8>>>;
-    fn verify(&self, data: &[u8], signature: &[u8], user_verification: Option<bool>) -> bool;
-    fn clean_secure_data(&mut self);
-    fn capability(&self) -> Capability;
-    fn version(&self) -> u8;
-    fn perform_diffie_hellman(&self, other_public_key: &[u8]) -> Result<Vec<u8>>;
-    fn dhies_encrypt(&self, message: &[u8], recipient_id: &[u8]) -> Result<Vec<u8>>;
-    fn dhies_decrypt(&self, encrypted_message: &[u8], sender_id: &[u8]) -> Result<Vec<u8>>;
+    // VaultysID-specific operations that aren't in AbstractKeyManager
     fn get_hmac(&self, message: &str) -> Result<Option<Vec<u8>>>;
-    fn signcrypt(&self, plaintext: &str, recipient_ids: &[Vec<u8>]) -> Result<String>;
-    fn decrypt(&self, encrypted_message: &str, sender_id: Option<&[u8]>) -> Result<String>;
     fn get_fingerprint(&self) -> Vec<u8>;
     fn get_did(&self, id_type: u8) -> String;
     fn as_any(&self) -> &dyn std::any::Any;
@@ -43,90 +42,27 @@ pub trait KeyManagerTrait: Send + Sync {
 
 // Implement the trait for Ed25519Manager
 impl KeyManagerTrait for Ed25519Manager {
-    fn id(&self) -> Vec<u8> {
-        self.id()
-    }
-
-    fn get_secret(&self) -> Result<Vec<u8>> {
-        self.get_secret()
-    }
-
-    fn sign(&self, data: &[u8]) -> Result<Option<Vec<u8>>> {
-        if self.base.capability != Capability::Private {
-            return Ok(None);
-        }
-        let signer = self.get_signer_ops()?;
-        Ok(Some(signer.sign(data)?))
-    }
-
-    fn verify(&self, data: &[u8], signature: &[u8], user_verification: Option<bool>) -> bool {
-        self.verify(data, signature, user_verification)
-    }
-
-    fn clean_secure_data(&mut self) {
-        self.clean_secure_data()
-    }
-
-    fn capability(&self) -> Capability {
-        self.base.capability
-    }
-
-    fn version(&self) -> u8 {
-        self.base.version
-    }
-
-    fn perform_diffie_hellman(&self, other_public_key: &[u8]) -> Result<Vec<u8>> {
-        let cypher = self.get_cypher_ops()?;
-        cypher.diffie_hellman(other_public_key)
-    }
-
-    fn dhies_encrypt(&self, message: &[u8], recipient_id: &[u8]) -> Result<Vec<u8>> {
-        let recipient_public_key =
-            crate::key_manager::cypher_manager::get_cypher_public_key_from_id(recipient_id)?;
-        let dhies = crate::key_manager::cypher_manager::DHIES::new(
-            self as &dyn crate::key_manager::cypher_manager::CypherOperations,
-        );
-        dhies.encrypt(message, &recipient_public_key)
-    }
-
-    fn dhies_decrypt(&self, encrypted_message: &[u8], sender_id: &[u8]) -> Result<Vec<u8>> {
-        let sender_public_key =
-            crate::key_manager::cypher_manager::get_cypher_public_key_from_id(sender_id)?;
-        let dhies = crate::key_manager::cypher_manager::DHIES::new(
-            self as &dyn crate::key_manager::cypher_manager::CypherOperations,
-        );
-        dhies.decrypt(encrypted_message, &sender_public_key)
-    }
-
     fn get_hmac(&self, message: &str) -> Result<Option<Vec<u8>>> {
-        let cypher = self.get_cypher_ops()?;
-        cypher.hmac(message)
-    }
-
-    fn signcrypt(&self, _plaintext: &str, _recipient_ids: &[Vec<u8>]) -> Result<String> {
-        // Saltpack signcrypt not implemented in this version
-        Err(Error::Other(
-            "Signcrypt not implemented in this version".into(),
-        ))
-    }
-
-    fn decrypt(&self, _encrypted_message: &str, _sender_id: Option<&[u8]>) -> Result<String> {
-        // Saltpack decrypt not implemented in this version
-        Err(Error::Other(
-            "Decrypt not implemented in this version".into(),
-        ))
+        if let Some(secret_key) = &self.cypher.secret_key {
+            use crate::crypto::hmac;
+            let data = format!("VaultysID/{}/end", message);
+            Ok(Some(hmac("sha256", secret_key, data.as_bytes())?))
+        } else {
+            Ok(None)
+        }
     }
 
     fn get_fingerprint(&self) -> Vec<u8> {
-        let id = self.id();
+        use crate::key_manager::abstract_key_manager::AbstractKeyManager;
+        let id = AbstractKeyManager::id(self);
         hash("sha224", &id)
     }
 
     fn get_did(&self, id_type: u8) -> String {
-        // Match TypeScript: Buffer.concat([Buffer.from([this.type]), hash("SHA224", this.keyManager.id)])
+        use crate::key_manager::abstract_key_manager::AbstractKeyManager;
         let mut fp_bytes = Vec::new();
         fp_bytes.push(id_type);
-        fp_bytes.extend_from_slice(&hash("sha224", &self.id()));
+        fp_bytes.extend_from_slice(&hash("sha224", &AbstractKeyManager::id(self)));
         let fp_hex = crate::crypto::to_hex(&fp_bytes);
         format!("did:vaultys:{}", &fp_hex[0..40])
     }
@@ -140,84 +76,29 @@ impl KeyManagerTrait for Ed25519Manager {
     }
 }
 
-// Implement the trait for DeprecatedKeyManager
-impl KeyManagerTrait for DeprecatedKeyManager {
-    fn id(&self) -> Vec<u8> {
-        self.id()
-    }
-
-    fn get_secret(&self) -> Result<Vec<u8>> {
-        self.get_secret()
-    }
-
-    fn sign(&self, data: &[u8]) -> Result<Option<Vec<u8>>> {
-        self.sign(data)
-    }
-
-    fn verify(&self, data: &[u8], signature: &[u8], user_verification: Option<bool>) -> bool {
-        self.verify(data, signature, user_verification)
-    }
-
-    fn clean_secure_data(&mut self) {
-        self.clean_secure_data()
-    }
-
-    fn capability(&self) -> Capability {
-        self.capability
-    }
-
-    fn version(&self) -> u8 {
-        self.version
-    }
-
-    fn perform_diffie_hellman(&self, other_public_key: &[u8]) -> Result<Vec<u8>> {
-        let cypher = self.get_cypher()?;
-        cypher.diffie_hellman(other_public_key)
-    }
-
-    fn dhies_encrypt(&self, _message: &[u8], _recipient_id: &[u8]) -> Result<Vec<u8>> {
-        // Simplified implementation for deprecated manager
-        Err(Error::Other(
-            "DHIES not fully implemented for deprecated manager".into(),
-        ))
-    }
-
-    fn dhies_decrypt(&self, _encrypted_message: &[u8], _sender_id: &[u8]) -> Result<Vec<u8>> {
-        // Simplified implementation for deprecated manager
-        Err(Error::Other(
-            "DHIES not fully implemented for deprecated manager".into(),
-        ))
-    }
-
+// Implement the trait for DilithiumManager
+impl KeyManagerTrait for DilithiumManager {
     fn get_hmac(&self, message: &str) -> Result<Option<Vec<u8>>> {
-        let cypher = self.get_cypher()?;
-        cypher.hmac(message)
-    }
-
-    fn signcrypt(&self, _plaintext: &str, _recipient_ids: &[Vec<u8>]) -> Result<String> {
-        // Saltpack signcrypt not implemented in this version
-        Err(Error::Other(
-            "Signcrypt not implemented in this version".into(),
-        ))
-    }
-
-    fn decrypt(&self, _encrypted_message: &str, _sender_id: Option<&[u8]>) -> Result<String> {
-        // Saltpack decrypt not implemented in this version
-        Err(Error::Other(
-            "Decrypt not implemented in this version".into(),
-        ))
+        if let Some(secret_key) = &self.cypher.secret_key {
+            use crate::crypto::hmac;
+            let result = hmac("sha256", secret_key, message.as_bytes())?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
     }
 
     fn get_fingerprint(&self) -> Vec<u8> {
-        let id = self.id();
+        use crate::key_manager::abstract_key_manager::AbstractKeyManager;
+        let id = AbstractKeyManager::id(self);
         hash("sha224", &id)
     }
 
     fn get_did(&self, id_type: u8) -> String {
-        // Match TypeScript: Buffer.concat([Buffer.from([this.type]), hash("SHA224", this.keyManager.id)])
+        use crate::key_manager::abstract_key_manager::AbstractKeyManager;
         let mut fp_bytes = Vec::new();
         fp_bytes.push(id_type);
-        fp_bytes.extend_from_slice(&hash("sha224", &self.id()));
+        fp_bytes.extend_from_slice(&hash("sha224", &AbstractKeyManager::id(self)));
         let fp_hex = crate::crypto::to_hex(&fp_bytes);
         format!("did:vaultys:{}", &fp_hex[0..40])
     }
@@ -234,7 +115,7 @@ impl KeyManagerTrait for DeprecatedKeyManager {
 impl VaultysId {
     /// Create a new VaultysId
     pub fn new(
-        key_manager: Box<dyn KeyManagerTrait>,
+        key_manager: Box<dyn AbstractKeyManager>,
         certificate: Option<Vec<u8>>,
         id_type: u8,
     ) -> Self {
@@ -242,6 +123,39 @@ impl VaultysId {
             id_type,
             key_manager,
             certificate,
+        }
+    }
+
+    /// Create from secret
+    pub fn from_secret(secret: &[u8], certificate: Option<Vec<u8>>) -> Result<Self> {
+        if secret.is_empty() {
+            return Err(Error::InvalidIdFormat);
+        }
+
+        let id_type = secret[0];
+        let secret_data = &secret[1..];
+
+        match id_type {
+            TYPE_MACHINE | TYPE_PERSON | TYPE_ORGANIZATION => {
+                // Determine which manager to use based on secret length
+                let key_manager: Box<dyn AbstractKeyManager> = if secret.len() == 77 {
+                    // Ed25519Manager secret
+                    Box::new(Ed25519Manager::from_secret(secret_data)?)
+                } else if secret.len() == 73 {
+                    // DilithiumManager secret (much larger due to Dilithium keys)
+                    Box::new(DilithiumManager::from_secret(secret_data)?)
+                } else {
+                    // Try DeprecatedKeyManager (needs to implement AbstractKeyManager)
+                    return Err(Error::InvalidIdFormat);
+                };
+
+                Ok(Self {
+                    id_type,
+                    key_manager,
+                    certificate,
+                })
+            }
+            _ => Err(Error::InvalidType(id_type)),
         }
     }
 
@@ -281,13 +195,17 @@ impl VaultysId {
                 // Determine which manager to use based on ID length
                 // Ed25519Manager serializes to 76 bytes (1 byte version + 32 bytes x + 32 bytes e)
                 // With type byte prefix, total is 77 bytes
-                // DeprecatedKeyManager includes proof field, making it longer
-                let key_manager: Box<dyn KeyManagerTrait> = if clean_id.len() <= 77 {
+                // DilithiumManager ID is much larger (1351 bytes for public keys)
+                // DeprecatedKeyManager includes proof field, making it longer than Ed25519 but shorter than Dilithium
+                let key_manager: Box<dyn AbstractKeyManager> = if clean_id.len() == 77 {
                     // Ed25519Manager ID (76 bytes + 1 type byte = 77 total)
                     Box::new(Ed25519Manager::from_id(id_data)?)
+                } else if clean_id.len() > 1300 {
+                    // DilithiumManager ID (around 1351 bytes + 1 type byte)
+                    Box::new(DilithiumManager::from_id(id_data)?)
                 } else {
-                    // DeprecatedKeyManager ID (longer due to proof field)
-                    Box::new(DeprecatedKeyManager::from_id(id_data)?)
+                    // DeprecatedKeyManager ID (longer than Ed25519 due to proof field)
+                    return Err(Error::InvalidIdFormat);
                 };
 
                 Ok(Self {
@@ -302,10 +220,20 @@ impl VaultysId {
 
     /// Create from entropy
     pub async fn from_entropy(entropy: &[u8], id_type: u8) -> Result<Self> {
-        let key_manager: Box<dyn KeyManagerTrait> = match id_type {
-            TYPE_MACHINE | TYPE_PERSON | TYPE_ORGANIZATION => {
-                Box::new(Ed25519Manager::from_entropy(entropy)?)
-            }
+        Self::from_entropy_with_alg(entropy, id_type, Algorithm::Ed25519).await
+    }
+
+    /// Create from entropy with algorithm selection
+    pub async fn from_entropy_with_alg(
+        entropy: &[u8],
+        id_type: u8,
+        alg: Algorithm,
+    ) -> Result<Self> {
+        let key_manager: Box<dyn AbstractKeyManager> = match id_type {
+            TYPE_MACHINE | TYPE_PERSON | TYPE_ORGANIZATION => match alg {
+                Algorithm::Dilithium => Box::new(DilithiumManager::from_entropy(entropy)?),
+                Algorithm::Ed25519 => Box::new(Ed25519Manager::from_entropy(entropy)?),
+            },
             _ => return Err(Error::InvalidType(id_type)),
         };
 
@@ -318,20 +246,35 @@ impl VaultysId {
 
     /// Generate a new machine ID
     pub async fn generate_machine() -> Result<Self> {
+        Self::generate_machine_with_alg(Algorithm::Ed25519).await
+    }
+
+    /// Generate a new machine ID with algorithm selection
+    pub async fn generate_machine_with_alg(alg: Algorithm) -> Result<Self> {
         let entropy = random_bytes(32);
-        Self::from_entropy(&entropy, TYPE_MACHINE).await
+        Self::from_entropy_with_alg(&entropy, TYPE_MACHINE, alg).await
     }
 
     /// Generate a new person ID
     pub async fn generate_person() -> Result<Self> {
+        Self::generate_person_with_alg(Algorithm::Ed25519).await
+    }
+
+    /// Generate a new person ID with algorithm selection
+    pub async fn generate_person_with_alg(alg: Algorithm) -> Result<Self> {
         let entropy = random_bytes(32);
-        Self::from_entropy(&entropy, TYPE_PERSON).await
+        Self::from_entropy_with_alg(&entropy, TYPE_PERSON, alg).await
     }
 
     /// Generate a new organization ID
     pub async fn generate_organization() -> Result<Self> {
+        Self::generate_organization_with_alg(Algorithm::Ed25519).await
+    }
+
+    /// Generate a new organization ID with algorithm selection
+    pub async fn generate_organization_with_alg(alg: Algorithm) -> Result<Self> {
         let entropy = random_bytes(32);
-        Self::from_entropy(&entropy, TYPE_ORGANIZATION).await
+        Self::from_entropy_with_alg(&entropy, TYPE_ORGANIZATION, alg).await
     }
 
     /// Get the complete ID including type byte
@@ -346,29 +289,6 @@ impl VaultysId {
         let mut result = vec![self.id_type];
         result.extend_from_slice(&self.key_manager.get_secret()?);
         Ok(result)
-    }
-
-    /// Create from secret
-    pub fn from_secret(secret: &[u8], certificate: Option<Vec<u8>>) -> Result<Self> {
-        if secret.is_empty() {
-            return Err(Error::InvalidIdFormat);
-        }
-
-        let id_type = secret[0];
-        let secret_data = &secret[1..];
-
-        let key_manager: Box<dyn KeyManagerTrait> = match id_type {
-            TYPE_MACHINE | TYPE_PERSON | TYPE_ORGANIZATION => {
-                Box::new(Ed25519Manager::from_secret(secret_data)?)
-            }
-            _ => return Err(Error::InvalidType(id_type)),
-        };
-
-        Ok(Self {
-            id_type,
-            key_manager,
-            certificate,
-        })
     }
 
     /// Generate a new VaultysId with optional type
@@ -399,9 +319,11 @@ impl VaultysId {
     }
 
     /// Get fingerprint
+    /// Get the fingerprint for this id
     pub fn fingerprint(&self) -> Vec<u8> {
         let mut fp_bytes = vec![self.id_type];
-        fp_bytes.extend_from_slice(&self.key_manager.get_fingerprint());
+        let id = self.key_manager.id();
+        fp_bytes.extend_from_slice(&hash("sha224", &id));
         fp_bytes
     }
 
@@ -424,7 +346,11 @@ impl VaultysId {
 
     /// Get DID
     pub fn did(&self) -> String {
-        self.key_manager.get_did(self.id_type)
+        let mut fp_bytes = Vec::new();
+        fp_bytes.push(self.id_type);
+        fp_bytes.extend_from_slice(&hash("sha224", &self.key_manager.id()));
+        let fp_hex = crate::crypto::to_hex(&fp_bytes);
+        format!("did:vaultys:{}", &fp_hex[0..40])
     }
 
     /// Get DID document
@@ -472,16 +398,18 @@ impl VaultysId {
     }
 
     /// Get OTP HMAC
+    /// Get HMAC for OTP authentication
     pub fn get_otp_hmac(&self, otp_type: &str, counter: u64) -> Result<Option<Vec<u8>>> {
         let otp = format!("{}/{}", otp_type, counter);
-        self.key_manager.get_hmac(&otp)
+        // Use get_secret_hash for HMAC-like functionality
+        Ok(Some(self.key_manager.get_secret_hash(otp.as_bytes())?))
     }
 
     /// Perform Diffie-Hellman key exchange
     pub async fn perform_diffie_hellman(&self, other_id: &[u8]) -> Result<Vec<u8>> {
         let other_vaultys_id = Self::from_id(other_id, None, None)?;
-        let other_public_key = &other_vaultys_id.key_manager.id();
-        self.key_manager.perform_diffie_hellman(other_public_key)
+        self.key_manager
+            .perform_diffie_hellman(&*other_vaultys_id.key_manager)
     }
 
     /// DHIES encrypt
@@ -513,7 +441,9 @@ impl VaultysId {
         let signature = self
             .key_manager
             .sign(&result)?
-            .ok_or(Error::InvalidCapability)?;
+            .ok_or(Error::InvalidCapability(
+                "No signature capability available".into(),
+            ))?;
 
         Ok(SignedChallenge { result, signature })
     }
@@ -529,7 +459,9 @@ impl VaultysId {
         let signature = self
             .key_manager
             .sign(&result)?
-            .ok_or(Error::InvalidCapability)?;
+            .ok_or(Error::InvalidCapability(
+                "No signature capability available".into(),
+            ))?;
 
         Ok(SignedChallenge { result, signature })
     }

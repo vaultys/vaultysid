@@ -10,7 +10,8 @@ pub mod vaultys_id;
 pub use challenger::{ChallengeType, Challenger};
 pub use error::{Error, Result};
 pub use key_manager::{
-    AbstractKeyManager, CypherManager, DeprecatedKeyManager, Ed25519Manager, KeyManager, KeyPair,
+    AbstractKeyManager, CypherManager, DeprecatedKeyManager, DilithiumManager, Ed25519Manager,
+    KeyManager, KeyPair,
 };
 pub use vaultys_id::VaultysId;
 

@@ -37,23 +37,23 @@ exports.secureErase = exports.fromUTF8 = exports.fromHex = exports.fromBase64 = 
 const tweetnacl_1 = __importStar(require("tweetnacl"));
 const buffer_1 = require("buffer/");
 Object.defineProperty(exports, "Buffer", { enumerable: true, get: function () { return buffer_1.Buffer; } });
-const sha2_1 = require("@noble/hashes/sha2");
-const hmac_1 = require("@noble/hashes/hmac");
+const sha2_js_1 = require("@noble/hashes/sha2.js");
+const hmac_js_1 = require("@noble/hashes/hmac.js");
 const getAlgorithm = (alg) => {
     const cleanAlg = alg.replaceAll("-", "").toLowerCase();
     if (cleanAlg === "sha256")
-        return sha2_1.sha256;
+        return sha2_js_1.sha256;
     if (cleanAlg === "sha512")
-        return sha2_1.sha512;
+        return sha2_js_1.sha512;
     if (cleanAlg === "sha224")
-        return sha2_1.sha224;
-    return sha2_1.sha256;
+        return sha2_js_1.sha224;
+    return sha2_js_1.sha256;
 };
 const _randomBytes = (size) => buffer_1.Buffer.from((0, tweetnacl_1.randomBytes)(size));
 exports.randomBytes = _randomBytes;
 const hash = (alg, buffer) => buffer_1.Buffer.from(getAlgorithm(alg).create().update(buffer).digest());
 exports.hash = hash;
-const _hmac = (alg, key, data) => buffer_1.Buffer.from((0, hmac_1.hmac)(getAlgorithm(alg), key, data));
+const _hmac = (alg, key, data) => buffer_1.Buffer.from((0, hmac_js_1.hmac)(getAlgorithm(alg), key, typeof data === "string" ? buffer_1.Buffer.from(data, "utf8") : data));
 exports.hmac = _hmac;
 const secretbox = tweetnacl_1.default.secretbox;
 exports.secretbox = secretbox;

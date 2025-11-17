@@ -1,8 +1,8 @@
-import IdManager from "../src/IdManager";
-import VaultysId from "../src/VaultysId";
 import { Buffer } from "buffer/";
 import * as fs from "fs";
 import * as path from "path";
+import VaultysId from "../../src/VaultysId";
+import IdManager from "../../src/IdManager";
 
 // Shared memory channel that can be used by both TypeScript and Rust
 // through file-based communication
@@ -40,8 +40,9 @@ class SharedMemoryChannel {
   // Receive a message by reading from files
   async receive(): Promise<Buffer> {
     while (true) {
-      const files = fs.readdirSync(this.channelDir)
-        .filter(f => f.startsWith("response_"))
+      const files = fs
+        .readdirSync(this.channelDir)
+        .filter((f) => f.startsWith("response_"))
         .sort();
 
       if (files.length > 0) {
@@ -57,14 +58,14 @@ class SharedMemoryChannel {
       }
 
       // Wait a bit before checking again
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
 
   // Clear all messages
   clear() {
     const files = fs.readdirSync(this.channelDir);
-    files.forEach(f => {
+    files.forEach((f) => {
       fs.unlinkSync(path.join(this.channelDir, f));
     });
   }
@@ -129,9 +130,7 @@ async function testMemoryProtocol() {
 
   if (responseData.type === "CHALLENGE") {
     // 3. Sign the challenge
-    const signature = await tsManager.vaultysId.signChallenge(
-      Buffer.from(responseData.challenge, "base64")
-    );
+    const signature = await tsManager.vaultysId.signChallenge(Buffer.from(responseData.challenge, "base64"));
 
     // 4. Send signed response
     const signedResponse = {
@@ -162,7 +161,7 @@ async function testMemoryProtocol() {
       console.log(`\nContacts saved: ${contacts.length}`);
       if (contacts.length > 0) {
         console.log("Contact details:");
-        contacts.forEach(contact => {
+        contacts.forEach((contact) => {
           console.log(`  - DID: ${contact.did}`);
           console.log(`    Name: ${contact.metadata?.name || "N/A"}`);
           console.log(`    Email: ${contact.metadata?.email || "N/A"}`);
@@ -187,7 +186,6 @@ async function testMemoryProtocol() {
       const statePath = path.join(channel.getChannelPath(), "final_state.json");
       fs.writeFileSync(statePath, JSON.stringify(finalState, null, 2));
       console.log(`\nFinal state saved to: ${statePath}`);
-
     } else {
       console.log(`\n❌ Protocol failed: ${finalData.type}`);
     }

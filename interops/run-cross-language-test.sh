@@ -48,7 +48,7 @@ case "$MODE" in
         echo -e "${CYAN}[2/2] Starting Rust IdManager (askContact)...${NC}\n"
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
-        cd rust && cargo run --bin cross_language_test -- asker "$CHANNEL_NAME" && cd ..
+        cd rust && cargo run --bin cross_language_test -- asker "$CHANNEL_NAME" ed25519 && cd ..
         RUST_EXIT=$?
 
         # Wait for TypeScript to complete
@@ -92,7 +92,7 @@ case "$MODE" in
         echo -e "${CYAN}[2/2] Starting TypeScript IdManager (askContact)...${NC}\n"
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
-        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts asker "$CHANNEL_NAME"
+        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts asker "$CHANNEL_NAME" ed25519
         TS_EXIT=$?
 
         # Wait for Rust to complete
@@ -120,12 +120,100 @@ case "$MODE" in
         fi
         ;;
 
+    "dilithium"|"ts-accept-rust-ask-dilithium")
+        echo -e "${GREEN}Mode: TypeScript accepts, Rust asks (with Dilithium)${NC}\n"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+        # Start TypeScript acceptor with Dilithium in background
+        echo -e "${CYAN}[1/2] Starting TypeScript IdManager with Dilithium (acceptContact)...${NC}"
+        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" dilithium > test/interops/tmp/ts-acceptor-dilithium.log 2>&1 &
+        TS_PID=$!
+
+        # Give TypeScript time to initialize
+        sleep 5
+
+        # Start Rust asker with Dilithium
+        echo -e "${CYAN}[2/2] Starting Rust IdManager with Dilithium (askContact)...${NC}\n"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+
+        cd rust && cargo run --bin cross_language_test -- asker "$CHANNEL_NAME" dilithium && cd ..
+        RUST_EXIT=$?
+
+        # Wait for TypeScript to complete
+        wait $TS_PID
+        TS_EXIT=$?
+
+        echo -e "\n${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+        # Show TypeScript output
+        echo -e "\n${CYAN}TypeScript Output:${NC}"
+        cat typescript/test/interops/tmp/ts-acceptor-dilithium.log
+
+        if [ $TS_EXIT -eq 0 ] && [ $RUST_EXIT -eq 0 ]; then
+            echo -e "\n${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${GREEN}║                    TEST PASSED! ✅                        ║${NC}"
+            echo -e "${GREEN}║  TypeScript (Dilithium) ←→ Rust (Dilithium) SUCCESS       ║${NC}"
+            echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+        else
+            echo -e "\n${RED}╔════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${RED}║                    TEST FAILED! ❌                        ║${NC}"
+            echo -e "${RED}║     Check the logs above for error details                ║${NC}"
+            echo -e "${RED}╚════════════════════════════════════════════════════════════╝${NC}"
+            echo -e "\n${YELLOW}Debug: Channel preserved at $CHANNEL_DIR${NC}"
+            exit 1
+        fi
+        ;;
+
+    "mixed"|"ed25519-dilithium-mixed")
+        echo -e "${GREEN}Mode: Mixed algorithms - Ed25519 accepts, Dilithium asks${NC}\n"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+        # Start TypeScript acceptor with Ed25519 in background
+        echo -e "${CYAN}[1/2] Starting TypeScript IdManager with Ed25519 (acceptContact)...${NC}"
+        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" ed25519 > test/interops/tmp/ts-acceptor-mixed.log 2>&1 &
+        TS_PID=$!
+
+        # Give TypeScript time to initialize
+        sleep 5
+
+        # Start Rust asker with Dilithium
+        echo -e "${CYAN}[2/2] Starting Rust IdManager with Dilithium (askContact)...${NC}\n"
+        echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
+
+        cd rust && cargo run --bin cross_language_test -- asker "$CHANNEL_NAME" dilithium && cd ..
+        RUST_EXIT=$?
+
+        # Wait for TypeScript to complete
+        wait $TS_PID
+        TS_EXIT=$?
+
+        echo -e "\n${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+        # Show TypeScript output
+        echo -e "\n${CYAN}TypeScript Output:${NC}"
+        cat typescript/test/interops/tmp/ts-acceptor-mixed.log
+
+        if [ $TS_EXIT -eq 0 ] && [ $RUST_EXIT -eq 0 ]; then
+            echo -e "\n${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${GREEN}║                    TEST PASSED! ✅                        ║${NC}"
+            echo -e "${GREEN}║  TypeScript (Ed25519) ←→ Rust (Dilithium) SUCCESS         ║${NC}"
+            echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
+        else
+            echo -e "\n${RED}╔════════════════════════════════════════════════════════════╗${NC}"
+            echo -e "${RED}║                    TEST FAILED! ❌                        ║${NC}"
+            echo -e "${RED}║     Check the logs above for error details                ║${NC}"
+            echo -e "${RED}╚════════════════════════════════════════════════════════════╝${NC}"
+            echo -e "\n${YELLOW}Debug: Channel preserved at $CHANNEL_DIR${NC}"
+            exit 1
+        fi
+        ;;
+
     "manual")
         echo -e "${GREEN}Manual mode - run the commands in separate terminals:${NC}\n"
         echo -e "${YELLOW}Terminal 1 (TypeScript acceptor):${NC}"
-        echo -e "  pnpm ts-node test/interops/cross-language-channel.ts acceptor $CHANNEL_NAME\n"
+        echo -e "  pnpm ts-node test/interops/cross-language-channel.ts acceptor $CHANNEL_NAME [ed25519|dilithium]\n"
         echo -e "${YELLOW}Terminal 2 (Rust asker):${NC}"
-        echo -e "  cd rust && cargo run --bin cross_language_test -- asker $CHANNEL_NAME\n"
+        echo -e "  cd rust && cargo run --bin cross_language_test -- asker $CHANNEL_NAME [ed25519|dilithium]\n"
         exit 0
         ;;
 
@@ -134,14 +222,16 @@ case "$MODE" in
         echo "Usage: ./run-cross-language-test.sh [mode] [channel-name]"
         echo ""
         echo "Modes:"
-        echo "  default    - TypeScript accepts, Rust asks (default)"
-        echo "  reverse    - Rust accepts, TypeScript asks"
+        echo "  default    - TypeScript accepts, Rust asks with Ed25519 (default)"
+        echo "  reverse    - Rust accepts, TypeScript asks with Ed25519"
+        echo "  dilithium  - TypeScript accepts, Rust asks with Dilithium"
+        echo "  mixed      - Mixed algorithms (Ed25519 accepts, Dilithium asks)"
         echo "  manual     - Show commands for manual testing"
         echo ""
         echo "Example:"
         echo "  ./run-cross-language-test.sh"
-        echo "  ./run-cross-language-test.sh reverse"
-        echo "  ./run-cross-language-test.sh default my-channel"
+        echo "  ./run-cross-language-test.sh dilithium"
+        echo "  ./run-cross-language-test.sh mixed my-channel"
         exit 1
         ;;
 esac

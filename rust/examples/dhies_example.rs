@@ -1,5 +1,4 @@
-use vaultysid::vaultys_id::KeyManagerTrait;
-use vaultysid::{Ed25519Manager, Result};
+use vaultysid::{AbstractKeyManager, Ed25519Manager, Result};
 
 fn main() -> Result<()> {
     println!("=== DHIES (Diffie-Hellman Integrated Encryption Scheme) Example ===\n");
