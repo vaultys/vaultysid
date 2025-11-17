@@ -1,5 +1,6 @@
 use crate::crypto::{constant_time_eq, hash, hmac, random_bytes, secure_erase};
 use crate::error::{Error, Result};
+#[allow(unused_imports)]
 use crate::key_manager::{AbstractKeyManager, Capability, KeyPairImpl};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};

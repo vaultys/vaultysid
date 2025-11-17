@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 use vaultysid::crypto::{hash, hmac, random_bytes};
 use vaultysid::key_manager::DHIES;
-use vaultysid::{DeprecatedKeyManager, Ed25519Manager, VaultysId};
+use vaultysid::{AbstractKeyManager, DeprecatedKeyManager, Ed25519Manager, VaultysId};
 
 fn bench_ed25519_generation(c: &mut Criterion) {
     c.bench_function("ed25519_generate", |b| {
@@ -23,13 +23,13 @@ fn bench_ed25519_sign_verify(c: &mut Criterion) {
 
     c.bench_function("ed25519_sign", |b| {
         b.iter(|| {
-            let signer = manager.get_signer_ops().unwrap();
+            let signer = manager.get_signer().unwrap();
             signer.sign(black_box(data)).unwrap()
         });
     });
 
-    let signer = manager.get_signer_ops().unwrap();
-    let signature = signer.sign(data).unwrap();
+    let signer = manager.get_signer().unwrap();
+    let signature = signer.sign(data).unwrap().unwrap();
 
     c.bench_function("ed25519_verify", |b| {
         b.iter(|| manager.verify(black_box(data), black_box(&signature), None));
@@ -39,7 +39,7 @@ fn bench_ed25519_sign_verify(c: &mut Criterion) {
 fn bench_diffie_hellman(c: &mut Criterion) {
     let alice = Ed25519Manager::generate().unwrap();
     let bob = Ed25519Manager::generate().unwrap();
-    let alice_cypher = alice.get_cypher_ops().unwrap();
+    let alice_cypher = alice.get_cypher().unwrap();
 
     c.bench_function("diffie_hellman", |b| {
         b.iter(|| {

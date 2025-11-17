@@ -150,27 +150,3 @@ rm -f /tmp/cross-lang-test.log
 
 echo -e "\n${CYAN}Test suite completed successfully!${NC}"
 echo -e "${CYAN}Both Ed25519 and Dilithium (post-quantum) algorithms are working correctly.${NC}\n"
-
-# Show algorithm comparison
-echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════════${NC}"
-echo -e "${YELLOW}Algorithm Comparison Summary:${NC}"
-echo -e "${YELLOW}═══════════════════════════════════════════════════════════════════════${NC}\n"
-
-echo -e "${CYAN}Ed25519:${NC}"
-echo -e "  • Public key: 32 bytes"
-echo -e "  • Signature: 64 bytes"
-echo -e "  • Performance: Fast"
-echo -e "  • Quantum resistance: ❌ No"
-echo -e "  • Use case: Current applications\n"
-
-echo -e "${CYAN}Dilithium2:${NC}"
-echo -e "  • Public key: 1312 bytes"
-echo -e "  • Signature: 2420 bytes"
-echo -e "  • Performance: Slower than Ed25519"
-echo -e "  • Quantum resistance: ✅ Yes"
-echo -e "  • Use case: Future-proof applications\n"
-
-echo -e "${GREEN}Recommendation:${NC}"
-echo -e "  • Use Ed25519 for current applications with size/speed constraints"
-echo -e "  • Use Dilithium for applications requiring long-term security"
-echo -e "  • Both algorithms use X25519 for encryption (interoperable)\n"
