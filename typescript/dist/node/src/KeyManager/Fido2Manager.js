@@ -163,9 +163,9 @@ class Fido2Manager extends CypherManager_1.default {
                 const { response } = (await this.webAuthn.get(publicKey));
                 const publicKeyResponse = response;
                 const output = {
-                    s: buffer_1.Buffer.from(publicKeyResponse.signature),
-                    c: buffer_1.Buffer.from(publicKeyResponse.clientDataJSON),
-                    a: buffer_1.Buffer.from(publicKeyResponse.authenticatorData),
+                    s: publicKeyResponse.signature,
+                    c: publicKeyResponse.clientDataJSON,
+                    a: publicKeyResponse.authenticatorData,
                 };
                 return buffer_1.Buffer.from((0, msgpack_1.encode)(output));
             },
