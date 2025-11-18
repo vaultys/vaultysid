@@ -12,22 +12,22 @@ importers:
         specifier: ^3.1.2
         version: 3.1.2
       '@noble/curves':
-        specifier: ^1.9.2
-        version: 1.9.7
+        specifier: ^2.0.1
+        version: 2.0.1
       '@noble/hashes':
-        specifier: ^1.8.0
-        version: 1.8.0
+        specifier: ^2.0.1
+        version: 2.0.1
       '@noble/post-quantum':
-        specifier: ^0.4.1
-        version: 0.4.1
+        specifier: ^0.5.2
+        version: 0.5.2
       '@stricahq/bip32ed25519':
-        specifier: ^1.1.1
+        specifier: ^1.1.2
         version: 1.1.2
       '@vaultys/saltpack':
         specifier: 1.0.0-beta4
         version: 1.0.0-beta4
       cbor:
-        specifier: ^10.0.3
+        specifier: ^10.0.11
         version: 10.0.11
       tweetnacl:
         specifier: ^1.0.3
@@ -89,7 +89,7 @@ importers:
         version: 11.7.5
       playwright:
         specifier: ^1.53.1
-        version: 1.55.1
+        version: 1.56.1
       prettier:
         specifier: ^3.5.3
         version: 3.6.2
@@ -364,16 +364,21 @@ packages:
     resolution: {integrity: sha512-JEW4DEtBzfe8HvUYecLU9e6+XJnKDlUAIve8FvPzF3Kzs6Xo/KuZkZJsDH0wJXl/qEZbeeE7edxDNY3kMs39hQ==}
     engines: {node: '>= 18'}
 
-  '@noble/curves@1.9.7':
-    resolution: {integrity: sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==}
-    engines: {node: ^14.21.3 || >=16}
+  '@noble/curves@2.0.1':
+    resolution: {integrity: sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==}
+    engines: {node: '>= 20.19.0'}
 
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
 
-  '@noble/post-quantum@0.4.1':
-    resolution: {integrity: sha512-TRXjvnY9jAFNWbxOx+pKt21BNsCEWKFjMbIKwdx9CQXBudDanpY20EfOcooV7DIsRS/+Mf8D8utpUPjfGrQ8fA==}
+  '@noble/hashes@2.0.1':
+    resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/post-quantum@0.5.2':
+    resolution: {integrity: sha512-etMDBkCuB95Xj/gfsWYBD2x+84IjL4uMLd/FhGoUUG/g+eh0K2eP7pJz1EmvpN8Df3vKdoWVAc7RxIBCHQfFHQ==}
+    engines: {node: '>= 20.19.0'}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -1664,18 +1669,8 @@ packages:
     resolution: {integrity: sha512-HRDzbaKjC+AOWVXxAU/x54COGeIv9eb+6CkDSQoNTt4XyWoIJvuPsXizxu/Fr23EiekbtZwmh1IcIG/l/a10GQ==}
     engines: {node: '>=8'}
 
-  playwright-core@1.55.1:
-    resolution: {integrity: sha512-Z6Mh9mkwX+zxSlHqdr5AOcJnfp+xUWLCt9uKV18fhzA8eyxUd8NUWzAjxUh55RZKSYwDGX0cfaySdhZJGMoJ+w==}
-    engines: {node: '>=18'}
-    hasBin: true
-
   playwright-core@1.56.1:
     resolution: {integrity: sha512-hutraynyn31F+Bifme+Ps9Vq59hKuUCz7H1kDOcBs+2oGguKkWTU50bBWrtz34OUWmIwpBTWDxaRPXrIXkgvmQ==}
-    engines: {node: '>=18'}
-    hasBin: true
-
-  playwright@1.55.1:
-    resolution: {integrity: sha512-cJW4Xd/G3v5ovXtJJ52MAOclqeac9S/aGGgRzLabuF8TnIb6xHvMzKIa6JmrRzUkeXJgfL1MhukP0NK6l39h3A==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -2332,15 +2327,18 @@ snapshots:
 
   '@msgpack/msgpack@3.1.2': {}
 
-  '@noble/curves@1.9.7':
+  '@noble/curves@2.0.1':
     dependencies:
-      '@noble/hashes': 1.8.0
+      '@noble/hashes': 2.0.1
 
   '@noble/hashes@1.8.0': {}
 
-  '@noble/post-quantum@0.4.1':
+  '@noble/hashes@2.0.1': {}
+
+  '@noble/post-quantum@0.5.2':
     dependencies:
-      '@noble/hashes': 1.8.0
+      '@noble/curves': 2.0.1
+      '@noble/hashes': 2.0.1
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:
@@ -3790,15 +3788,7 @@ snapshots:
     dependencies:
       find-up: 4.1.0
 
-  playwright-core@1.55.1: {}
-
   playwright-core@1.56.1: {}
-
-  playwright@1.55.1:
-    dependencies:
-      playwright-core: 1.55.1
-    optionalDependencies:
-      fsevents: 2.3.2
 
   playwright@1.56.1:
     dependencies:
