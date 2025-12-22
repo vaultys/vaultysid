@@ -64,6 +64,13 @@ const getSignerFromCkey = (ckey: Buffer) => {
   return { publicKey } as KeyPair;
 };
 
+const serializeID_v0 = (km: Fido2Manager) => {
+  const version = Buffer.from([0x83, 0xa1, 0x76, 0]);
+  const ckey = Buffer.concat([Buffer.from([0xa1, 0x63, 0xc5, 0x00, km.ckey.length]), km.ckey]);
+  const cypher = Buffer.concat([Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length]), km.cypher.publicKey]);
+  return Buffer.concat([version, ckey, cypher]);
+};
+
 export default class Fido2Manager extends CypherManager {
   webAuthn: WebAuthnProvider;
   fid!: Buffer;
@@ -108,13 +115,16 @@ export default class Fido2Manager extends CypherManager {
   }
 
   get id() {
-    return Buffer.from(
-      encode({
-        v: this.version,
-        c: this.ckey,
-        e: this.cypher.publicKey,
-      }),
-    );
+    if (this.version === 0) return serializeID_v0(this);
+    else {
+      return Buffer.from(
+        encode({
+          v: this.version,
+          c: this.ckey,
+          e: this.cypher.publicKey,
+        }),
+      );
+    }
   }
 
   getSecret() {

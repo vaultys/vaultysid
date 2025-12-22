@@ -77,6 +77,7 @@ export default class VaultysId {
       const f2m = Fido2Manager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
     } else if (type === TYPE_FIDO2PRF) {
+      // console.log("TYPE_FIDO2PRF");
       const f2m = Fido2PRFManager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
     } else {

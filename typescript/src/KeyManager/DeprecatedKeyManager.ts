@@ -405,10 +405,11 @@ export default class DeprecatedKeyManager {
 
   verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean {
     try {
+      // console.log(this.signer.publicKey, data, signature);
       return bip32.Bip32PublicKey.fromBytes(this.signer.publicKey).toPublicKey().verify(signature, data);
     } catch (error) {
-      //console.log(error);
-      //console.log(this);
+      // console.log(error);
+      // console.log(this);
       return false;
     }
   }

@@ -82,6 +82,16 @@ export default class Fido2PRFManager extends Fido2Manager {
     return f2m;
   }
 
+  get id() {
+    return Buffer.from(
+      encode({
+        v: this.version,
+        c: this.ckey,
+        e: this.cypher.publicKey,
+      }),
+    );
+  }
+
   getSecret() {
     return Buffer.from(
       encode({
