@@ -1,0 +1,24 @@
+{
+  "name": "backward-compat-tests",
+  "version": "1.0.0",
+  "description": "Backward compatibility tests for @vaultys/id",
+  "scripts": {
+    "test": "mocha *.test.ts --require tsx",
+    "test:watch": "mocha *.test.ts --require tsx --watch",
+    "install:old": "npm install @vaultys/id@2.4.9 --save-exact",
+    "install:current": "npm link ../..",
+    "setup": "npm install && npm run install:old"
+  },
+  "devDependencies": {
+    "@types/chai": "^5.2.2",
+    "@types/mocha": "^8.2.3",
+    "@types/node": "^22.15.32",
+    "chai": "^5.2.0",
+    "mocha": "^11.7.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@vaultys/id": "2.4.9"
+  }
+}

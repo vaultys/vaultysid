@@ -1,0 +1,157 @@
+{
+  "description": "Comprehensive Go-generated test vectors for TypeScript compatibility",
+  "timestamp": "2025-12-22T23:00:29Z",
+  "version": "2.0.0",
+  "keyGeneration": {
+    "entropy": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "ed25519": {
+      "publicKey": "3e2373a8c520575e2345093211c60e7fda8397e77d1f60c216fa7aaedd60fe81",
+      "secretKey": "b5829ce3ccf1d8edd5da1132d46271b0169f58b6414fd263d3c98da627170f5e"
+    },
+    "x25519": {
+      "publicKey": "f0d32702884a0f2694c17987e29fc1bb8f0f8fb235e965002dcee726da4c454b",
+      "secretKey": "13cb194ef464e3d3968547e043f8caf19e78db5b6693ba867b1a613b9c337cf0"
+    }
+  },
+  "identity": {
+    "type": 1,
+    "typeName": "person",
+    "idBytes": "0183a17601a178c4203e2373a8c520575e2345093211c60e7fda8397e77d1f60c216fa7aaedd60fe81a165c420f0d32702884a0f2694c17987e29fc1bb8f0f8fb235e965002dcee726da4c454b",
+    "idBytesLength": 77,
+    "did": "did:vaultys:015b1f489c056ee8135405ac01c129c58f3d3835",
+    "version": 1
+  },
+  "signing": {
+    "message": "test message",
+    "messageHex": "74657374206d657373616765",
+    "signature": "79fa98d84696c360ebe9797cb545259f98f307c3b3e33c6cfb6e8318e1f4557bb1c8843f946be36fe8be86e7a3d778b10e3f303fdbbd8c939ccb0e4f1f822804",
+    "additionalSignatures": [
+      {
+        "name": "empty",
+        "message": "",
+        "messageHex": "",
+        "signature": "d7e6c8c0c99359bc0681d8cb82eba54d87a8a40369ac11c474a1b636eaaf17d4f04792d6d316972388e20fd6f60a0d69cde8bc16040dee6719caaa60f06c5107"
+      },
+      {
+        "name": "vaultysid",
+        "message": "VaultysID",
+        "messageHex": "5661756c7479734944",
+        "signature": "800b47cc7524d8633e6ba22a6fd3a747fd7d5aa6c26d5bb6009e04f35f98a0fae179ea38537f234e59faca53b13db67fe7693e809fedde4305ff10109f72ec03"
+      },
+      {
+        "name": "long",
+        "message": "This is a longer message to test signing and verification across implementations",
+        "messageHex": "546869732069732061206c6f6e676572206d65737361676520746f2074657374207369676e696e6720616e6420766572696669636174696f6e206163726f737320696d706c656d656e746174696f6e73",
+        "signature": "e0656b7d47c3b31dac4da2931634c68c6a5401ce7be785a6787de9be2a0cf3132bc7571e07758ec05f1fc04e4dcd1e179b4948ef62266e914f097da5103b8706"
+      },
+      {
+        "name": "binary",
+        "message": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t",
+        "messageHex": "00010203040506070809",
+        "signature": "fac4556aad3bb2cfb351134881a7da7a5a1bf7aea701c9fe32bee182c33b73fc500d9e1a3ee92bc401943ceeb650dbced8eda6ed8d44a475230b428c61b3e602"
+      },
+      {
+        "name": "unicode",
+        "message": "Hello 世界 🌍",
+        "messageHex": "48656c6c6f20e4b896e7958c20f09f8c8d",
+        "signature": "50c8b65ab91d58eb5d316599a0525d4f678c868b9bc4c3c9b35b0dc134e5028efd24b03243a6cf376eb74b3d816974b67775fbd1bdd72d002b8d6e6e6fa36e01"
+      }
+    ]
+  },
+  "diffieHellman": {
+    "aliceEntropy": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bobEntropy": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "alicePublicKey": "fe3d306cf34757e1a17a1b7dc8d8386c67ee309b56f94d035cd494666e4c8263",
+    "bobPublicKey": "7e1ba2b937ddff40ee68036d262966c81270f84cbf6ae1cf460fb22a44bbdc4b",
+    "sharedSecret": "1cd82a7675ec673f76bcec92ff662b44724f953fbbb473cc75e8802230d9a258"
+  },
+  "hmac": {
+    "message": "test/hmac/message",
+    "result": "72b286745cea60aab27a3e8bfb333587e5ecb37082d6699c757857ff7d174630"
+  },
+  "serialization": {
+    "secret": "0183a17601a178c420b5829ce3ccf1d8edd5da1132d46271b0169f58b6414fd263d3c98da627170f5ea165c42013cb194ef464e3d3968547e043f8caf19e78db5b6693ba867b1a613b9c337cf0",
+    "publicId": "0183a17601a178c4203e2373a8c520575e2345093211c60e7fda8397e77d1f60c216fa7aaedd60fe81a165c420f0d32702884a0f2694c17987e29fc1bb8f0f8fb235e965002dcee726da4c454b",
+    "secretBase64": "AYOhdgGheMQgtYKc48zx2O3V2hEy1GJxsBafWLZBT9Jj08mNpicXD16hZcQgE8sZTvRk49OWhUfgQ/jK8Z5421tmk7qGexphO5wzfPA=",
+    "publicBase64": "AYOhdgGheMQgPiNzqMUgV14jRQkyEcYOf9qDl+d9H2DCFvp6rt1g/oGhZcQg8NMnAohKDyaUwXmH4p/Bu48Pj7I16WUALc7nJtpMRUs="
+  },
+  "challenge": {
+    "aliceEntropy": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bobEntropy": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "protocol": "test-protocol",
+    "service": "test-service",
+    "steps": [
+      {
+        "name": "init",
+        "state": 0,
+        "from": "alice",
+        "to": "bob",
+        "messageHex": "87a974696d657374616d70d3000000006949cd8da86d6574616461746180a3706b31c44d0183a17601a178c420f226e123b6f77239c818b241f78cb1f590bba66c49d293bfef1a36d39e0b2c91a165c420fe3d306cf34757e1a17a1b7dc8d8386c67ee309b56f94d035cd494666e4c8263a56e6f6e6365c4101858691ee9fee604a7cf4492ad8d9286a776657273696f6ecc01a870726f746f636f6cad746573742d70726f746f636f6ca773657276696365ac746573742d73657276696365",
+        "hasPk1": true,
+        "hasPk2": false,
+        "hasSign1": false,
+        "hasSign2": false,
+        "nonceLength": 16
+      },
+      {
+        "name": "step1",
+        "state": 1,
+        "from": "bob",
+        "to": "alice",
+        "messageHex": "89a773657276696365ac746573742d73657276696365a974696d657374616d70d3000000006949cd8da3706b31c44d0183a17601a178c420f226e123b6f77239c818b241f78cb1f590bba66c49d293bfef1a36d39e0b2c91a165c420fe3d306cf34757e1a17a1b7dc8d8386c67ee309b56f94d035cd494666e4c8263a870726f746f636f6cad746573742d70726f746f636f6ca86d6574616461746180a3706b32c44d0183a17601a178c420fbf627d3d6be69dd785d1e0d4624af2ca38c295016ea51514d9c48c717538937a165c4207e1ba2b937ddff40ee68036d262966c81270f84cbf6ae1cf460fb22a44bbdc4ba56e6f6e6365c4201858691ee9fee604a7cf4492ad8d9286cd5820d09d8fa23d69aaeb8ae666121ea57369676e32c4409b8e7598ff44ff11b6f9307acaaf7a61ec9b66963d2001ed10e44744c959de923efc4f46316cb7141a19ce88fc9394c3f3c3d093273b85353d8a60cff9a1c009a776657273696f6ecc01",
+        "hasPk1": true,
+        "hasPk2": true,
+        "hasSign1": false,
+        "hasSign2": true,
+        "nonceLength": 32
+      },
+      {
+        "name": "complete",
+        "state": 2,
+        "from": "alice",
+        "to": "bob",
+        "messageHex": "8aa776657273696f6ecc01a870726f746f636f6cad746573742d70726f746f636f6ca773657276696365ac746573742d73657276696365a56e6f6e6365c4201858691ee9fee604a7cf4492ad8d9286cd5820d09d8fa23d69aaeb8ae666121ea57369676e32c4409b8e7598ff44ff11b6f9307acaaf7a61ec9b66963d2001ed10e44744c959de923efc4f46316cb7141a19ce88fc9394c3f3c3d093273b85353d8a60cff9a1c009a974696d657374616d70d3000000006949cd8da86d6574616461746180a3706b31c44d0183a17601a178c420f226e123b6f77239c818b241f78cb1f590bba66c49d293bfef1a36d39e0b2c91a165c420fe3d306cf34757e1a17a1b7dc8d8386c67ee309b56f94d035cd494666e4c8263a3706b32c44d0183a17601a178c420fbf627d3d6be69dd785d1e0d4624af2ca38c295016ea51514d9c48c717538937a165c4207e1ba2b937ddff40ee68036d262966c81270f84cbf6ae1cf460fb22a44bbdc4ba57369676e31c440cf276bbb1591cd6ea2e1ec4e98a011d84e2a38a457d8198b914c0dd122f886a78ffe727ae8ff50cbbdab0f3ed767dfd8217c2959acd129813b5f9b04ed741d0f",
+        "hasPk1": true,
+        "hasPk2": true,
+        "hasSign1": true,
+        "hasSign2": true,
+        "nonceLength": 32
+      }
+    ]
+  },
+  "crossVerification": [
+    {
+      "name": "machine_identity",
+      "description": "Machine identity cross-verification",
+      "entropy": "1111111111111111111111111111111111111111111111111111111111111111",
+      "type": 0,
+      "message": "machine test message",
+      "signature": "93437cbf8e42330aff6012886efd7cd7e99f48430783ebcc7cdbc00a57cd5b9cca80b03f6b108e5d8a0dc8e46027992d7cdaaa4ca1d8a338a810b46a861f8900",
+      "did": "did:vaultys:007bd630f73867b5a85b443432adcf1563e93901",
+      "idBytes": "0083a17601a178c4200ab5a25f927a1c1dc78f0966a7db834f74d973e43ac824a9c30c4fddb911e097a165c420b099a1ec336afe7f297f919a73751877aa1912fa38473b0998b884f6b4732545",
+      "canVerify": true
+    },
+    {
+      "name": "person_identity",
+      "description": "Person identity cross-verification",
+      "entropy": "2222222222222222222222222222222222222222222222222222222222222222",
+      "type": 1,
+      "message": "person test message",
+      "signature": "25fb8994618d38339f4d9acd51d7cb1f254a60bbafb5dad9788dbf12f7e5415d5bd5ec53d2167c4ac118a34a72067ec009c9e3a8b9498df7ceb637d98aa6af00",
+      "did": "did:vaultys:01fa7c9019b9e31e46bbc6fdcf139fe716e08408",
+      "idBytes": "0183a17601a178c420906053b702751805e5ee90426fb7e1ea67f4a0a4ffb6d53580db00fd5339f48da165c4208445cf352e1bbd6325e2c128f9c96e617ad1a5c5857efcefdeb7393cffa2b04b",
+      "canVerify": true
+    },
+    {
+      "name": "organization_identity",
+      "description": "Organization identity cross-verification",
+      "entropy": "3333333333333333333333333333333333333333333333333333333333333333",
+      "type": 2,
+      "message": "organization test message",
+      "signature": "f8862b79f904a9e8c1f2224c22b2dae4859635e09d4633228fada90116657885810024ef9f1dd0c5aef7f8dd4f7d9333b9140a47410265e5df906f3075a05407",
+      "did": "did:vaultys:0244ad8d5ce24a05864e4ef4c01a050b13fa889b",
+      "idBytes": "0283a17601a178c42015e26ac9826390d875f2501154a48707459dd9bc25b57bbd03c5ebefd8f69019a165c420aa9117bb78ebf2e9dda891eac21e3af41428fd05044b32ab0fffec585e3a6e71",
+      "canVerify": true
+    }
+  ]
+}

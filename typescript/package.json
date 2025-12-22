@@ -28,6 +28,8 @@
     "test:compatibility:export": "pnpm run build:node && tsx test/interops/compatibility-export.ts",
     "test:compatibility:rust": "cd rust && cargo test --test typescript_compatibility",
     "test:compatibility": "pnpm run test:compatibility:export && npm run test:compatibility:rust",
+    "test:backward-compat": "cd test/backward_compat && npm install && npm test",
+    "test:backward-compat:setup": "cd test/backward_compat && npm install && npm run setup",
     "test:interops:reverse": "test/interops/run-cross-language-test.sh reverse",
     "test:interops": "test/interops/run-cross-language-test.sh"
   },
