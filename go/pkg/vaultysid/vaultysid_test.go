@@ -384,6 +384,86 @@ func TestEquals(t *testing.T) {
 	}
 }
 
+func TestDHIESEncryptDecrypt(t *testing.T) {
+	// Create two machine identities
+	alice, err := GenerateMachine()
+	if err != nil {
+		t.Fatalf("Failed to generate Alice: %v", err)
+	}
+
+	bob, err := GenerateMachine()
+	if err != nil {
+		t.Fatalf("Failed to generate Bob: %v", err)
+	}
+
+	// Test data
+	plaintext := []byte("Hello, this is a secret message for Bob!")
+
+	// Alice encrypts for Bob
+	ciphertext, err := alice.DHIESEncrypt(plaintext, bob)
+	if err != nil {
+		t.Fatalf("Failed to encrypt: %v", err)
+	}
+
+	// Bob decrypts from Alice
+	decrypted, err := bob.DHIESDecrypt(ciphertext, alice)
+	if err != nil {
+		t.Fatalf("Failed to decrypt: %v", err)
+	}
+
+	// Verify the decrypted text matches
+	if !bytes.Equal(decrypted, plaintext) {
+		t.Errorf("Decrypted text doesn't match. Got %s, want %s", decrypted, plaintext)
+	}
+
+	// Test that wrong recipient can't decrypt
+	charlie, err := GenerateMachine()
+	if err != nil {
+		t.Fatalf("Failed to generate Charlie: %v", err)
+	}
+
+	_, err = charlie.DHIESDecrypt(ciphertext, alice)
+	if err == nil {
+		t.Error("Charlie should not be able to decrypt message meant for Bob")
+	}
+
+	// Test that public-only identity can't encrypt
+	publicBob, err := FromID(bob.ToBytes(), nil)
+	if err != nil {
+		t.Fatalf("Failed to create public Bob: %v", err)
+	}
+
+	_, err = publicBob.DHIESEncrypt(plaintext, alice)
+	if err == nil {
+		t.Error("Public-only identity should not be able to encrypt")
+	}
+
+	// Test that public-only identity can't decrypt
+	_, err = publicBob.DHIESDecrypt(ciphertext, alice)
+	if err == nil {
+		t.Error("Public-only identity should not be able to decrypt")
+	}
+
+	// Test DHIES with FIDO2 identity (should fail)
+	// FIDO2 doesn't support DHIES yet
+	t.Run("FIDO2_DHIES_NotSupported", func(t *testing.T) {
+		fido2Secret := make([]byte, 65)
+		fido2Secret[0] = byte(TypeFIDO2)
+		copy(fido2Secret[1:], bytes.Repeat([]byte{0x01}, 64))
+
+		fido2ID, err := FromSecret(fido2Secret)
+		if err != nil {
+			// It's OK if FIDO2 creation fails in test environment
+			t.Skip("FIDO2 identity creation not available in test environment")
+		}
+
+		_, err = fido2ID.DHIESEncrypt(plaintext, bob)
+		if err == nil {
+			t.Error("FIDO2 identity should not support DHIES encryption")
+		}
+	})
+}
+
 func TestClone(t *testing.T) {
 	vid1, err := GenerateMachine()
 	if err != nil {

@@ -34,6 +34,12 @@ var (
 	FromID            = Ed25519FromID
 )
 
+// Exported functions for FIDO2Manager
+var (
+	FIDO2FromSecret = CreateFIDO2FromSecret
+	FIDO2FromID     = CreateFIDO2FromID
+)
+
 // CreateEd25519FromEntropy creates an Ed25519Manager from entropy
 func CreateEd25519FromEntropy(entropy []byte) (KeyManager, error) {
 	return createEd25519FromEntropy(entropy)
@@ -69,4 +75,23 @@ func fromSecretEd25519(secret []byte) (*Ed25519Manager, error) {
 
 func fromIDEd25519(id []byte) (*Ed25519Manager, error) {
 	return FromIDInternal(id)
+}
+
+// CreateFIDO2FromSecret creates a FIDO2Manager from a secret
+func CreateFIDO2FromSecret(secret []byte) (KeyManager, error) {
+	return createFIDO2FromSecret(secret)
+}
+
+// CreateFIDO2FromID creates a FIDO2Manager from an ID (public only)
+func CreateFIDO2FromID(id []byte) (KeyManager, error) {
+	return createFIDO2FromID(id)
+}
+
+// Helper functions for FIDO2Manager
+func createFIDO2FromSecret(secret []byte) (*FIDO2Manager, error) {
+	return FIDO2ManagerFromSecret(secret)
+}
+
+func createFIDO2FromID(id []byte) (*FIDO2Manager, error) {
+	return FIDO2ManagerFromID(id)
 }

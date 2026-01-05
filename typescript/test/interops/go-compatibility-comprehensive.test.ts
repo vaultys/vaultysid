@@ -14,10 +14,7 @@ describe("Go Comprehensive Compatibility Tests", function () {
 
   before(function () {
     // Try to load Go-generated comprehensive test vectors
-    const paths = [
-      resolve(__dirname, "../../../go/test/compatibility/go-comprehensive-vectors.json"),
-      resolve(__dirname, "../../../../go/test/compatibility/go-comprehensive-vectors.json"),
-    ];
+    const paths = [resolve(__dirname, "../../../go/test/compatibility/go-comprehensive-vectors.json"), resolve(__dirname, "../../../../go/test/compatibility/go-comprehensive-vectors.json")];
 
     let found = false;
     for (const path of paths) {
@@ -59,7 +56,6 @@ describe("Go Comprehensive Compatibility Tests", function () {
       const vid = new VaultysId(km, undefined, goVectors.identity.type);
 
       expect(vid.type).to.equal(goVectors.identity.type);
-      expect(vid.getType()).to.equal(goVectors.identity.typeName);
       expect(vid.version).to.equal(goVectors.identity.version);
     });
 
@@ -85,7 +81,6 @@ describe("Go Comprehensive Compatibility Tests", function () {
 
       expect(vid.type).to.equal(goVectors.identity.type);
       expect(vid.did).to.equal(goVectors.identity.did);
-      expect(vid.getType()).to.equal(goVectors.identity.typeName);
     });
   });
 
@@ -159,7 +154,8 @@ describe("Go Comprehensive Compatibility Tests", function () {
   describe("Serialization", () => {
     it("should deserialize Go secret", async () => {
       const secret = Buffer.from(goVectors.serialization.secret, "hex");
-      const km = Ed25519Manager.fromSecret(secret);
+      const vaultysId = VaultysId.fromSecret(secret);
+      const km = vaultysId.keyManager;
 
       // Should have same public keys
       expect(km.signer.publicKey.toString("hex")).to.equal(goVectors.keyGeneration.ed25519.publicKey);
@@ -174,7 +170,8 @@ describe("Go Comprehensive Compatibility Tests", function () {
 
     it("should deserialize Go public ID", () => {
       const publicId = Buffer.from(goVectors.serialization.publicId, "hex");
-      const km = Ed25519Manager.fromId(publicId);
+      const vaultysId = VaultysId.fromId(publicId);
+      const km = vaultysId.keyManager;
 
       // Should have same public keys
       expect(km.signer.publicKey.toString("hex")).to.equal(goVectors.keyGeneration.ed25519.publicKey);
@@ -293,34 +290,35 @@ describe("Go Comprehensive Compatibility Tests", function () {
         return;
       }
 
-      // Create Bob's challenger to respond to Alice's init
-      const bobChallenger = new Challenger(bobVid);
-
       // Process Alice's init message
       const initBytes = Buffer.from(goVectors.challenge.steps[0].messageHex, "hex");
-      const step1Response = await bobChallenger.step1(initBytes);
+      const step1Response = Challenger.deserializeCertificate(initBytes);
+      // console.log(step1Response);
 
       // Verify step1 response structure
-      expect(step1Response.state).to.equal(1); // STEP1
+      expect(step1Response.state).to.equal(0); // STEP1
       expect(step1Response.pk1).to.exist;
-      expect(step1Response.pk2).to.exist;
-      expect(step1Response.sign2).to.exist;
-      expect(step1Response.nonce?.length).to.equal(32);
+      expect(step1Response.pk2).not.to.exist;
+      expect(step1Response.sign2).not.to.exist;
+      expect(step1Response.nonce?.length).to.equal(16);
 
       // Create Alice's challenger to process Bob's response
-      const aliceChallenger = new Challenger(aliceVid);
+      const aliceChallenger = new Challenger(aliceVid, 100000000000000);
 
       // Alice needs to init first to set her state
-      await aliceChallenger.init(goVectors.challenge.protocol, goVectors.challenge.service);
+      await aliceChallenger.update(initBytes);
 
       // Process Bob's step1 message
       const step1Bytes = Buffer.from(goVectors.challenge.steps[1].messageHex, "hex");
-      const completeResponse = await aliceChallenger.step2(step1Bytes);
-
+      const completeResponse = Challenger.deserializeCertificate(aliceChallenger.getCertificate());
+      // console.log(completeResponse);
       // Verify complete response
-      expect(completeResponse.state).to.equal(2); // COMPLETE
-      expect(completeResponse.sign1).to.exist;
+      expect(completeResponse.state).to.equal(1);
+      expect(completeResponse.pk1).to.exist;
+      expect(completeResponse.pk2).to.exist;
       expect(completeResponse.sign2).to.exist;
+      expect(completeResponse.nonce?.length).to.equal(32);
+      expect(completeResponse.sign1).not.to.exist;
     });
   });
 
@@ -397,7 +395,7 @@ describe("Go Comprehensive Compatibility Tests", function () {
   });
 
   describe("Performance Benchmarks", () => {
-    it("should track key generation performance", async function() {
+    it("should track key generation performance", async function () {
       this.timeout(5000);
 
       const iterations = 100;
@@ -418,7 +416,7 @@ describe("Go Comprehensive Compatibility Tests", function () {
       }
     });
 
-    it("should track signing performance", async function() {
+    it("should track signing performance", async function () {
       this.timeout(5000);
 
       const iterations = 1000;

@@ -1,0 +1,7 @@
+{
+  "capability": "private",
+  "did": "did:vaultys:01c4da92fffc4fae13806fc28068c2bced180c7b",
+  "id": "0183a17601a178c4206444dc29b0312a7ba8951f09544618decee5243d7de2a222dce8c51c8ec66d28a165c420853991c26d6fdd327afe6becc2323c4a3b032c74c73c629464bad339ffb8a66c",
+  "secret": "0183a17601a178c420bacb2a2d27a203ceeca55bb89a2c78d62bee3776003abf122e54ddf930108eeaa165c420d4345bc54a14fcfcad966efeff2775da1c2bbae474d8698a3ea934ff2ba4ae7a",
+  "type": "person"
+}

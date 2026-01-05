@@ -35,6 +35,15 @@ type Challenge struct {
 	Error     string            `msgpack:"-"`
 }
 
+// Result represents the result of a challenge operation
+type Result struct {
+	Challenge []byte                 `msgpack:"challenge"`
+	Response  []byte                 `msgpack:"response,omitempty"`
+	Metadata  map[string]interface{} `msgpack:"metadata,omitempty"`
+	Success   bool                   `msgpack:"success"`
+	State     int                    `msgpack:"state"`
+}
+
 // ChallengeMetadata contains optional metadata for the challenge
 type ChallengeMetadata struct {
 	PK1 map[string]string `msgpack:"pk1,omitempty"`

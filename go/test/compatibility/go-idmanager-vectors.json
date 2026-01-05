@@ -1,0 +1,221 @@
+{
+  "description": "Comprehensive IdManager test vectors for TypeScript compatibility",
+  "timestamp": "2025-12-29T10:46:28Z",
+  "version": "1.0.0",
+  "identity": {
+    "entropy": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "type": 1,
+    "name": "Test User",
+    "email": "test@example.com",
+    "phone": "+1234567890",
+    "displayName": "Test User",
+    "did": "did:vaultys:015b1f489c056ee8135405ac01c129c58f3d3835",
+    "metadata": {
+      "email": "test@example.com",
+      "name": "Test User",
+      "phone": "+1234567890"
+    }
+  },
+  "contacts": {
+    "contacts": [
+      {
+        "entropy": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "did": "did:vaultys:01502d878c221d7a8f90af28642f39ce3be29920",
+        "idBytes": "0183a17601a178c420f226e123b6f77239c818b241f78cb1f590bba66c49d293bfef1a36d39e0b2c91a165c420fe3d306cf34757e1a17a1b7dc8d8386c67ee309b56f94d035cd494666e4c8263",
+        "metadata": {
+          "email": "contact1@example.com",
+          "name": "Contact 1",
+          "nickname": "Nick1"
+        }
+      },
+      {
+        "entropy": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "did": "did:vaultys:01b4e2c49404662a4cbee4bf8718fe07ecfb0c88",
+        "idBytes": "0183a17601a178c420fbf627d3d6be69dd785d1e0d4624af2ca38c295016ea51514d9c48c717538937a165c4207e1ba2b937ddff40ee68036d262966c81270f84cbf6ae1cf460fb22a44bbdc4b",
+        "metadata": {
+          "email": "contact2@example.com",
+          "name": "Contact 2",
+          "nickname": "Nick2"
+        }
+      },
+      {
+        "entropy": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "did": "did:vaultys:016211f6b829fb33b7c5c2f82e3d8cfa99df2ead",
+        "idBytes": "0183a17601a178c420f02c480876e954f3abd3505580931d514dca6b2b3a98a967f9a6f00d45c7a4eaa165c420dadd6138b177316223b76bfa63cd560bc675f69073b2c7654e4ce021851a522b",
+        "metadata": {
+          "email": "contact3@example.com",
+          "name": "Contact 3",
+          "nickname": "Nick3"
+        }
+      }
+    ]
+  },
+  "apps": {
+    "apps": [
+      {
+        "site": "app1.example.com",
+        "serverId": "server-id-001",
+        "timestamp": 1767005188333
+      },
+      {
+        "site": "app2.example.com",
+        "serverId": "server-id-002",
+        "timestamp": 1767005188333
+      },
+      {
+        "site": "app3.example.com",
+        "serverId": "server-id-003",
+        "timestamp": 1767005188333
+      }
+    ]
+  },
+  "files": {
+    "signing": {
+      "file": {
+        "name": "test.txt",
+        "type": "text/plain",
+        "dataHex": "48656c6c6f2c205661756c747973494421",
+        "dataBase64": "SGVsbG8sIFZhdWx0eXNJRCE="
+      },
+      "signature": {
+        "challenge": "7661756c7479733a2f2f7369676e66696c653f686173683d303233303561653138663734353133303836316166323433663737393763656664306662306262613232663963336131323764626464393233376336633034392674696d657374616d703d31373637303035313838333333",
+        "signature": "0b88e4bf3406e57a6ce48a7af10fd23ef1784c371a074fe55e5c1af6e1187cc02db419ab2a41d9c55b1486dd97fb6422efe21670ca7da20510bd1fe0bea57e06"
+      }
+    },
+    "encryption": {
+      "original": {
+        "name": "test.txt",
+        "type": "text/plain",
+        "dataHex": "48656c6c6f2c205661756c747973494421",
+        "dataBase64": "SGVsbG8sIFZhdWx0eXNJRCE="
+      },
+      "password": "",
+      "encrypted": {
+        "name": "test.txt",
+        "type": "text/plain",
+        "dataHex": "7661756c7479732f656e6372797074696f6e2f01d2ef1566ff5ff0bc742fa867a242a611d22b053525f0021c359825d4e85bb7a3f6db94f0fcf96672b1dfc23fb8624bb95f87d9a91960a62a46fd47153591b3783f259b36626104ce84a13de3560a3d0166c8a5715aaf99eb46",
+        "dataBase64": "dmF1bHR5cy9lbmNyeXB0aW9uLwHS7xVm/1/wvHQvqGeiQqYR0isFNSXwAhw1mCXU6Fu3o/bblPD8+WZysd/CP7hiS7lfh9mpGWCmKkb9RxU1kbN4PyWbNmJhBM6EoT3jVgo9AWbIpXFar5nrRg=="
+      }
+    }
+  },
+  "keyDerivation": {
+    "protocol": {
+      "protocol": "https",
+      "version": 1,
+      "publicKey": "deff0a8a4fccd648b798f14bfa4ffc3ec09a8e15e1efed7c8d2af7b6734fc668"
+    },
+    "service": {
+      "service": "api.example.com",
+      "protocol": "https",
+      "publicKey": "a06075663af671d84861fb7ca564e892479e2e6039875ca1066ab1eb9856fb33"
+    },
+    "encryption": {
+      "recipientDid": "did:vaultys:1234567890abcdef",
+      "key": "ef77159dfbf923d0be0f749319270a21b7a60b9d4ab79eac0ba736bf0873e4a2"
+    },
+    "signing": {
+      "context": "document-signing",
+      "key": "c6621ef66311b94055c3db896e1c14c3c2f6566dee971c91d732b3bafab23fed"
+    },
+    "session": {
+      "sessionId": "session-123",
+      "ttl": 3600000,
+      "key": "c0f6bba4321efb9fb9c66c9dffbf729c61700c7c5b964f01f5b1a73b0e5aa96c"
+    },
+    "channel": {
+      "peerPublicKey": "f2dcd63b0444b52ad6e6b74dfc383aa4b4d88a85135c73ce89caf3173f4abc63",
+      "nonce": "746573742d6e6f6e63652d3132333435",
+      "encKey": "21630cf18c1e1847ae503ea06442fc16a2b89359e9aaaa171babd50c9a4d2191",
+      "macKey": "62461ebc89f142af58feb3b88eb3c47690787b1330633e464659022b39ba6fc3"
+    },
+    "hmac": {
+      "purpose": "authentication",
+      "message": "74657374206d657373616765",
+      "result": "7c7c916d72409e82fe23a9183db4edec79db416959ee2bd0aa57b507912bc950"
+    }
+  },
+  "prf": {
+    "appId": "test-app",
+    "salts": [
+      "73616c74313233",
+      "73616c74343536",
+      "73616c74373839"
+    ],
+    "results": [
+      "1156a098100fbb30d92f0b600efb8177cf971f467060ece0b3a55e31504b6ee5",
+      "3236d2f15219881a0332d3f6a577c20b6dc4231d9d87e4aafcccfabc6bd03301",
+      "63b7c8d13946e2fb59e1e730c3780e4f20544aa88d88106568c24b7c0e2b5b01"
+    ]
+  },
+  "backup": {
+    "password": "backup-password-123",
+    "encryptedBackup": "fx7rZiVi1TzM1d9F9zR9Z4cmFsgDrO4YzLzNpJEV9fAc35ErtEVg4Ha2BYj6ppuUn+UELTs++I6wVP0JFOOwJIhIRceEcKmztGuBNHeVTXNujwMmgFtoEQnUcs7wFoXy1Rc0o4pk4Yki5VmQaJqtryNFAWhpY5tSWa6ZM1340wDz5DXq8CP9gYCL0IiDqbvquU0vVGs3bzQLp9dxsNF0vHD6gkywvUmzyonB/ZColZv/h2/BxiFyyqQsUIpcPNlJ6to4tgKRct+qehpWIzI84JKgkxasuU4uAegZgGHc/ybbY8JErGwk3caNi+3DSp0s/5fkLuxdKv+v/FQz7iu3VLpQCGplwk+161tnifx3wDxZH3js0l4/FAz9d7hiB7j7E0YSuwr51WJhf72MtWU7IrTWvYf8+TG+iRXjDT5hT/btbmWabzf4ajRyxy4C4KFEJaHw533ZvKL8+YOpgrX349dcBbOrVIL8pKF7WsAXwuYbdnY244Bqf08YLsNpcw2kqYtckUj4o2ozGj6FD3SIkqDtK4YuowW5hqQOOj58M9vMFaPhdnyzBpoNRG/zrY9qZyBMo9WMEGz4cmYOcIr0y/GQPqLpikMlfogWy6fODNvENOdCE08a7V7VYlx7xsecR/Tw30Tl1BE26o1Yn0zK+QufdkTjqAz7cDENj1+K8tUxMA/dUbbVlPzL1RzYrjUYoyt4+vu7kpnwqyK6ae3u5O7TArwZYj8CPG8u2YLo4wzGnmoEqwX8bSINa1f3IVdUfLAbty6PhMuW4WUcYv42U3oOuceTo0oBMW2y+zllX3AmSjKkQDd4uWRDGHiBD28KA0qOO16sHn0Zg+nwkmyXujjdlPQ6Cfe927uxesRNao/MLx94dWNgvMohWUvxbuo6R4b19EOokPI8WEOLsvJBtrXyyAoSBB/1GWq2lJh5yc5wCCmH1Eu02D+Yv9JNhHW/DHjIj/vsKuCoi04dSvtL1CXdxJoAImuPyrYANssfMf6Ad8m0l+ZwVQjJQwRZq7apkNyIo+VBASDfBLx3cH7/5Np4+X9hs0imkwGywYojIKFTWBTkDysSLdzRHr/y8aEeFhk/vqRh3Eos1Z3rylzX4dSLMUV1SwnpJPC2x6a5N5OUwkPYNoHL8qSI5xFayELd1LuS8AooQ4D7FuF4eb1PBegBpUVv8+3Z7VECgaZ5vDmlYQnIxqR0Ilh97tSgaY86+5eH7uyVDwiCD38QFm4u5u1XEtTnIoYxbqSJ4mS8K8kxPJVBfBLxcQyKaUR8ffjcpzJOMO3GHyi2PzacRudUCshuZoqul63ScU5B5PwtLcPY0d1eBkCgV/i/C7BT2GYvNjxqatJQba1CK5YpX+AeQ2/5MaK89mU1XpM4KoqkqY+npPzCMrYJo3OvIo+LDCluxb8WLsPqCru68baL7rKGxEDXegfaOBGI+CtR0LPsWVMUbB8U7BZCvfUbLVIodJrjxjuK3itAySD90L6iLAADffy0tHq6ZF+jDQgIG1NzLh0aAyb/e8gZKyxvIB7tThrbgypa59AP2TbbEj9kcOXAQmUwY0mQpCDBoxXlOmH8egnuGHJS/iVlnD3NRTd5+VUb2AVArPwPC/WYh3bFrsNamtfKZKX0V+dPSCuKn41G2qxu/8Djyg4EETFuDJAuEYx6jc5J9p+siLpPG6CsKo2M7imRAEEer11CnWQUthODTw8VpFVq8w6VWxoWTxYHyiMG1Xfnp+dp+fVI",
+    "metadata": {
+      "hasApps": true,
+      "hasContacts": true,
+      "timestamp": 1767005188399,
+      "version": 1
+    }
+  },
+  "challenge": {
+    "protocolV0": {
+      "challenge": "746573742d6368616c6c656e67652d64617461",
+      "signature": "ced38c3221873a333b7dab845e4557bd489ca34f4720bb15442034050c6cb8c5a401cb64ce85001ee03df347ca8fe69ca2b8affe2cff36f7bbd162dc82dcc40a",
+      "version": 0
+    },
+    "protocolV1": {
+      "challenge": "746573742d6368616c6c656e67652d64617461",
+      "signature": "ced38c3221873a333b7dab845e4557bd489ca34f4720bb15442034050c6cb8c5a401cb64ce85001ee03df347ca8fe69ca2b8affe2cff36f7bbd162dc82dcc40a",
+      "version": 1
+    }
+  },
+  "storage": {
+    "memoryStore": {
+      "data": {
+        "key1": "value1",
+        "key2": 42,
+        "key3": {
+          "nested": "data",
+          "number": 123
+        }
+      },
+      "serialized": "haUhc3ViMYKnc3Via2V5MalzdWJ2YWx1ZTGnc3Via2V5MqlzdWJ2YWx1ZTKlIXN1YjKBpGRhdGGCpmZpZWxkMaZ2YWx1ZTGmZmllbGQyzQPnpGtleTGmdmFsdWUxpGtleTIqpGtleTOCpm5lc3RlZKRkYXRhpm51bWJlcns=",
+      "json": {
+        "!sub1": {
+          "subkey1": "subvalue1",
+          "subkey2": "subvalue2"
+        },
+        "!sub2": {
+          "data": {
+            "field1": "value1",
+            "field2": 999
+          }
+        },
+        "key1": "value1",
+        "key2": 42,
+        "key3": {
+          "nested": "data",
+          "number": 123
+        }
+      }
+    },
+    "substores": [
+      {
+        "name": "sub1",
+        "data": {
+          "subkey1": "subvalue1",
+          "subkey2": "subvalue2"
+        }
+      },
+      {
+        "name": "sub2",
+        "data": {
+          "data": {
+            "field1": "value1",
+            "field2": 999
+          }
+        }
+      }
+    ]
+  }
+}

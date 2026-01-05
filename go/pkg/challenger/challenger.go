@@ -34,6 +34,11 @@ func NewChallenger(vid *vaultysid.VaultysID, opts *ChallengerOptions) *Challenge
 	}
 }
 
+// New creates a new Challenger instance with default options (wrapper for compatibility)
+func New(vid *vaultysid.VaultysID) *Challenger {
+	return NewChallenger(vid, nil)
+}
+
 // Init initializes the challenge protocol
 func (c *Challenger) Init(protocol, service string) (*Challenge, error) {
 	if c.state.State != StateUninitialized {
@@ -48,12 +53,13 @@ func (c *Challenger) Init(protocol, service string) (*Challenge, error) {
 
 	c.state.Protocol = protocol
 	c.state.Service = service
-	c.state.Timestamp = time.Now().Unix()
 	c.state.Nonce = nonce
+	c.state.Timestamp = time.Now().Unix()
 	c.state.State = StateInit
 
+	// Create init challenge
 	challenge := &Challenge{
-		Version:   c.state.Version,
+		Version:   c.options.Version,
 		Protocol:  protocol,
 		Service:   service,
 		Timestamp: c.state.Timestamp,
@@ -364,6 +370,45 @@ func (c *Challenger) Reset() {
 		Version:   c.options.Version,
 		Metadata:  make(map[string]string),
 	}
+}
+
+// Accept accepts an incoming challenge and returns a response
+func (c *Challenger) Accept(challengeBytes []byte) (*Challenge, error) {
+	// Unmarshal the challenge
+	var challenge Challenge
+	if err := msgpack.Unmarshal(challengeBytes, &challenge); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal challenge: %w", err)
+	}
+
+	var response *Challenge
+	var err error
+
+	// Process based on challenge state
+	switch challenge.State {
+	case StateInit:
+		// We're the responder, process init and return step1
+		response, err = c.Step1(&challenge)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process init: %w", err)
+		}
+	case StateStep1:
+		// We're the initiator, process step1 and return complete
+		response, err = c.Step2(&challenge)
+		if err != nil {
+			return nil, fmt.Errorf("failed to process step1: %w", err)
+		}
+	case StateComplete:
+		// We're the responder, finalize the protocol
+		if err := c.Finalize(&challenge); err != nil {
+			return nil, fmt.Errorf("failed to finalize: %w", err)
+		}
+		// Return nil for successful finalization
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("invalid challenge state: %d", challenge.State)
+	}
+
+	return response, nil
 }
 
 // SetMetadata sets metadata to include in challenges

@@ -95,15 +95,21 @@ func FromID(id []byte, certificate []byte) (*VaultysID, error) {
 		return nil, fmt.Errorf("invalid identity type: %d", idType)
 	}
 
-	// Skip FIDO2 types for now (not implemented in Go)
-	if idType == TypeFIDO2 || idType == TypeFIDO2PRF {
-		return nil, fmt.Errorf("FIDO2 types not implemented in Go version")
-	}
+	var km KeyManager
+	var err error
 
-	// Parse the key manager based on the remaining bytes
-	km, err := keymanager.FromID(id[1:])
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse key manager: %w", err)
+	// Parse the key manager based on the identity type
+	switch idType {
+	case TypeFIDO2, TypeFIDO2PRF:
+		km, err = keymanager.FIDO2FromID(id[1:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse FIDO2 key manager: %w", err)
+		}
+	default:
+		km, err = keymanager.FromID(id[1:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse key manager: %w", err)
+		}
 	}
 
 	return &VaultysID{
@@ -147,14 +153,21 @@ func FromSecret(secret []byte) (*VaultysID, error) {
 		return nil, fmt.Errorf("invalid identity type: %d", idType)
 	}
 
-	// Skip FIDO2 types for now
-	if idType == TypeFIDO2 || idType == TypeFIDO2PRF {
-		return nil, fmt.Errorf("FIDO2 types not implemented in Go version")
-	}
+	var km KeyManager
+	var err error
 
-	km, err := keymanager.FromSecret(secret[1:])
-	if err != nil {
-		return nil, fmt.Errorf("failed to create key manager from secret: %w", err)
+	// Parse the key manager based on the identity type
+	switch idType {
+	case TypeFIDO2, TypeFIDO2PRF:
+		km, err = keymanager.FIDO2FromSecret(secret[1:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create FIDO2 key manager from secret: %w", err)
+		}
+	default:
+		km, err = keymanager.FromSecret(secret[1:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create key manager from secret: %w", err)
+		}
 	}
 
 	return &VaultysID{
@@ -358,6 +371,23 @@ func (v *VaultysID) HasCertificate() bool {
 	return len(v.Certificate) > 0
 }
 
+// HMAC computes an HMAC-SHA256 of the input using the KeyManager's implementation
+// This ensures consistency with TypeScript which wraps the message with "VaultysID/" prefix and "/end" suffix
+func (v *VaultysID) HMAC(input string) ([]byte, error) {
+	return v.KeyManager.HMAC(input)
+}
+
+// GetCypherPublicKey returns the cipher public key from the key manager
+func (v *VaultysID) GetCypherPublicKey() []byte {
+	return v.KeyManager.GetCypherPublicKey()
+}
+
+// DiffieHellman performs a Diffie-Hellman key exchange with the peer's public key
+// This delegates to the KeyManager's DiffieHellman implementation
+func (v *VaultysID) DiffieHellman(peerPublicKey []byte) ([]byte, error) {
+	return v.KeyManager.DiffieHellman(peerPublicKey)
+}
+
 // Capability checking
 
 // IsPrivate returns true if the identity has private key capabilities
@@ -380,23 +410,6 @@ func (v *VaultysID) GetCapability() string {
 // GetPublicKey returns the signing public key
 func (v *VaultysID) GetPublicKey() []byte {
 	return v.KeyManager.GetPublicKey()
-}
-
-// GetCypherPublicKey returns the encryption public key
-func (v *VaultysID) GetCypherPublicKey() []byte {
-	return v.KeyManager.GetCypherPublicKey()
-}
-
-// Cryptographic operations
-
-// DiffieHellman performs a Diffie-Hellman key exchange
-func (v *VaultysID) DiffieHellman(peerPublicKey []byte) ([]byte, error) {
-	return v.KeyManager.DiffieHellman(peerPublicKey)
-}
-
-// HMAC computes an HMAC of the given message
-func (v *VaultysID) HMAC(message string) ([]byte, error) {
-	return v.KeyManager.HMAC(message)
 }
 
 // Equals checks if two VaultysIDs are equal (same public keys and type)
@@ -448,4 +461,143 @@ func (v *VaultysID) ToVersion(version int) error {
 func (v *VaultysID) String() string {
 	return fmt.Sprintf("VaultysID{type=%s, did=%s, capability=%s}",
 		v.GetType(), v.DID(), v.GetCapability())
+}
+
+// Cryptographic operations
+
+// PerformDiffieHellman performs a Diffie-Hellman key exchange with another VaultysID
+// This delegates to the KeyManager's DiffieHellman implementation
+func (v *VaultysID) PerformDiffieHellman(peer *VaultysID) ([]byte, error) {
+	if v.KeyManager.GetCapability() != "private" {
+		return nil, fmt.Errorf("no private key available")
+	}
+
+	if peer == nil {
+		return nil, fmt.Errorf("peer is nil")
+	}
+
+	peerPublicKey := peer.KeyManager.GetCypherPublicKey()
+	if len(peerPublicKey) == 0 {
+		return nil, fmt.Errorf("peer has no cypher public key")
+	}
+
+	return v.KeyManager.DiffieHellman(peerPublicKey)
+}
+
+// DiffieHellman performs a Diffie-Hellman key exchange between two VaultysIDs
+// Static method that tries with both identities to find one with private key
+func DiffieHellman(id1, id2 *VaultysID) ([]byte, error) {
+	// Try with id1 as the private key holder
+	secret, err := id1.PerformDiffieHellman(id2)
+	if err == nil {
+		return secret, nil
+	}
+
+	// If that fails, try with id2 as the private key holder
+	return id2.PerformDiffieHellman(id1)
+}
+
+// DHIESEncrypt performs DHIES encryption to a recipient
+// Uses the keymanager's DHIES implementation for Ed25519-based identities
+func (v *VaultysID) DHIESEncrypt(plaintext []byte, recipient *VaultysID) ([]byte, error) {
+	if v.KeyManager.GetCapability() != "private" {
+		return nil, fmt.Errorf("no private key available")
+	}
+
+	// Create DHIES instance using the keymanager package
+	// The DHIES implementation requires access to the underlying Ed25519 keys
+	// For now, we'll use a type assertion to check if this is possible
+	km, ok := v.KeyManager.(*keymanager.Ed25519Manager)
+	if !ok {
+		// Try to handle other key manager types gracefully
+		// FIDO2 and other implementations don't support DHIES yet
+		return nil, fmt.Errorf("DHIES encryption is only supported for Ed25519-based identities")
+	}
+
+	dhies, err := keymanager.NewDHIES(km)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create DHIES instance: %w", err)
+	}
+
+	recipientPublicKey := recipient.KeyManager.GetCypherPublicKey()
+	if len(recipientPublicKey) == 0 {
+		return nil, fmt.Errorf("recipient has no cypher public key")
+	}
+
+	return dhies.Encrypt(recipientPublicKey, plaintext)
+}
+
+// DHIESDecrypt performs DHIES decryption from a sender
+// Uses the keymanager's DHIES implementation for Ed25519-based identities
+func (v *VaultysID) DHIESDecrypt(ciphertext []byte, sender *VaultysID) ([]byte, error) {
+	if v.KeyManager.GetCapability() != "private" {
+		return nil, fmt.Errorf("no private key available")
+	}
+
+	// Create DHIES instance using the keymanager package
+	// The DHIES implementation requires access to the underlying Ed25519 keys
+	// For now, we'll use a type assertion to check if this is possible
+	km, ok := v.KeyManager.(*keymanager.Ed25519Manager)
+	if !ok {
+		// Try to handle other key manager types gracefully
+		// FIDO2 and other implementations don't support DHIES yet
+		return nil, fmt.Errorf("DHIES decryption is only supported for Ed25519-based identities")
+	}
+
+	dhies, err := keymanager.NewDHIES(km)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create DHIES instance: %w", err)
+	}
+
+	// DHIES decrypt doesn't need sender's public key in basic implementation
+	// The ephemeral public key is embedded in the ciphertext
+	return dhies.Decrypt(ciphertext)
+}
+
+// Encrypt encrypts data for a set of recipients
+// This would implement saltpack or similar multi-recipient encryption
+func (v *VaultysID) Encrypt(plaintext string, recipients []*VaultysID) (string, error) {
+	// TODO: Implement saltpack encryption for multiple recipients
+	// For now, return error to indicate not yet implemented
+	return "", fmt.Errorf("multi-recipient encryption not yet implemented")
+}
+
+// Decrypt decrypts data encrypted for this identity
+// This would implement saltpack or similar decryption
+func (v *VaultysID) Decrypt(ciphertext string) (string, error) {
+	// TODO: Implement saltpack decryption
+	// For now, return error to indicate not yet implemented
+	return "", fmt.Errorf("decryption not yet implemented")
+}
+
+// Signcrypt signs and encrypts data for recipients
+// This would implement saltpack signcryption combining signing and encryption
+func (v *VaultysID) Signcrypt(plaintext string, recipients []*VaultysID) (string, error) {
+	// TODO: Implement saltpack signcryption
+	// For now, return error to indicate not yet implemented
+	return "", fmt.Errorf("signcryption not yet implemented")
+}
+
+// GetOTP generates a one-time password based on the provided data
+// This uses the identity's secret for OTP generation
+func (v *VaultysID) GetOTP(data []byte) (string, error) {
+	if v.KeyManager.GetCapability() != "private" {
+		return "", fmt.Errorf("no private key available")
+	}
+
+	// TODO: Implement TOTP/HOTP generation using the identity's secret
+	// This would derive an OTP secret from the identity and use standard OTP algorithms
+	return "", fmt.Errorf("OTP generation not yet implemented")
+}
+
+// GetOTPHMAC generates an HMAC-based OTP
+// This uses HMAC with the identity's secret for OTP generation
+func (v *VaultysID) GetOTPHMAC(secret string) (string, error) {
+	if v.KeyManager.GetCapability() != "private" {
+		return "", fmt.Errorf("no private key available")
+	}
+
+	// TODO: Implement HMAC-based OTP using the identity's secret
+	// This would use the KeyManager's HMAC capability with OTP algorithms
+	return "", fmt.Errorf("OTP HMAC not yet implemented")
 }

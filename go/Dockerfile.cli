@@ -1,0 +1,60 @@
+# Multi-stage Dockerfile for VaultysID CLI
+
+# Build stage
+FROM golang:1.21-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git make
+
+# Set working directory
+WORKDIR /build
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the CLI binary
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X main.Version=docker -X main.BuildTime=$(date -u '+%Y-%m-%d_%H:%M:%S')" \
+    -o vaultysid-cli \
+    ./cmd/vaultysid-cli
+
+# Final stage - minimal image
+FROM alpine:3.19
+
+# Install ca-certificates for HTTPS connections
+RUN apk --no-cache add ca-certificates
+
+# Create non-root user
+RUN addgroup -g 1000 vaultysid && \
+    adduser -D -u 1000 -G vaultysid vaultysid
+
+# Copy binary from builder
+COPY --from=builder /build/vaultysid-cli /usr/local/bin/vaultysid-cli
+
+# Ensure binary is executable
+RUN chmod +x /usr/local/bin/vaultysid-cli
+
+# Create working directory
+WORKDIR /data
+
+# Switch to non-root user
+USER vaultysid
+
+# Set entrypoint
+ENTRYPOINT ["vaultysid-cli"]
+
+# Default command (show help)
+CMD ["--help"]
+
+# Labels
+LABEL org.opencontainers.image.title="VaultysID CLI"
+LABEL org.opencontainers.image.description="Decentralized Identity Management CLI"
+LABEL org.opencontainers.image.vendor="Vaultys"
+LABEL org.opencontainers.image.source="https://github.com/vaultys/vaultysid-go"
+LABEL org.opencontainers.image.documentation="https://github.com/vaultys/vaultysid-go/blob/main/go/README.md"

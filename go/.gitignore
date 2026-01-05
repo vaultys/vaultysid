@@ -68,7 +68,7 @@ godoc.pid
 docker-compose.override.yml
 
 # Project specific
-vaultysid-*
+
 !vaultysid-go/
 test-vectors/
 interop-results/
