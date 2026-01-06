@@ -16,16 +16,7 @@ import (
 	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
 )
 
-// Integration test that tests a complete workflow
 func TestCompleteWorkflow(t *testing.T) {
-	// Skip: This test has deep integration issues with manager store serialization
-	t.Skip("CLI complete workflow requires store format compatibility fixes")
-}
-
-func TestCompleteWorkflow_Skipped(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
 
 	tempDir := t.TempDir()
 
@@ -246,10 +237,6 @@ func TestCompleteWorkflow_Skipped(t *testing.T) {
 
 // Test complete signing and verification workflow
 func TestSigningWorkflow(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
 	tempDir := t.TempDir()
 
 	// Generate identities for signing
@@ -413,17 +400,7 @@ func TestSigningWorkflow(t *testing.T) {
 	})
 }
 
-// Test encryption and decryption workflow
 func TestEncryptionWorkflow(t *testing.T) {
-	// Skip: Encryption workflow requires peer-based key exchange setup
-	t.Skip("CLI encryption workflow requires peer-based key exchange - tested in pkg/keymanager")
-}
-
-func TestEncryptionWorkflow_Skipped(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping integration test in short mode")
-	}
-
 	tempDir := t.TempDir()
 
 	// Generate identity for encryption
@@ -752,27 +729,7 @@ func TestOutputFormats(t *testing.T) {
 	})
 }
 
-// Test concurrency safety
-func TestConcurrencySafety(t *testing.T) {
-	// Skip: Concurrency test has issues with file store race conditions
-	t.Skip("CLI concurrency test requires file store locking fixes")
-}
-
-func TestConcurrencySafety_Skipped(t *testing.T) {
-	// Skip: This test exposes a known file store locking issue with concurrent access
-	// The file store implementation uses atomic rename which can fail under concurrent writes
-	t.Skip("CLI concurrency test requires file store locking fixes - known issue")
-}
-
-func TestConcurrencySafety_Implementation(t *testing.T) {
-	// Skip: This test exposes a known file store locking issue with concurrent access
-	t.Skip("CLI concurrency test requires file store locking fixes - known issue")
-}
-
 func testConcurrencySafetyImplementation(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Skipping concurrency test in short mode")
-	}
 
 	tempDir := t.TempDir()
 	storePath := filepath.Join(tempDir, "concurrent.store")

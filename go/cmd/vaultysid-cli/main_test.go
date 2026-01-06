@@ -852,11 +852,6 @@ func TestManagerInit(t *testing.T) {
 }
 
 func TestManagerExportImport(t *testing.T) {
-	// Skip: CLI manager tests have deep integration issues with store serialization
-	t.Skip("CLI manager export/import requires store format compatibility fixes")
-}
-
-func TestManagerExportImport_Skipped(t *testing.T) {
 	tempDir := t.TempDir()
 	storePath := filepath.Join(tempDir, "test.store")
 
@@ -903,11 +898,6 @@ func TestManagerExportImport_Skipped(t *testing.T) {
 }
 
 func TestManagerContacts(t *testing.T) {
-	// Skip: CLI manager tests have deep integration issues with store serialization
-	t.Skip("CLI manager contacts requires store format compatibility fixes")
-}
-
-func TestManagerContacts_Skipped(t *testing.T) {
 	tempDir := t.TempDir()
 	storePath := filepath.Join(tempDir, "test.store")
 
@@ -937,11 +927,6 @@ func TestManagerContacts_Skipped(t *testing.T) {
 }
 
 func TestManagerApps(t *testing.T) {
-	// Skip: CLI manager tests have deep integration issues with store serialization
-	t.Skip("CLI manager apps requires store format compatibility fixes")
-}
-
-func TestManagerApps_Skipped(t *testing.T) {
 	tempDir := t.TempDir()
 	storePath := filepath.Join(tempDir, "test.store")
 
@@ -967,11 +952,6 @@ func TestManagerApps_Skipped(t *testing.T) {
 }
 
 func TestManagerSaveContact(t *testing.T) {
-	// Skip: CLI manager tests have deep integration issues with store serialization
-	t.Skip("CLI manager save-contact requires store format compatibility fixes")
-}
-
-func TestManagerSaveContact_Skipped(t *testing.T) {
 	tempDir := t.TempDir()
 	storePath := filepath.Join(tempDir, "test.store")
 
@@ -997,11 +977,6 @@ func TestManagerSaveContact_Skipped(t *testing.T) {
 }
 
 func TestManagerSaveApp(t *testing.T) {
-	// Skip: CLI manager tests have deep integration issues with store serialization
-	t.Skip("CLI manager save-app requires store format compatibility fixes")
-}
-
-func TestManagerSaveApp_Skipped(t *testing.T) {
 	tempDir := t.TempDir()
 	storePath := filepath.Join(tempDir, "test.store")
 
@@ -1028,11 +1003,6 @@ func TestManagerSaveApp_Skipped(t *testing.T) {
 }
 
 func TestManagerSetters(t *testing.T) {
-	// Skip: CLI manager tests have deep integration issues with store serialization
-	t.Skip("CLI manager setters requires store format compatibility fixes")
-}
-
-func TestManagerSetters_Skipped(t *testing.T) {
 	tempDir := t.TempDir()
 	storePath := filepath.Join(tempDir, "test.store")
 
