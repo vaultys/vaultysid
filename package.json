@@ -1,27 +1,30 @@
 {
   "name": "@vaultys/id",
-  "version": "2.4.9",
+  "version": "2.4.10",
   "exports": {
     ".": {
-      "browser": "./dist/browser/vaultys.min.js",
-      "node": "./dist/node/index.js",
-      "default": "./dist/browser/vaultys.min.js"
+      "types": "./dist/node/index.d.ts",
+      "browser": "./dist/browser/vaultysid.min.js",
+      "import": "./dist/node/index.js",
+      "require": "./dist/node/index.js",
+      "default": "./dist/node/index.js"
     }
   },
   "main": "./dist/node/index.js",
-  "browser": "./dist/browser/vaultys.min.js",
-  "types": "./dist/index.d.ts",
+  "module": "./dist/node/index.js",
+  "browser": "./dist/browser/vaultysid.min.js",
+  "types": "./dist/node/index.d.ts",
   "description": "the most advanced decentralised id framework",
   "scripts": {
     "build": "npm run build:node && npm run build:browser",
-    "build:node": "tsc -p tsconfig.node.json",
+    "build:node": "tsc -p tsconfig.json",
     "build:browser": "webpack --config webpack.config.js",
     "prettier": "find src -name \"*.ts\" | xargs prettier --write",
     "test": "mocha ./test/*.test.[jt]s",
+    "test:pqc": "mocha ./test/pqc.test.ts ",
     "test:server": "http-server . -p 8080",
-    "test:web": "webpack --config webpack.test.config.js && mocha --require tsx test/runner.ts",
-    "testone": "mocha",
-    "visualize": "webpack --config webpack.config.web.cjs --json > stats.json"
+    "test:web": "pnpm build:browser && webpack --config webpack.test.config.js && mocha --require tsx test/runner.ts",
+    "visualize": "webpack --config webpack.config.js --json > stats.json"
   },
   "keywords": [],
   "author": "",
@@ -63,7 +66,7 @@
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.1.1",
-    "@noble/curves": "^1.9.0",
+    "@noble/curves": "^1.9.2",
     "@noble/hashes": "^1.8.0",
     "@peculiar/x509": "^1.12.3",
     "@samuelthomas2774/saltpack": "^0.3.2",
@@ -79,5 +82,5 @@
       "buffer": "^6.0.3"
     }
   },
-  "packageManager": "pnpm@9.7.0+sha512.dc09430156b427f5ecfc79888899e1c39d2d690f004be70e05230b72cb173d96839587545d09429b55ac3c429c801b4dc3c0e002f653830a420fa2dd4e3cf9cf"
+  "packageManager": "pnpm@10.11.0+sha512.6540583f41cc5f628eb3d9773ecee802f4f9ef9923cc45b69890fb47991d4b092964694ec3a4f738a420c918a333062c8b925d312f42e4f0c263eb603551f977"
 }

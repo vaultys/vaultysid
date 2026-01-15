@@ -9,9 +9,10 @@
     "strict": true,
     "allowJs": true,
     "skipLibCheck": true,
-    "outDir": "./dist",
-    "declaration": true
+    "outDir": "./dist/node",
+    "declaration": true,
+    "resolveJsonModule": true
   },
   "include": ["index.ts", "src"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist/node"]
 }

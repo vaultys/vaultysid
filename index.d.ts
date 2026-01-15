@@ -10,28 +10,28 @@ import CryptoChannel from "./src/cryptoChannel";
 import * as crypto from "./src/crypto";
 export { crypto, VaultysId, Challenger, MemoryChannel, MemoryStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
 export type ChallengeType = {
-    protocol: string;
-    service: string;
-    timestamp: number;
-    pk1?: Buffer;
-    pk2?: Buffer;
-    nonce?: Buffer;
-    sign1?: Buffer;
-    sign2?: Buffer;
-    metadata?: Buffer;
-    state: number;
-    error: string;
+  protocol: string;
+  service: string;
+  timestamp: number;
+  pk1?: Buffer;
+  pk2?: Buffer;
+  nonce?: Buffer;
+  sign1?: Buffer;
+  sign2?: Buffer;
+  metadata?: Buffer;
+  state: number;
+  error: string;
 };
 export interface FilePayload {
-    challenge: Buffer;
-    signature?: Buffer;
-    name?: string;
-    hash?: string | null;
-    timestamp?: number | null;
+  challenge: Buffer;
+  signature?: Buffer;
+  name?: string;
+  hash?: string | null;
+  timestamp?: number | null;
 }
 export type IdMetadata = {
-    name?: string;
-    firstname?: string;
-    email?: string;
-    phone?: string;
+  name?: string;
+  firstname?: string;
+  email?: string;
+  phone?: string;
 };

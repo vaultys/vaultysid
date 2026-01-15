@@ -8,6 +8,10 @@ const replacer = (key, value) => {
         return value;
     if (key === "certificate")
         return "__C__" + buffer_1.Buffer.from(value).toString("base64");
+    if (key === "publicKey")
+        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
+    if (key === "secretKey")
+        return "__C__" + buffer_1.Buffer.from(value).toString("base64");
     if (value.type === "Buffer") {
         return "_bx_" + buffer_1.Buffer.from(value.data).toString("base64");
     }
@@ -17,7 +21,7 @@ const replacer = (key, value) => {
     return value;
 };
 const reviver = (key, value) => {
-    if (value && key === "certificate") {
+    if (value && (key === "certificate" || key === "publicKey" || key === "secretKey")) {
         if (typeof value === "string" && value.startsWith("__C__")) {
             return buffer_1.Buffer.from(value.slice(5), "base64");
         }
@@ -55,12 +59,13 @@ const LocalStorage = (key = "vaultysStorage") => {
 };
 exports.LocalStorage = LocalStorage;
 const storagify = (object, save, destroy) => {
+    const result = { _raw: object };
     return {
+        ...result,
         destroy,
         save,
-        toString: () => (0, exports.serialize)(object),
+        toString: () => (0, exports.serialize)(result._raw),
         fromString: (string, s, d) => storagify((0, exports.deserialize)(string), s, d),
-        _raw: object,
         set: (key, value) => (object[key] = value),
         delete: (key) => delete object[key],
         get: (key) => object[key],

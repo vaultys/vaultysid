@@ -32,6 +32,7 @@ export default class IdManager {
     setProtocolVersion(version: 0 | 1): void;
     static fromStore(store: Store): Promise<IdManager>;
     merge(otherStore: Store, master?: boolean): void;
+    verifyWebOfTrust(): Promise<boolean>;
     isHardware(): boolean;
     signIn(): Promise<boolean>;
     get contacts(): VaultysId[];
