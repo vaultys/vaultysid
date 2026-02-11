@@ -6,6 +6,7 @@ import { Channel, MemoryChannel, StreamChannel, convertWebReadableStreamToNodeRe
 import { MemoryStorage, Store, LocalStorage } from "./src/MemoryStorage";
 import GameOfLifeIcon from "./src/GameOfLifeIcon";
 import CryptoChannel from "./src/cryptoChannel";
+import { ExecutionManager } from "./src/execution";
 
 //utils
 import * as crypto from "./src/crypto";
@@ -17,7 +18,7 @@ if (typeof Symbol.dispose === "undefined") {
   Symbol.dispose = Symbol("Symbol.dispose");
 }
 
-export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel };
+export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel, ExecutionManager };
 
 export type { Channel, Store, File, StoredApp, StoredContact, FileSignature };
 
