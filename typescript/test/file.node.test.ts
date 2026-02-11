@@ -32,6 +32,8 @@ describe("IdManagerwith files on nodejs", () => {
         highWaterMark: 1 * 1024,
       });
 
+
+
       const output = createWriteStream("./test/assets/streamed_file_encrypted.png");
       const promise = manager2.download(channel, output);
       await manager1.upload(channel.otherend, input);

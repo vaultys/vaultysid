@@ -1,8 +1,6 @@
 import assert from "assert";
 import { Buffer } from "buffer/";
-// import { publicDerivePath, privateDerivePath, HISCP } from "../src/KeyManager";
-// import * as bip32 from "@stricahq/bip32ed25519";
-import { VaultysId, KeyManager } from "../";
+import { VaultysId } from "../";
 import { createRandomVaultysId } from "./utils";
 import nacl from "tweetnacl";
 import { Ed25519Manager } from "../src/KeyManager";
@@ -222,11 +220,11 @@ describe("KeyManager tests", () => {
   });
 
   it("Decrypt a sample encrypted message", async () => {
-    // const bob = await createRandomVaultysId();
-    // console.log(await VaultysId.encrypt("test", [bob.id]));
-    // console.log(bob.getSecret("base64"));
-    const message = "BEGIN SALTPACK ENCRYPTED MESSAGE. keDIDMQWYvVR58B FTfTeD305hcoHcr Wi4X4pWBmPExHwE WaBDIrIPJ7pgJVE 2Yaxiu3jYK3Osf2 uhjKjQeNaUshMjT QrZdWGFObOEKXZS u5ZF9IyxzRQiBF8 vtIJhLH1kKcDJj4 IQGkhxNTmUljHeo ulEUOyGRt0K3CrR gVkJxxehI8H0GJy 0iJTgCMM7DEX4Jk qmUWofh3hNbfZcs G171PLnJVJ484sS ozpRNJIRMYpHD4g lEdwwVM3NfIoSW3 Cg6FKTrtiNoDgtN gvXoqM96taPvEal dAjNjMgXFcuPT2b U0CFssYXxGKzAnJ gevNrFwrZGLd78h. END SALTPACK ENCRYPTED MESSAGE.";
-    const id = VaultysId.fromSecret("AIShdgGhcMQg3KBa7NhKclRHgvQL/51gDBKkVt9ndZurKDM+wDY4uBSheMRgIEM+lQwxORCD8hOul7keOXea5fMYYghYYL2inBxdB1Uop0p+SGS0ju18I7OOTiMDGGKo7wzTR0xj5xxE9qpTHqHAbWi6fPFaYOXNTK1t6NwVTiNkJDrvqK1OvVrzHnOGoWXEIJRd5AQLlhofk5h7yIGMHzJt5kWUX/J+sTH4gQhGtW1S", "base64");
+    //const bob = await createRandomVaultysId();
+    //console.log(await VaultysId.encrypt("test", [bob.id]));
+    //console.log(bob.getSecret("base64"));
+    const message = "BEGIN SALTPACK ENCRYPTED MESSAGE. keDIDMQWYvVR58B FTfTeD305z8ZGH1 g0Ly343rrKYtyYO ivshH4UqA0fWZpt t1zWRieaKO5u1Xc sgmueh7OprqKIpV GbPhs7mGEViNnLa kBdOivFZAQeHr0x nQWjqbr54ICP5hx M8Dbs0ralx9PwpR cjCS7g5H9lnuRwe SWvb5VUvi7bwrfh sZC7fsSZt1yELHX JCe9wOgL0ztkl8J M8B4ww3YZMvPO5Z xHpNmDV0bgW46Gx OahnMiTNJdtvzaq aBAw7ICdiBEEzQ5 gfZzE2YqYGuoO3v rWQrtNQiM5as9f9 Q0BwpmPxB61iiL6 Ok8h5cdes5kGlNP. END SALTPACK ENCRYPTED MESSAGE.";
+    const id = VaultysId.fromSecret("AIKhdgGhc8RA8Yj2Hc4In/yFXJd6hb88YtpCIC0MIuJ9WsPiPxMsWMXxwdsCA/0S16LnvpAABQq8nikJwgTXfHi7XeoWQbaoHQ==", "base64");
     const decrypted = await id.decrypt(message);
     assert.equal(decrypted, "test");
   });

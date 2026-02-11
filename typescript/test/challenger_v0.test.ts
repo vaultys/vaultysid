@@ -5,6 +5,7 @@ import "./shims";
 import { randomBytes } from "../src/crypto";
 import { createRandomVaultysId } from "./utils";
 import { decrypt } from "../src/cryptoChannel";
+import { Challenger as OldChallenger } from "@vaultys/id_2";
 
 const delay = (ms: number = 1000) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -353,7 +354,7 @@ describe("Symetric Proof of Relationship - SRG - v0", () => {
 
   it("Should deserialize a succesful v0 certificate", async () => {
     const cert = "iahwcm90b2NvbKNwMnCnc2VydmljZahyZWdpc3Rlcql0aW1lc3RhbXDPAAABko9gLwijcGsxxHQBhKF2AKFwxQAgthOolbL2HWtbnAkuAyLHAjfbnS8njgLhHlxWlosbC6uheMUAIBXMRt4jV1gxWK5/TF1jNx0kD+v2qKTWFnfEDQsrOeIvoWXFACCwkdnz8o6yhL86amqfB4/nUoznXnmSs9wAIIT30iGhaaNwazLEdACEoXYAoXDFACARZg0feo56ckkSEU8xc0G/xCH5vjeLeQjP9/KtRC4X76F4xQAg9qbrfdWleMqBsN8y7qPmZ1/ObCqFxeQmIopZBwJGfa2hZcUAIHKiC8fHbhLl902mhMbl/h04JvVnWLBCyAGb22orn5dVpW5vbmNlxCAofLkkt7f/YFen3ve05OcpDl8AFJRnejfZbMC6q37gOqVzaWduMcRAby4aZAta/aZL/8NxtqX8NnDUMTfXZ44qEdW5QVl3Gp/nh7sNDtdJfpF3XdJ1bJ7FtinGDDtTkRCzW5Hm9S+EAqVzaWduMsRA0xyketeALY1yA/KbPo7gTWTGdBVyxmG4u60kQJ2WtTDdjhVnCVzlb56xZtWhtGX/DJxw43yEehPyPxI/HvgwB6htZXRhZGF0YYA=";
-    const result = Challenger.deserializeCertificate(Buffer.from(cert, "base64"));
+    const result = OldChallenger.deserializeCertificate(Buffer.from(cert, "base64"));
     assert.equal(result.error, "");
     assert.equal(result.state, 2);
   });
