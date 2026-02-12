@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/mcp-agent",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "description": "Policy-enforced MCP server powered by VaultysID — cryptographic authorization and audit trail for every AI tool call",
   "license": "MIT",
