@@ -15,7 +15,9 @@
  */
 
 import * as assert from "node:assert";
+import * as fs from "node:fs";
 import * as path from "node:path";
+import * as os from "node:os";
 import {
   IdManager,
   VaultysId,
@@ -25,11 +27,12 @@ import {
   Challenger,
 } from "@vaultys/id";
 import type { PolicyBundle, ExecOutcome } from "@vaultys/id";
-import { createPolicyMiddleware } from "./src/policyMiddleware.js";
+import { createPolicyMiddleware } from "../src/policyMiddleware.js";
 
 // ── Helpers ──
 
 const WORKSPACE = "/tmp/vaultys-mcp-test";
+const TEST_AUDIT_DIR = path.join(os.tmpdir(), "vaultys-mcp-test-audit");
 
 const createIdManager = async (): Promise<IdManager> => {
   const store = MemoryStorage();
@@ -448,6 +451,7 @@ async function main() {
       serverIdManager: server,
       signedPolicy,
       workspaceRoot: WORKSPACE,
+      auditDir: TEST_AUDIT_DIR,
     });
 
     const result = await middleware.enforce(
@@ -468,6 +472,7 @@ async function main() {
       serverIdManager: server,
       signedPolicy,
       workspaceRoot: WORKSPACE,
+      auditDir: TEST_AUDIT_DIR,
     });
 
     const result = await middleware.enforce(
@@ -489,6 +494,7 @@ async function main() {
       serverIdManager: server,
       signedPolicy,
       workspaceRoot: WORKSPACE,
+      auditDir: TEST_AUDIT_DIR,
     });
 
     const result = await middleware.enforce(
@@ -508,6 +514,7 @@ async function main() {
       serverIdManager: server,
       signedPolicy,
       workspaceRoot: WORKSPACE,
+      auditDir: TEST_AUDIT_DIR,
     });
 
     const result = await middleware.enforce(
@@ -528,6 +535,7 @@ async function main() {
       serverIdManager: server,
       signedPolicy,
       workspaceRoot: WORKSPACE,
+      auditDir: TEST_AUDIT_DIR,
     });
 
     const result = await middleware.enforce(
@@ -548,6 +556,7 @@ async function main() {
       serverIdManager: server,
       signedPolicy,
       workspaceRoot: WORKSPACE,
+      auditDir: TEST_AUDIT_DIR,
     });
 
     const result = await middleware.enforce(
@@ -611,6 +620,13 @@ async function main() {
     assert.equal(result.decision, "deny");
     assert.ok(result.denied_caps?.includes("policy:expired"));
   });
+
+  // ────────────────────────────────
+  // Cleanup
+  // ────────────────────────────────
+  if (fs.existsSync(TEST_AUDIT_DIR)) {
+    fs.rmSync(TEST_AUDIT_DIR, { recursive: true });
+  }
 
   // ────────────────────────────────
   // Summary

@@ -31,11 +31,13 @@ export interface CapabilityMapping {
  * tools can resolve relative paths to absolute paths matching the policy globs.
  */
 export declare const DEFAULT_TOOL_MAPPINGS: Record<string, CapabilityMapping>;
+export declare function setAuditDir(dir: string): void;
 export interface PolicyMiddlewareOptions {
     serverIdManager: IdManager;
     signedPolicy: PolicyBundle;
     toolMappings?: Record<string, CapabilityMapping>;
     workspaceRoot?: string;
+    auditDir?: string;
 }
 export interface ToolCallResult {
     decision: "allow" | "deny";

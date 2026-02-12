@@ -97,7 +97,11 @@ function resolveWorkspacePath(raw: string, workspaceRoot?: string): string {
 
 // ── Audit persistence ──
 
-const AUDIT_DIR = path.resolve("audit");
+let AUDIT_DIR = path.resolve("audit");
+
+export function setAuditDir(dir: string): void {
+  AUDIT_DIR = path.resolve(dir);
+}
 
 function ensureAuditDir(): void {
   if (!fs.existsSync(AUDIT_DIR)) {
@@ -131,6 +135,7 @@ export interface PolicyMiddlewareOptions {
   signedPolicy: PolicyBundle;
   toolMappings?: Record<string, CapabilityMapping>;
   workspaceRoot?: string;
+  auditDir?: string;
 }
 
 export interface ToolCallResult {
@@ -149,7 +154,12 @@ export function createPolicyMiddleware(options: PolicyMiddlewareOptions) {
     signedPolicy,
     toolMappings = DEFAULT_TOOL_MAPPINGS,
     workspaceRoot = process.cwd(),
+    auditDir,
   } = options;
+
+  if (auditDir) {
+    setAuditDir(auditDir);
+  }
 
   const em = new ExecutionManager(serverIdManager);
 

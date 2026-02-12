@@ -79,7 +79,10 @@ function resolveWorkspacePath(raw, workspaceRoot) {
     return path.join(workspaceRoot ?? "/workspace", raw);
 }
 // ── Audit persistence ──
-const AUDIT_DIR = path.resolve("audit");
+let AUDIT_DIR = path.resolve("audit");
+export function setAuditDir(dir) {
+    AUDIT_DIR = path.resolve(dir);
+}
 function ensureAuditDir() {
     if (!fs.existsSync(AUDIT_DIR)) {
         fs.mkdirSync(AUDIT_DIR, { recursive: true });
@@ -107,7 +110,10 @@ function persistReceipt(jobId, receipt, meta) {
  * Create policy-enforced middleware that wraps MCP tool handlers.
  */
 export function createPolicyMiddleware(options) {
-    const { serverIdManager, signedPolicy, toolMappings = DEFAULT_TOOL_MAPPINGS, workspaceRoot = process.cwd(), } = options;
+    const { serverIdManager, signedPolicy, toolMappings = DEFAULT_TOOL_MAPPINGS, workspaceRoot = process.cwd(), auditDir, } = options;
+    if (auditDir) {
+        setAuditDir(auditDir);
+    }
     const em = new ExecutionManager(serverIdManager);
     /**
      * Wrap a tool call: evaluate policy, run handler if allowed, sign receipt.

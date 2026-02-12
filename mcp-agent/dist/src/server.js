@@ -25,6 +25,7 @@ import { createPolicyMiddleware } from "./policyMiddleware.js";
 import { registerFilesystemTools } from "./tools/filesystem.js";
 import { registerShellTool } from "./tools/shell.js";
 import { registerNetworkTool } from "./tools/network.js";
+import { registerAuditTool } from "./tools/audit.js";
 import { registerResources } from "./resources/index.js";
 // ── Configuration ──
 const WORKSPACE_ROOT = path.resolve(process.env.WORKSPACE_ROOT ?? process.cwd());
@@ -68,6 +69,7 @@ async function main() {
     registerFilesystemTools(mcpServer, middleware, WORKSPACE_ROOT);
     registerShellTool(mcpServer, middleware, WORKSPACE_ROOT);
     registerNetworkTool(mcpServer, middleware);
+    registerAuditTool(mcpServer, serverIdm);
     // 7. Register resources (audit trail, policy, identity)
     registerResources(mcpServer, serverIdm, signedPolicy);
     // 8. Connect via stdio transport

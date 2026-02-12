@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/mcp-agent",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "description": "Policy-enforced MCP server powered by VaultysID — cryptographic authorization and audit trail for every AI tool call",
   "license": "MIT",
@@ -33,7 +33,7 @@
     "grant-policy": "tsx grant-policy.ts",
     "srp-grant": "tsx srp-grant-policy.ts",
     "audit": "tsx src/audit.ts",
-    "test": "tsx test-e2e.ts",
+    "test": "tsx test/e2e.test.ts",
     "prepublishOnly": "npm run build",
     "build": "tsc && chmod +x dist/bin/*.js"
   },
