@@ -87,11 +87,18 @@ function ensureAuditDir() {
 }
 function persistReceipt(jobId, receipt, meta) {
     ensureAuditDir();
+    // Serialize broker_signature as base64 string for JSON storage
+    const serializedReceipt = {
+        ...receipt,
+        broker_signature: receipt.broker_signature
+            ? Buffer.from(receipt.broker_signature).toString("base64")
+            : undefined,
+    };
     const record = {
         job_id: jobId,
         timestamp: new Date().toISOString(),
         ...meta,
-        receipt,
+        receipt: serializedReceipt,
     };
     const filePath = path.join(AUDIT_DIR, `${jobId}.json`);
     fs.writeFileSync(filePath, JSON.stringify(record, null, 2));

@@ -125,8 +125,12 @@ async function main() {
     const decision = record.decision;
     const tool = record.tool;
 
-    if (receipt.broker_signature && typeof receipt.broker_signature === "string") {
-      receipt.broker_signature = Buffer.from(receipt.broker_signature as unknown as string, "base64") as any;
+    if (receipt.broker_signature) {
+      if (typeof receipt.broker_signature === "string") {
+        receipt.broker_signature = Buffer.from(receipt.broker_signature, "base64") as any;
+      } else if (typeof receipt.broker_signature === "object" && (receipt.broker_signature as any).data) {
+        receipt.broker_signature = Buffer.from((receipt.broker_signature as any).data) as any;
+      }
     }
 
     let verified = false;

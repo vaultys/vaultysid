@@ -91,8 +91,13 @@ async function main() {
         const decision = record.decision;
         const tool = record.tool;
         // Restore Buffer types for signature
-        if (receipt.broker_signature && typeof receipt.broker_signature === "string") {
-            receipt.broker_signature = Buffer.from(receipt.broker_signature, "base64");
+        if (receipt.broker_signature) {
+            if (typeof receipt.broker_signature === "string") {
+                receipt.broker_signature = Buffer.from(receipt.broker_signature, "base64");
+            }
+            else if (typeof receipt.broker_signature === "object" && receipt.broker_signature.data) {
+                receipt.broker_signature = Buffer.from(receipt.broker_signature.data);
+            }
         }
         let verified = false;
         let sigStatus = "⏭  no key";
