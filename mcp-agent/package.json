@@ -45,6 +45,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@vaultys/id": "^3.0.0-beta7",
+    "buffer": "^6.0.3",
     "zod": "^3.25.0"
   },
   "devDependencies": {
