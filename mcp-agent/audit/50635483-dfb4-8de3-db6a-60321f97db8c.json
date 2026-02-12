@@ -1,0 +1,99 @@
+{
+  "job_id": "50635483-dfb4-8de3-db6a-60321f97db8c",
+  "timestamp": "2026-02-12T16:47:44.740Z",
+  "tool": "read_file",
+  "args": {
+    "path": "src/index.ts"
+  },
+  "decision": "allow",
+  "allowed_caps": [
+    "fs.read:/tmp/vaultys-mcp-test/src/index.ts"
+  ],
+  "constraints": {
+    "max_runtime": 300,
+    "no_shell_features": true
+  },
+  "receipt": {
+    "intent_hash": "c38b96ed27fd829b46a74ed11d80d265bcf5caaad1dd55123f69ff362fddd5c8",
+    "policy_hash": "58272f2b9262d3f6cf3a795a4153f2664ece144bb01fb6bb0cf922c86620bb86",
+    "sandbox_config_hash": "",
+    "exec": {
+      "started": "2026-02-12T16:47:44.739Z",
+      "ended": "2026-02-12T16:47:44.739Z",
+      "exit_code": 0
+    },
+    "outputs": {
+      "stdout_hash": "ZmlsZSBjb250ZW50cw=="
+    },
+    "artifacts": {},
+    "broker_signature": {
+      "type": "Buffer",
+      "data": [
+        67,
+        163,
+        200,
+        187,
+        193,
+        203,
+        167,
+        33,
+        147,
+        211,
+        101,
+        143,
+        113,
+        99,
+        254,
+        182,
+        47,
+        17,
+        108,
+        198,
+        163,
+        213,
+        161,
+        3,
+        111,
+        44,
+        152,
+        134,
+        199,
+        97,
+        255,
+        53,
+        236,
+        227,
+        188,
+        18,
+        204,
+        83,
+        122,
+        114,
+        249,
+        163,
+        127,
+        0,
+        1,
+        218,
+        49,
+        79,
+        221,
+        221,
+        60,
+        139,
+        183,
+        118,
+        187,
+        170,
+        231,
+        219,
+        143,
+        146,
+        75,
+        152,
+        191,
+        14
+      ]
+    }
+  }
+}

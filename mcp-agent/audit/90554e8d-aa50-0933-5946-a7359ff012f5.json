@@ -1,0 +1,99 @@
+{
+  "job_id": "90554e8d-aa50-0933-5946-a7359ff012f5",
+  "timestamp": "2026-02-12T16:43:04.042Z",
+  "tool": "run_command",
+  "args": {
+    "command": "ls -la"
+  },
+  "decision": "allow",
+  "allowed_caps": [
+    "proc.exec:ls"
+  ],
+  "constraints": {
+    "max_runtime": 300,
+    "no_shell_features": true
+  },
+  "receipt": {
+    "intent_hash": "2bffe8a972555ce723e1ee6c6ab388e846685486c50f20294226b16bf3ba89c6",
+    "policy_hash": "58272f2b9262d3f6cf3a795a4153f2664ece144bb01fb6bb0cf922c86620bb86",
+    "sandbox_config_hash": "",
+    "exec": {
+      "started": "2026-02-12T16:43:04.042Z",
+      "ended": "2026-02-12T16:43:04.042Z",
+      "exit_code": 0
+    },
+    "outputs": {
+      "stdout_hash": "dG90YWwgNDIKZHJ3eHIteHIteCAuLi4="
+    },
+    "artifacts": {},
+    "broker_signature": {
+      "type": "Buffer",
+      "data": [
+        27,
+        11,
+        226,
+        236,
+        147,
+        254,
+        137,
+        210,
+        127,
+        231,
+        40,
+        128,
+        104,
+        72,
+        22,
+        162,
+        42,
+        161,
+        43,
+        187,
+        148,
+        148,
+        158,
+        132,
+        111,
+        225,
+        80,
+        227,
+        99,
+        37,
+        155,
+        62,
+        210,
+        10,
+        89,
+        100,
+        77,
+        66,
+        29,
+        128,
+        15,
+        240,
+        95,
+        119,
+        100,
+        193,
+        97,
+        232,
+        206,
+        91,
+        226,
+        132,
+        61,
+        144,
+        244,
+        121,
+        232,
+        250,
+        100,
+        64,
+        66,
+        22,
+        40,
+        7
+      ]
+    }
+  }
+}

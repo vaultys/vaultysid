@@ -1,0 +1,28 @@
+# Source files (published as dist/)
+src/
+bin/*.ts
+
+# Test files
+test-e2e.ts
+*.test.ts
+
+# Dev config
+tsconfig.json
+pnpm-lock.yaml
+.gitignore
+
+# Runtime artifacts
+audit/
+workspace/
+*.identity.json
+*.secret.json
+policy.signed.json
+node_modules/
+
+# Grant/SRP scripts (dev only)
+grant-policy.ts
+srp-grant-policy.ts
+
+# Debug/docs
+debug/
+docs/

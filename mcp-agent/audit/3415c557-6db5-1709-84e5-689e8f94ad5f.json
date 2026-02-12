@@ -1,0 +1,99 @@
+{
+  "job_id": "3415c557-6db5-1709-84e5-689e8f94ad5f",
+  "timestamp": "2026-02-12T16:43:04.051Z",
+  "tool": "read_file",
+  "args": {
+    "path": "README.md"
+  },
+  "decision": "allow",
+  "allowed_caps": [
+    "fs.read:/tmp/vaultys-mcp-test/README.md"
+  ],
+  "constraints": {
+    "max_runtime": 300,
+    "no_shell_features": true
+  },
+  "receipt": {
+    "intent_hash": "67e312e1fe252721964421c55e5ce2031d776e27432995a133530d8f0436fe60",
+    "policy_hash": "58272f2b9262d3f6cf3a795a4153f2664ece144bb01fb6bb0cf922c86620bb86",
+    "sandbox_config_hash": "",
+    "exec": {
+      "started": "2026-02-12T16:43:04.050Z",
+      "ended": "2026-02-12T16:43:04.050Z",
+      "exit_code": 0
+    },
+    "outputs": {
+      "stdout_hash": "IyBIZWxsbw=="
+    },
+    "artifacts": {},
+    "broker_signature": {
+      "type": "Buffer",
+      "data": [
+        125,
+        82,
+        55,
+        55,
+        167,
+        75,
+        28,
+        81,
+        164,
+        178,
+        79,
+        100,
+        100,
+        111,
+        102,
+        108,
+        246,
+        115,
+        134,
+        254,
+        75,
+        130,
+        25,
+        88,
+        231,
+        140,
+        176,
+        191,
+        157,
+        160,
+        11,
+        190,
+        171,
+        65,
+        92,
+        69,
+        132,
+        217,
+        22,
+        2,
+        85,
+        163,
+        96,
+        12,
+        60,
+        182,
+        36,
+        154,
+        89,
+        80,
+        177,
+        130,
+        155,
+        151,
+        224,
+        204,
+        247,
+        237,
+        231,
+        109,
+        153,
+        156,
+        90,
+        13
+      ]
+    }
+  }
+}

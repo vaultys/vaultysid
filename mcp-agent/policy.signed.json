@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "scopes": {
+    "fs.read": [
+      "/Users/fxthoorens/Documents/GitHub/vaultysid/typescript/demos/mcp-agent/workspace/**"
+    ],
+    "fs.write": [
+      "/Users/fxthoorens/Documents/GitHub/vaultysid/typescript/demos/mcp-agent/workspace/**"
+    ],
+    "fs.list": [
+      "/Users/fxthoorens/Documents/GitHub/vaultysid/typescript/demos/mcp-agent/workspace/**"
+    ],
+    "proc.exec": [
+      "ls",
+      "cat",
+      "echo",
+      "wc",
+      "head",
+      "tail",
+      "grep",
+      "find"
+    ],
+    "net.egress.http": [
+      "*"
+    ]
+  },
+  "denied": [
+    "secrets.*",
+    "pkg.system",
+    "proc.privilege"
+  ],
+  "constraints": {
+    "max_runtime": 300,
+    "no_shell_features": true
+  },
+  "not_before": 1770913402568,
+  "not_after": 1770999802568,
+  "signature": "RoQ6rsPgs9blaJH9WiSgIuqeK7O1UfuBdibSqetEwnxpjghqRv2Q1bAsrheWjtMDB3z1Ctu+ujCjSPCtI14uAw=="
+}
