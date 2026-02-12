@@ -50,6 +50,8 @@ async function main() {
       max_runtime: 30000,
       no_shell_features: true,
     },
+    not_before: Date.now(),
+    not_after: Date.now() + 3600_000,
   };
 
   // ── 2. Phase 1 – Send signed policy ──

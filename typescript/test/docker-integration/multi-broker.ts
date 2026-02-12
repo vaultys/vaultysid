@@ -48,6 +48,8 @@ async function main() {
     },
     denied: ["proc.privilege"],
     constraints: { no_shell_features: true },
+    not_before: Date.now(),
+    not_after: Date.now() + 3600_000,
   };
 
   const signedPolicy = await execManager.signPolicy(policy);

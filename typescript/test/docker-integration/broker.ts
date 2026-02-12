@@ -56,6 +56,8 @@ async function main() {
       max_runtime: 30000,
       no_shell_features: true,
     },
+    not_before: Date.now(),             // valid from now
+    not_after: Date.now() + 3600_000,   // valid for 1 hour
   };
 
   const signedPolicy = await execManager.signPolicy(policy);

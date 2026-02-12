@@ -42,6 +42,8 @@ export interface PolicyBundle {
   scopes: PolicyScopes;
   denied: string[];
   constraints: PolicyConstraints;
+  not_before?: number; // epoch ms – policy is not valid before this timestamp
+  not_after?: number;  // epoch ms – policy is not valid after this timestamp
   signature?: Buffer;
 }
 

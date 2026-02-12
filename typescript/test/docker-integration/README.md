@@ -29,27 +29,27 @@ Each process:
 
 ### 1. Happy Path (`broker.ts` + `agent.ts`)
 
-| Role   | What it does |
-|--------|-------------|
+| Role   | What it does                                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Broker | Signs a policy allowing `proc.exec:[echo,ls,cat]` and `fs.read:**`. Listens on port `P` for policy exchange, then `P+1` for execution. |
-| Agent  | Connects, receives the signed policy, verifies its signature, creates an intent requesting `proc.exec:echo`, submits it via SRP. |
+| Agent  | Connects, receives the signed policy, verifies its signature, creates an intent requesting `proc.exec:echo`, submits it via SRP.       |
 
 **Pass condition**: Agent receives a valid signed receipt with `exit_code: 0`.
 
 ### 2. Denied Capability (`denied-broker.ts` + `denied-agent.ts`)
 
-| Role   | What it does |
-|--------|-------------|
-| Broker | Same policy as happy path. Expects the intent to be **denied** during evaluation. |
+| Role   | What it does                                                                           |
+| ------ | -------------------------------------------------------------------------------------- |
+| Broker | Same policy as happy path. Expects the intent to be **denied** during evaluation.      |
 | Agent  | Requests `fs.delete:/important-data` — a capability not present in the allowed scopes. |
 
 **Pass condition**: Broker throws "Intent denied by policy" and the agent receives a null/error response. Both processes exit 0.
 
 ### 3. Multi-Agent (`multi-broker.ts` + `multi-agent.ts` × 2)
 
-| Role   | What it does |
-|--------|-------------|
-| Broker | Serves `N` agents sequentially: `N` policy exchanges on port `P`, then `N` execution rounds on port `P+1`. |
+| Role   | What it does                                                                                                                                                                            |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Broker | Serves `N` agents sequentially: `N` policy exchanges on port `P`, then `N` execution rounds on port `P+1`.                                                                              |
 | Agents | Staggered by `AGENT_INDEX × 3s` to serialize connections to the single-threaded broker. Each agent independently receives the policy, creates its own intent, and gets its own receipt. |
 
 **Pass condition**: All agents get valid receipts. Broker stores `N` receipts.
@@ -58,18 +58,18 @@ Each process:
 
 ## Files
 
-| File | Description |
-|------|-------------|
-| `TcpChannel.ts` | TCP-based `Channel` implementation with length-prefixed framing. `listen()` accepts exactly one connection then closes the server socket. |
-| `broker.ts` | Happy-path broker process |
-| `agent.ts` | Happy-path agent process |
-| `denied-broker.ts` | Denied-capability broker process |
-| `denied-agent.ts` | Denied-capability agent process |
-| `multi-broker.ts` | Multi-agent broker process |
-| `multi-agent.ts` | Multi-agent agent process (parameterized by `AGENT_INDEX`) |
-| `Dockerfile` | Single image for all roles (Node 22 Alpine + pnpm + tsx) |
-| `docker-compose.yml` | Defines all 3 scenarios with isolated networks |
-| `run.sh` | Test runner with local and Docker modes |
+| File                 | Description                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `TcpChannel.ts`      | TCP-based `Channel` implementation with length-prefixed framing. `listen()` accepts exactly one connection then closes the server socket. |
+| `broker.ts`          | Happy-path broker process                                                                                                                 |
+| `agent.ts`           | Happy-path agent process                                                                                                                  |
+| `denied-broker.ts`   | Denied-capability broker process                                                                                                          |
+| `denied-agent.ts`    | Denied-capability agent process                                                                                                           |
+| `multi-broker.ts`    | Multi-agent broker process                                                                                                                |
+| `multi-agent.ts`     | Multi-agent agent process (parameterized by `AGENT_INDEX`)                                                                                |
+| `Dockerfile`         | Single image for all roles (Node 22 Alpine + pnpm + tsx)                                                                                  |
+| `docker-compose.yml` | Defines all 3 scenarios with isolated networks                                                                                            |
+| `run.sh`             | Test runner with local and Docker modes                                                                                                   |
 
 ---
 
@@ -113,15 +113,15 @@ docker compose -f test/docker-integration/docker-compose.yml up --build --abort-
 
 ## Environment Variables
 
-| Variable | Used by | Default | Description |
-|----------|---------|---------|-------------|
-| `BROKER_HOST` | agents | `broker` | Hostname of the broker container |
-| `BROKER_PORT` | all | `9000` | Base port (policy on `P`, execution on `P+1`) |
-| `BROKER_NAME` | brokers | `broker` | Display name in logs |
-| `AGENT_NAME` | agents | `agent` | Display name in logs |
-| `AGENT_INDEX` | multi-agent | `0` | 0-based index, used to stagger startup |
-| `AGENT_COUNT` | multi-broker | `2` | Number of agents to expect |
-| `ALGORITHM` | all | `ed25519` | Key algorithm (`ed25519` or `dilithium`) |
+| Variable      | Used by      | Default   | Description                                   |
+| ------------- | ------------ | --------- | --------------------------------------------- |
+| `BROKER_HOST` | agents       | `broker`  | Hostname of the broker container              |
+| `BROKER_PORT` | all          | `9000`    | Base port (policy on `P`, execution on `P+1`) |
+| `BROKER_NAME` | brokers      | `broker`  | Display name in logs                          |
+| `AGENT_NAME`  | agents       | `agent`   | Display name in logs                          |
+| `AGENT_INDEX` | multi-agent  | `0`       | 0-based index, used to stagger startup        |
+| `AGENT_COUNT` | multi-broker | `2`       | Number of agents to expect                    |
+| `ALGORITHM`   | all          | `ed25519` | Key algorithm (`ed25519` or `dilithium`)      |
 
 ---
 

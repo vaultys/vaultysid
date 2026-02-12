@@ -7,13 +7,21 @@ import "./shims";
 
 // ── Helpers ──
 
-const createMachineIdManager = async () => {
+const createMachineIdManager = async (algo?: "dilithium_ed25519" | "dilithium" | "ed25519") => {
   const algorithms: ("dilithium_ed25519" | "dilithium" | "ed25519")[] = ["dilithium_ed25519", "dilithium", "ed25519"];
-  const id = await VaultysId.generateMachine(algorithms[Math.floor(Math.random() * algorithms.length)]);
+  const chosen = algo ?? algorithms[Math.floor(Math.random() * algorithms.length)];
+  const id = await VaultysId.generateMachine(chosen);
   const store = MemoryStorage(() => "");
   const manager = new IdManager(id, store);
   manager.setProtocolVersion(1);
   return manager;
+};
+
+const getAlgorithm = (manager: IdManager): "dilithium_ed25519" | "dilithium" | "ed25519" => {
+  const name = manager.vaultysId.keyManager.constructor.name;
+  if (name === "HybridManager") return "dilithium_ed25519";
+  if (name === "DilithiumManager") return "dilithium";
+  return "ed25519";
 };
 
 const samplePolicy: Omit<PolicyBundle, "signature"> = {
@@ -246,6 +254,88 @@ describe("ExecutionManager – Evaluation", () => {
     assert.equal(result.decision, "allow-with-constraints");
     assert.equal(result.constraints?.max_runtime, 300);
   });
+
+  it("denies an intent when policy has not started yet (not_before)", async () => {
+    const agentManager = await createMachineIdManager();
+    const agentEm = new ExecutionManager(agentManager);
+    const authorityEm = new ExecutionManager(await createMachineIdManager());
+
+    const futurePolicy = await authorityEm.signPolicy({
+      ...samplePolicy,
+      not_before: Date.now() + 60_000, // starts 1 minute from now
+    });
+
+    const intent = await agentEm.createIntent({
+      tool: "npm",
+      argv: ["install"],
+      cwd: "/workspace",
+      requested_caps: ["proc.exec.build"],
+    });
+
+    const result = em.evaluateIntent(intent, futurePolicy);
+    assert.equal(result.decision, "deny");
+    assert.ok(result.denied_caps?.includes("policy:not_yet_valid"));
+  });
+
+  it("denies an intent when policy has expired (not_after)", async () => {
+    const agentManager = await createMachineIdManager();
+    const agentEm = new ExecutionManager(agentManager);
+    const authorityEm = new ExecutionManager(await createMachineIdManager());
+
+    const expiredPolicy = await authorityEm.signPolicy({
+      ...samplePolicy,
+      not_before: Date.now() - 120_000,
+      not_after: Date.now() - 60_000, // expired 1 minute ago
+    });
+
+    const intent = await agentEm.createIntent({
+      tool: "npm",
+      argv: ["install"],
+      cwd: "/workspace",
+      requested_caps: ["proc.exec.build"],
+    });
+
+    const result = em.evaluateIntent(intent, expiredPolicy);
+    assert.equal(result.decision, "deny");
+    assert.ok(result.denied_caps?.includes("policy:expired"));
+  });
+
+  it("allows an intent when current time is within not_before/not_after window", async () => {
+    const agentManager = await createMachineIdManager();
+    const agentEm = new ExecutionManager(agentManager);
+    const authorityEm = new ExecutionManager(await createMachineIdManager());
+
+    const validPolicy = await authorityEm.signPolicy({
+      ...samplePolicy,
+      not_before: Date.now() - 60_000, // started 1 minute ago
+      not_after: Date.now() + 60_000,  // expires 1 minute from now
+    });
+
+    const intent = await agentEm.createIntent({
+      tool: "npm",
+      argv: ["install"],
+      cwd: "/workspace",
+      requested_caps: ["proc.exec.build"],
+    });
+
+    const result = em.evaluateIntent(intent, validPolicy);
+    assert.notEqual(result.decision, "deny");
+  });
+
+  it("time validity is covered by the policy signature", async () => {
+    const authority = await createMachineIdManager();
+    const authorityEm = new ExecutionManager(authority);
+
+    const signed = await authorityEm.signPolicy({
+      ...samplePolicy,
+      not_before: Date.now(),
+      not_after: Date.now() + 3600_000,
+    });
+
+    // Tamper with the expiry
+    signed.not_after = Date.now() + 86400_000;
+    assert.ok(!ExecutionManager.verifyPolicy(signed, authority.vaultysId));
+  });
 });
 
 // ── Receipt Tests ──
@@ -402,7 +492,7 @@ describe("ExecutionManager – SRP Round-Trip", () => {
     const agent = await createMachineIdManager();
     const broker = await createMachineIdManager();
     const authority = await createMachineIdManager();
-    const fakeAuthority = await createMachineIdManager();
+    const fakeAuthority = await createMachineIdManager(getAlgorithm(authority));
 
     const agentEm = new ExecutionManager(agent);
     const brokerEm = new ExecutionManager(broker);

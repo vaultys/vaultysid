@@ -256,7 +256,23 @@ export default class ExecutionManager {
    * Evaluate a signed intent against a policy bundle.
    * Returns allow / deny / allow-with-constraints.
    */
-  evaluateIntent(intent: ExecutionIntent, policy: PolicyBundle): ExecutionResult {
+  evaluateIntent(intent: ExecutionIntent, policy: PolicyBundle, now: number = Date.now()): ExecutionResult {
+    // ── Time validity check ──
+    if (policy.not_before != null && now < policy.not_before) {
+      return {
+        decision: "deny",
+        denied_caps: ["policy:not_yet_valid"],
+        allowed_caps: [],
+      };
+    }
+    if (policy.not_after != null && now > policy.not_after) {
+      return {
+        decision: "deny",
+        denied_caps: ["policy:expired"],
+        allowed_caps: [],
+      };
+    }
+
     const denied_caps: string[] = [];
     const allowed_caps: string[] = [];
 

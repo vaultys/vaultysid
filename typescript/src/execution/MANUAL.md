@@ -92,6 +92,8 @@ const policy = {
     max_runtime: 300,         // seconds
     no_shell_features: true,  // reject argv with |, ;, &, etc.
   },
+  not_before: Date.now(),              // policy is valid from now
+  not_after:  Date.now() + 86400_000,  // policy expires in 24 hours
 };
 ```
 
@@ -332,9 +334,44 @@ switch (result.decision) {
 ```
 
 The evaluator checks:
-1. Each `requested_caps` entry against `policy.scopes` and `policy.denied`
-2. Shell metacharacters in `argv` when `no_shell_features` is set
-3. Returns constraints for the sandbox to enforce
+1. **Time validity** — rejects if current time is before `not_before` or after `not_after`
+2. Each `requested_caps` entry against `policy.scopes` and `policy.denied`
+3. Shell metacharacters in `argv` when `no_shell_features` is set
+4. Returns constraints for the sandbox to enforce
+
+### Time Validity
+
+Policies can include optional time bounds:
+
+| Field        | Type          | Description                                     |
+| ------------ | ------------- | ----------------------------------------------- |
+| `not_before` | `number` (ms) | Policy is not valid before this epoch timestamp |
+| `not_after`  | `number` (ms) | Policy is not valid after this epoch timestamp  |
+
+Both fields are optional. When set, `evaluateIntent` checks the current time (or a custom timestamp passed as the third argument) against these bounds:
+
+```typescript
+// Policy that is valid for the next hour
+const policy = {
+  ...basePolicy,
+  not_before: Date.now(),
+  not_after:  Date.now() + 3600_000,
+};
+
+const signed = await authorityEm.signPolicy(policy);
+
+// Evaluating after expiry returns deny
+const futureTime = Date.now() + 7200_000;
+const result = brokerEm.evaluateIntent(intent, signed, futureTime);
+// result.decision === "deny"
+// result.denied_caps === ["policy:expired"]
+```
+
+Time-related denial reasons:
+- `policy:not_yet_valid` — current time is before `not_before`
+- `policy:expired` — current time is after `not_after`
+
+The `not_before` and `not_after` fields are included in the signed payload, so tampering with them invalidates the policy signature.
 
 ---
 
@@ -489,6 +526,8 @@ All verification failures throw descriptive errors:
 | `"No policy found in SRP metadata"`        | Producer did not include policy in SRP metadata      |
 | `"Policy hash mismatch in SRP metadata"`   | Policy content was tampered during SRP exchange      |
 | `"Policy rejected by executor"`            | Executor's `onPolicy` callback returned false        |
+| `"policy:not_yet_valid"`                   | Policy `not_before` is in the future                 |
+| `"policy:expired"`                         | Policy `not_after` is in the past                    |
 
 ---
 
@@ -499,4 +538,4 @@ cd typescript
 pnpm test -- --grep "Execution"
 ```
 
-This runs 30 tests covering: taxonomy parsing, policy signing, SRP policy agreement, intent signing, evaluation, receipts, SRP round-trips, and error cases.
+This runs 34 tests covering: taxonomy parsing, policy signing, time validity, SRP policy agreement, intent signing, evaluation, receipts, SRP round-trips, and error cases.
