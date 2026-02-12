@@ -10,4 +10,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { PolicyBundle } from "@vaultys/id";
 import type { IdManager } from "@vaultys/id";
+export declare function setResourceAuditDir(dir: string): void;
 export declare function registerResources(server: McpServer, serverIdManager: IdManager, signedPolicy: PolicyBundle): void;

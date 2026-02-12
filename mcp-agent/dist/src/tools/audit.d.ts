@@ -6,4 +6,5 @@
  */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { IdManager } from "@vaultys/id";
+export declare function setAuditToolDir(dir: string): void;
 export declare function registerAuditTool(server: McpServer, serverIdManager: IdManager): void;

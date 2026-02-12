@@ -8,7 +8,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { z } from "zod";
 import { ExecutionManager } from "@vaultys/id";
-const AUDIT_DIR = path.resolve("audit");
+import { getConfigDir } from "../autoInit.js";
+let AUDIT_DIR = path.join(getConfigDir(), "audit");
+export function setAuditToolDir(dir) {
+    AUDIT_DIR = path.resolve(dir);
+}
 function restoreSignature(receipt) {
     if (receipt.broker_signature) {
         if (typeof receipt.broker_signature === "string") {

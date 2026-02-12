@@ -97,7 +97,9 @@ function resolveWorkspacePath(raw: string, workspaceRoot?: string): string {
 
 // ── Audit persistence ──
 
-let AUDIT_DIR = path.resolve("audit");
+import { getConfigDir } from "./autoInit.js";
+
+let AUDIT_DIR = path.join(getConfigDir(), "audit");
 
 export function setAuditDir(dir: string): void {
   AUDIT_DIR = path.resolve(dir);

@@ -12,8 +12,13 @@ import { ExecutionManager } from "@vaultys/id";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { IdManager } from "@vaultys/id";
 import type { SignedReceipt } from "@vaultys/id";
+import { getConfigDir } from "../autoInit.js";
 
-const AUDIT_DIR = path.resolve("audit");
+let AUDIT_DIR = path.join(getConfigDir(), "audit");
+
+export function setAuditToolDir(dir: string): void {
+  AUDIT_DIR = path.resolve(dir);
+}
 
 interface AuditRecord {
   job_id: string;

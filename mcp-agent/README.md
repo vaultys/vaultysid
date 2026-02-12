@@ -224,8 +224,8 @@ Tampered receipts are detected — the cryptographic signature becomes invalid.
 ## Development
 
 ```bash
-git clone https://github.com/nicmusic/vaultysid
-cd typescript/demos/mcp-agent
+git clone https://github.com/vaultys/vaultysid
+cd mcp-agent
 pnpm install
 
 # Run tests (29 E2E tests)

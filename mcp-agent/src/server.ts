@@ -23,12 +23,12 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { autoInit, getConfigDir } from "./autoInit.js";
-import { createPolicyMiddleware } from "./policyMiddleware.js";
+import { createPolicyMiddleware, setAuditDir } from "./policyMiddleware.js";
 import { registerFilesystemTools } from "./tools/filesystem.js";
 import { registerShellTool } from "./tools/shell.js";
 import { registerNetworkTool } from "./tools/network.js";
-import { registerAuditTool } from "./tools/audit.js";
-import { registerResources } from "./resources/index.js";
+import { registerAuditTool, setAuditToolDir } from "./tools/audit.js";
+import { registerResources, setResourceAuditDir } from "./resources/index.js";
 
 // ── Configuration ──
 
@@ -38,6 +38,13 @@ const WORKSPACE_ROOT = path.resolve(process.env.WORKSPACE_ROOT ?? process.cwd())
 
 async function main() {
   console.error(`[VaultysID] Config dir: ${getConfigDir()}`);
+
+  // Set audit directory consistently across all modules
+  const auditDir = path.join(getConfigDir(), "audit");
+  setAuditDir(auditDir);
+  setAuditToolDir(auditDir);
+  setResourceAuditDir(auditDir);
+  console.error(`[VaultysID] Audit dir: ${auditDir}`);
 
   // 1. Auto-initialize (identity + policy — generates defaults on first run)
   const { serverIdm, signedPolicy, authorityDid } = await autoInit(WORKSPACE_ROOT);

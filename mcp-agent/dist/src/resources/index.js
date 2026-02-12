@@ -9,7 +9,11 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
-const AUDIT_DIR = path.resolve("audit");
+import { getConfigDir } from "../autoInit.js";
+let AUDIT_DIR = path.join(getConfigDir(), "audit");
+export function setResourceAuditDir(dir) {
+    AUDIT_DIR = path.resolve(dir);
+}
 export function registerResources(server, serverIdManager, signedPolicy) {
     // ── Current Policy ──
     server.resource("current-policy", "vaultys://policy/current", { mimeType: "application/json", description: "The active signed policy bundle" }, async () => {

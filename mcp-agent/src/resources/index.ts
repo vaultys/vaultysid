@@ -13,8 +13,13 @@ import * as path from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { PolicyBundle } from "@vaultys/id";
 import type { IdManager } from "@vaultys/id";
+import { getConfigDir } from "../autoInit.js";
 
-const AUDIT_DIR = path.resolve("audit");
+let AUDIT_DIR = path.join(getConfigDir(), "audit");
+
+export function setResourceAuditDir(dir: string): void {
+  AUDIT_DIR = path.resolve(dir);
+}
 
 export function registerResources(
   server: McpServer,
