@@ -15,6 +15,12 @@
   "browser": "./dist/browser/vaultysid.min.js",
   "types": "./dist/node/index.d.ts",
   "description": "the most advanced decentralised id framework",
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "npm run build:node && npm run build:browser",
     "build:node": "rm -fr ./dist && tsc -p tsconfig.json",
