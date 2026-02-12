@@ -1,13 +1,13 @@
 {
   "name": "@vaultys/mcp-agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Policy-enforced MCP server powered by VaultysID — cryptographic authorization and audit trail for every AI tool call",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nicmusic/vaultysid",
-    "directory": "typescript/demos/mcp-agent"
+    "url": "https://github.com/vaultys/vaultysid",
+    "directory": "mcp-agent"
   },
   "keywords": [
     "mcp",
