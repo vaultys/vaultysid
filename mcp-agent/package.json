@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/mcp-agent",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Policy-enforced MCP server powered by VaultysID — cryptographic authorization and audit trail for every AI tool call",
   "license": "MIT",
@@ -21,6 +21,7 @@
   ],
   "main": "./dist/src/server.js",
   "bin": {
+    "mcp-agent": "./dist/bin/server.js",
     "vaultys-mcp-agent": "./dist/bin/server.js",
     "vaultys-mcp-init": "./dist/bin/init.js",
     "vaultys-mcp-grant": "./dist/bin/grant-policy.js",
