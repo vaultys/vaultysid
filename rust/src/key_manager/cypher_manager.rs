@@ -73,7 +73,7 @@ impl<'a> DHIES<'a> {
         data_to_authenticate.extend_from_slice(&nonce_bytes);
         data_to_authenticate.extend_from_slice(&ciphertext);
 
-        let mac = self.compute_mac(&kdf_output.mac_key, &data_to_authenticate);
+        let mac = self.compute_mac(&kdf_output.mac_key, &data_to_authenticate)?;
 
         // Construct final message: nonce || ephemeral_public || ciphertext || mac
         let mut encrypted_message = Vec::new();
@@ -145,7 +145,7 @@ impl<'a> DHIES<'a> {
         data_to_authenticate.extend_from_slice(nonce_bytes);
         data_to_authenticate.extend_from_slice(ciphertext);
 
-        let computed_mac = self.compute_mac(&kdf_output.mac_key, &data_to_authenticate);
+        let computed_mac = self.compute_mac(&kdf_output.mac_key, &data_to_authenticate)?;
 
         if !constant_time_eq(&computed_mac, mac) {
             return Err(Error::MacVerificationFailed);
@@ -205,12 +205,9 @@ impl<'a> DHIES<'a> {
         }
     }
 
-    /// Compute MAC for authenticated encryption
-    fn compute_mac(&self, mac_key: &[u8], data: &[u8]) -> Vec<u8> {
-        let mut input = Vec::new();
-        input.extend_from_slice(mac_key);
-        input.extend_from_slice(data);
-        hash("sha256", &input)
+    /// Compute MAC for authenticated encryption using HMAC-SHA256
+    fn compute_mac(&self, mac_key: &[u8], data: &[u8]) -> Result<Vec<u8>> {
+        hmac("sha256", mac_key, data)
     }
 }
 

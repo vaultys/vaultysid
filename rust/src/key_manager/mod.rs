@@ -18,7 +18,6 @@ use zeroize::Zeroize;
 #[zeroize(drop)]
 pub struct KeyPairImpl {
     pub public_key: Vec<u8>,
-    #[zeroize(skip)]
     pub secret_key: Option<Vec<u8>>,
 }
 

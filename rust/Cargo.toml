@@ -3,7 +3,7 @@ name = "vaultysid"
 version = "0.1.0"
 authors = ["Vaultys"]
 edition = "2021"
-rust-version = "1.91"
+rust-version = "1.90"
 description = "Cryptographic identity library providing Ed25519 signing, X25519 key exchange, and DID-based identity management"
 documentation = "https://docs.rs/vaultysid"
 readme = "README.md"
@@ -47,7 +47,7 @@ rand_chacha = "0.3"
 getrandom = "0.2"
 
 # Post-quantum cryptography
-libcrux-ml-dsa = "0.0.4"
+libcrux-ml-dsa = "0.0.8"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -69,7 +69,6 @@ zeroize = { version = "1.7", features = ["derive"] }
 # Async runtime
 tokio = { version = "1.35", features = ["full"] }
 zerocopy = "0.8.27"
-pqc_dilithium = "0.2.0"
 
 [dev-dependencies]
 tempfile = "3.8"
