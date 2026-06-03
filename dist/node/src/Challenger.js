@@ -203,7 +203,7 @@ const isLive = (challenge, liveliness, time = Date.now()) => {
     return challenge.timestamp > time - liveliness && challenge.timestamp < time + liveliness;
 };
 class Challenger {
-    constructor(vaultysId, liveliness = 60 * 1000) {
+    constructor(vaultysId, liveliness = 60 * 5 * 1000) {
         this.version = 0;
         this.state = UNINITIALISED;
         // create a copy of VaultysId

@@ -221,7 +221,7 @@ export default class Challenger {
   challenge: ChallengeType | undefined;
   version: 0 | 1 = 0;
 
-  constructor(vaultysId: VaultysId, liveliness = 60 * 1000) {
+  constructor(vaultysId: VaultysId, liveliness = 60 * 5 * 1000) {
     this.state = UNINITIALISED;
     // create a copy of VaultysId
     this.vaultysId = VaultysId.fromSecret(vaultysId.getSecret());
