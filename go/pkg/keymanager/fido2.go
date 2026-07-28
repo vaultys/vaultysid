@@ -542,6 +542,9 @@ func (m *FIDO2Manager) GetCypherPublicKey() []byte {
 }
 
 // DiffieHellman performs ECDH key agreement
+// DiffieHellman returns the raw X25519 scalar-mult output, matching TS's
+// `cypher.diffieHellman`. It is intentionally unhashed here; VaultysID.PerformDiffieHellman
+// is the layer that hashes it, matching TS's CypherManager.performDiffieHellman.
 func (m *FIDO2Manager) DiffieHellman(peerPublicKey []byte) ([]byte, error) {
 	if m.Capability != "private" {
 		return nil, fmt.Errorf("no private key")

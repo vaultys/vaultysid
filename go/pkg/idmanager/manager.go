@@ -675,13 +675,20 @@ func (m *Manager) PRF(appID string, salt []byte) ([]byte, error) {
 func (m *Manager) SaveContact(contact *vaultysid.VaultysID, metadata map[string]interface{}) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.saveContactLocked(contact, metadata)
+}
 
+// saveContactLocked is the implementation of SaveContact. Callers must hold m.mu;
+// it exists so SaveApp can dispatch here without recursively re-locking m.mu
+// (sync.RWMutex isn't reentrant, so calling SaveContact/SaveApp from within
+// each other via the public locking methods would deadlock).
+func (m *Manager) saveContactLocked(contact *vaultysid.VaultysID, metadata map[string]interface{}) error {
 	// Match TypeScript: convert to same version
 	// contact.toVersion(this.vaultysId.version)
 
 	if contact.IsMachine() {
 		// If it's a machine, save as app instead
-		return m.SaveApp(contact)
+		return m.saveAppLocked(contact)
 	}
 
 	did := contact.DID()
@@ -704,13 +711,18 @@ func (m *Manager) SaveContact(contact *vaultysid.VaultysID, metadata map[string]
 func (m *Manager) SaveApp(app interface{}, name ...string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.saveAppLocked(app, name...)
+}
 
+// saveAppLocked is the implementation of SaveApp. Callers must hold m.mu; see
+// saveContactLocked for why this split exists.
+func (m *Manager) saveAppLocked(app interface{}, name ...string) error {
 	switch v := app.(type) {
 	case *vaultysid.VaultysID:
 		// TypeScript-style API with VaultysID
 		if !v.IsMachine() {
 			// If not a machine, save as contact instead
-			return m.SaveContact(v, nil)
+			return m.saveContactLocked(v, nil)
 		}
 
 		appStore := m.store.Substore("registrations")

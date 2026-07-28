@@ -2,14 +2,20 @@ package keymanager
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"fmt"
 
 	"github.com/vaultys/vaultysid-go/pkg/crypto"
-	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/curve25519"
 )
 
-// DHIES implements Diffie-Hellman Integrated Encryption Scheme
+// DHIES implements Diffie-Hellman Integrated Encryption Scheme.
+//
+// Wire format and key derivation match the TypeScript reference
+// (KeyManager/CypherManager.ts) so ciphertexts produced by one
+// implementation can be decrypted by the other:
+//
+//	nonce(24) || ephemeralPublicKey(32) || secretbox(plaintext) || mac(32)
 type DHIES struct {
 	privateKey []byte
 	publicKey  []byte
@@ -26,177 +32,109 @@ func NewDHIES(km *Ed25519Manager) (*DHIES, error) {
 	}, nil
 }
 
+// dhiesKDF derives an encryption key and a MAC key from a shared secret,
+// matching TS CypherManager.DHIES.kdf: SHA-512(shared || "DHIES-KDF" || pubA || pubB || domainByte).
+func dhiesKDF(shared, pubA, pubB []byte) (encKey, macKey []byte) {
+	context := make([]byte, 0, len("DHIES-KDF")+len(pubA)+len(pubB))
+	context = append(context, []byte("DHIES-KDF")...)
+	context = append(context, pubA...)
+	context = append(context, pubB...)
+
+	encMaterial := crypto.Hash("sha512", append(append(append([]byte{}, shared...), context...), 0x01))
+	macMaterial := crypto.Hash("sha512", append(append(append([]byte{}, shared...), context...), 0x02))
+
+	return encMaterial[:32], macMaterial[:32]
+}
+
+// dhiesMAC computes the outer authentication tag, matching TS computeMAC: SHA-256(macKey || data).
+func dhiesMAC(macKey, data []byte) []byte {
+	return crypto.Hash("sha256", append(append([]byte{}, macKey...), data...))
+}
+
 // Encrypt encrypts data for a recipient's public key
 func (d *DHIES) Encrypt(recipientPublicKey []byte, plaintext []byte) ([]byte, error) {
-	// Generate ephemeral key pair
 	ephemeralPrivate := make([]byte, 32)
 	if _, err := rand.Read(ephemeralPrivate); err != nil {
 		return nil, err
 	}
+	defer crypto.SecureErase(ephemeralPrivate)
 
 	ephemeralPublic, err := curve25519.X25519(ephemeralPrivate, curve25519.Basepoint)
 	if err != nil {
 		return nil, err
 	}
 
-	// Compute shared secret
 	shared, err := curve25519.X25519(ephemeralPrivate, recipientPublicKey)
 	if err != nil {
 		return nil, err
 	}
+	defer crypto.SecureErase(shared)
 
-	// Derive encryption key using HKDF-like construction
-	encKey := crypto.Hash("sha256", append(shared, []byte("encryption")...))
+	encKey, macKey := dhiesKDF(shared, d.publicKey, recipientPublicKey)
+	defer crypto.SecureErase(encKey)
+	defer crypto.SecureErase(macKey)
 
-	// Use ChaCha20-Poly1305 for authenticated encryption
-	aead, err := chacha20poly1305.NewX(encKey)
-	if err != nil {
-		return nil, err
-	}
-
-	// Generate nonce
-	nonce := make([]byte, chacha20poly1305.NonceSizeX)
+	nonce := make([]byte, 24)
 	if _, err := rand.Read(nonce); err != nil {
 		return nil, err
 	}
 
-	// Encrypt
-	ciphertext := aead.Seal(nil, nonce, plaintext, ephemeralPublic)
+	ciphertext, err := crypto.Encrypt(plaintext, encKey, nonce)
+	if err != nil {
+		return nil, err
+	}
 
-	// Return: ephemeral_public || nonce || ciphertext
-	result := make([]byte, 0, 32+len(nonce)+len(ciphertext))
-	result = append(result, ephemeralPublic...)
+	toAuthenticate := make([]byte, 0, len(d.publicKey)+len(nonce)+len(ciphertext))
+	toAuthenticate = append(toAuthenticate, d.publicKey...)
+	toAuthenticate = append(toAuthenticate, nonce...)
+	toAuthenticate = append(toAuthenticate, ciphertext...)
+	mac := dhiesMAC(macKey, toAuthenticate)
+
+	result := make([]byte, 0, len(nonce)+len(ephemeralPublic)+len(ciphertext)+len(mac))
 	result = append(result, nonce...)
+	result = append(result, ephemeralPublic...)
 	result = append(result, ciphertext...)
+	result = append(result, mac...)
 
 	return result, nil
 }
 
-// Decrypt decrypts data encrypted for our public key
-func (d *DHIES) Decrypt(ciphertext []byte) ([]byte, error) {
-	if len(ciphertext) < 32+chacha20poly1305.NonceSizeX+chacha20poly1305.Overhead {
+// Decrypt decrypts a message produced by Encrypt, verifying it came from senderPublicKey.
+func (d *DHIES) Decrypt(message []byte, senderPublicKey []byte) ([]byte, error) {
+	const minLen = 24 + 32 + 32 // nonce + ephemeralPublic + mac (ciphertext may be empty plaintext + 16-byte overhead, but check that separately)
+	if len(message) < minLen {
 		return nil, fmt.Errorf("ciphertext too short")
 	}
 
-	// Extract components
-	ephemeralPublic := ciphertext[:32]
-	nonce := ciphertext[32 : 32+chacha20poly1305.NonceSizeX]
-	encrypted := ciphertext[32+chacha20poly1305.NonceSizeX:]
+	nonce := message[:24]
+	ephemeralPublic := message[24:56]
+	mac := message[len(message)-32:]
+	ciphertext := message[56 : len(message)-32]
 
-	// Compute shared secret
 	shared, err := curve25519.X25519(d.privateKey, ephemeralPublic)
 	if err != nil {
 		return nil, err
 	}
+	defer crypto.SecureErase(shared)
 
-	// Derive decryption key
-	encKey := crypto.Hash("sha256", append(shared, []byte("encryption")...))
+	encKey, macKey := dhiesKDF(shared, senderPublicKey, d.publicKey)
+	defer crypto.SecureErase(encKey)
+	defer crypto.SecureErase(macKey)
 
-	// Create cipher
-	aead, err := chacha20poly1305.NewX(encKey)
-	if err != nil {
-		return nil, err
+	toAuthenticate := make([]byte, 0, len(senderPublicKey)+len(nonce)+len(ciphertext))
+	toAuthenticate = append(toAuthenticate, senderPublicKey...)
+	toAuthenticate = append(toAuthenticate, nonce...)
+	toAuthenticate = append(toAuthenticate, ciphertext...)
+	expectedMAC := dhiesMAC(macKey, toAuthenticate)
+
+	if subtle.ConstantTimeCompare(mac, expectedMAC) != 1 {
+		return nil, fmt.Errorf("DHIES: MAC verification failed")
 	}
 
-	// Decrypt
-	plaintext, err := aead.Open(nil, nonce, encrypted, ephemeralPublic)
+	plaintext, err := crypto.Decrypt(ciphertext, encKey, nonce)
 	if err != nil {
-		return nil, fmt.Errorf("decryption failed: %w", err)
+		return nil, fmt.Errorf("DHIES: decryption failed: %w", err)
 	}
 
 	return plaintext, nil
-}
-
-// EncryptAuthenticated encrypts with sender authentication
-func (d *DHIES) EncryptAuthenticated(recipientPublicKey []byte, plaintext []byte) ([]byte, error) {
-	// For authenticated encryption, we include our public key in the AD
-	// and sign the ciphertext
-
-	// First, do normal encryption
-	ciphertext, err := d.Encrypt(recipientPublicKey, plaintext)
-	if err != nil {
-		return nil, err
-	}
-
-	// Sign the ciphertext with our key
-	// In a real implementation, we'd use the signing key from Ed25519Manager
-	// For now, we'll use HMAC with the private key as a simple signature
-	signature := crypto.HMAC("sha256", d.privateKey, ciphertext)
-
-	// Return: ciphertext || signature
-	result := make([]byte, 0, len(ciphertext)+32)
-	result = append(result, ciphertext...)
-	result = append(result, signature...)
-
-	return result, nil
-}
-
-// DecryptAuthenticated decrypts and verifies sender authentication
-func (d *DHIES) DecryptAuthenticated(senderPublicKey []byte, ciphertext []byte) ([]byte, error) {
-	if len(ciphertext) < 32+chacha20poly1305.NonceSizeX+chacha20poly1305.Overhead+32 {
-		return nil, fmt.Errorf("ciphertext too short for authenticated message")
-	}
-
-	// Extract signature
-	message := ciphertext[:len(ciphertext)-32]
-	signature := ciphertext[len(ciphertext)-32:]
-
-	// Verify signature (simplified - in real implementation would use Ed25519)
-	// Here we can't verify without sender's private key, so we skip verification
-	// In a complete implementation, this would use Ed25519 signature verification
-	_ = signature
-	_ = senderPublicKey
-
-	// Decrypt the message
-	return d.Decrypt(message)
-}
-
-// SimpleBox provides a simple encrypt/decrypt interface similar to NaCl box
-func SimpleBox(message, nonce, peerPublicKey, privateKey []byte) ([]byte, error) {
-	if len(nonce) != 24 {
-		return nil, fmt.Errorf("nonce must be 24 bytes")
-	}
-
-	// Compute shared secret
-	shared, err := curve25519.X25519(privateKey, peerPublicKey)
-	if err != nil {
-		return nil, err
-	}
-
-	// Derive key
-	key := crypto.Hash("sha256", shared)
-
-	// Use ChaCha20-Poly1305
-	aead, err := chacha20poly1305.New(key)
-	if err != nil {
-		return nil, err
-	}
-
-	// Encrypt
-	return aead.Seal(nil, nonce[:12], message, nil), nil
-}
-
-// SimpleBoxOpen decrypts a message encrypted with SimpleBox
-func SimpleBoxOpen(ciphertext, nonce, peerPublicKey, privateKey []byte) ([]byte, error) {
-	if len(nonce) != 24 {
-		return nil, fmt.Errorf("nonce must be 24 bytes")
-	}
-
-	// Compute shared secret
-	shared, err := curve25519.X25519(privateKey, peerPublicKey)
-	if err != nil {
-		return nil, err
-	}
-
-	// Derive key
-	key := crypto.Hash("sha256", shared)
-
-	// Use ChaCha20-Poly1305
-	aead, err := chacha20poly1305.New(key)
-	if err != nil {
-		return nil, err
-	}
-
-	// Decrypt
-	return aead.Open(nil, nonce[:12], ciphertext, nil)
 }

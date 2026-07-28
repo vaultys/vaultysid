@@ -72,10 +72,11 @@ type ChallengerOptions struct {
 	MetadataHandler func(map[string]string) error
 }
 
-// DefaultOptions returns default challenger options
+// DefaultOptions returns default challenger options.
+// Version defaults to 0 to match TS Challenger's `version: 0 | 1 = 0`.
 func DefaultOptions() *ChallengerOptions {
 	return &ChallengerOptions{
-		Version:    ProtocolV1,
+		Version:    ProtocolV0,
 		TimeWindow: 60 * time.Second,
 	}
 }

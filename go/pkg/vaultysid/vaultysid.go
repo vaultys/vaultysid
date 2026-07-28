@@ -466,7 +466,8 @@ func (v *VaultysID) String() string {
 // Cryptographic operations
 
 // PerformDiffieHellman performs a Diffie-Hellman key exchange with another VaultysID
-// This delegates to the KeyManager's DiffieHellman implementation
+// and hashes the raw scalar-mult output, matching TS CypherManager.performDiffieHellman.
+// KeyManager.DiffieHellman itself stays unhashed (matches TS's low-level cypher.diffieHellman).
 func (v *VaultysID) PerformDiffieHellman(peer *VaultysID) ([]byte, error) {
 	if v.KeyManager.GetCapability() != "private" {
 		return nil, fmt.Errorf("no private key available")
@@ -481,7 +482,13 @@ func (v *VaultysID) PerformDiffieHellman(peer *VaultysID) ([]byte, error) {
 		return nil, fmt.Errorf("peer has no cypher public key")
 	}
 
-	return v.KeyManager.DiffieHellman(peerPublicKey)
+	shared, err := v.KeyManager.DiffieHellman(peerPublicKey)
+	if err != nil {
+		return nil, err
+	}
+	defer crypto.SecureErase(shared)
+
+	return crypto.Hash("sha256", shared), nil
 }
 
 // DiffieHellman performs a Diffie-Hellman key exchange between two VaultysIDs
@@ -549,9 +556,11 @@ func (v *VaultysID) DHIESDecrypt(ciphertext []byte, sender *VaultysID) ([]byte, 
 		return nil, fmt.Errorf("failed to create DHIES instance: %w", err)
 	}
 
-	// DHIES decrypt doesn't need sender's public key in basic implementation
-	// The ephemeral public key is embedded in the ciphertext
-	return dhies.Decrypt(ciphertext)
+	if sender == nil {
+		return nil, fmt.Errorf("sender is nil")
+	}
+
+	return dhies.Decrypt(ciphertext, sender.KeyManager.GetCypherPublicKey())
 }
 
 // Encrypt encrypts data for a set of recipients

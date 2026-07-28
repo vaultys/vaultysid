@@ -189,6 +189,10 @@ func (m *Ed25519Manager) GetCypherPublicKey() []byte {
 	return m.Cypher.PublicKey
 }
 
+// DiffieHellman returns the raw X25519 scalar-mult output, matching TS's
+// `cypher.diffieHellman` (KeyManager/CypherManager.ts getCypher()). It is
+// intentionally unhashed here; VaultysID.PerformDiffieHellman is the layer
+// that hashes it, matching TS's CypherManager.performDiffieHellman.
 func (m *Ed25519Manager) DiffieHellman(peerPublicKey []byte) ([]byte, error) {
 	if m.Capability != "private" {
 		return nil, fmt.Errorf("no private key")

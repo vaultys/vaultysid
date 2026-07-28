@@ -3,7 +3,6 @@ package challenger
 import (
 	"bytes"
 	"fmt"
-	"time"
 
 	"github.com/vaultys/vaultysid-go/pkg/crypto"
 	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
@@ -54,7 +53,7 @@ func (c *Challenger) Init(protocol, service string) (*Challenge, error) {
 	c.state.Protocol = protocol
 	c.state.Service = service
 	c.state.Nonce = nonce
-	c.state.Timestamp = time.Now().Unix()
+	c.state.Timestamp = crypto.Now()
 	c.state.State = StateInit
 
 	// Create init challenge
@@ -374,32 +373,34 @@ func (c *Challenger) Reset() {
 
 // Accept accepts an incoming challenge and returns a response
 func (c *Challenger) Accept(challengeBytes []byte) (*Challenge, error) {
-	// Unmarshal the challenge
-	var challenge Challenge
-	if err := msgpack.Unmarshal(challengeBytes, &challenge); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal challenge: %w", err)
+	// Deserialize infers State from which fields are present (PK1/PK2/Sign1/Sign2/nonce
+	// length) since State isn't part of the wire format (msgpack:"-"). A raw
+	// msgpack.Unmarshal here would leave State at its zero value (StateInit) for
+	// every message, mishandling step1/complete messages as init messages.
+	challenge, err := Deserialize(challengeBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to deserialize challenge: %w", err)
 	}
 
 	var response *Challenge
-	var err error
 
 	// Process based on challenge state
 	switch challenge.State {
 	case StateInit:
 		// We're the responder, process init and return step1
-		response, err = c.Step1(&challenge)
+		response, err = c.Step1(challenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to process init: %w", err)
 		}
 	case StateStep1:
 		// We're the initiator, process step1 and return complete
-		response, err = c.Step2(&challenge)
+		response, err = c.Step2(challenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to process step1: %w", err)
 		}
 	case StateComplete:
 		// We're the responder, finalize the protocol
-		if err := c.Finalize(&challenge); err != nil {
+		if err := c.Finalize(challenge); err != nil {
 			return nil, fmt.Errorf("failed to finalize: %w", err)
 		}
 		// Return nil for successful finalization
@@ -422,17 +423,18 @@ func (c *Challenger) GetMetadata(key string) (string, bool) {
 	return val, ok
 }
 
-// validateTimestamp checks if the timestamp is within the allowed time window
+// validateTimestamp checks if the timestamp is within the allowed time window.
+// Timestamps are Unix milliseconds, matching TS Challenger's use of Date.now()/liveliness.
 func (c *Challenger) validateTimestamp(timestamp int64) error {
-	now := time.Now().Unix()
+	now := crypto.Now()
 	diff := now - timestamp
 	if diff < 0 {
 		diff = -diff
 	}
 
-	maxDiff := int64(c.options.TimeWindow.Seconds())
+	maxDiff := c.options.TimeWindow.Milliseconds()
 	if diff > maxDiff {
-		return fmt.Errorf("timestamp outside allowed window: %d seconds", diff)
+		return fmt.Errorf("timestamp outside allowed window: %d ms", diff)
 	}
 	return nil
 }

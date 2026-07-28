@@ -28,7 +28,7 @@ func TestDHIES_EncryptDecrypt(t *testing.T) {
 	}
 
 	// Bob decrypts
-	decrypted, err := dhiesBob.Decrypt(ciphertext)
+	decrypted, err := dhiesBob.Decrypt(ciphertext, alice.GetCypherPublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestDHIES_LargeMessage(t *testing.T) {
 	}
 
 	dhiesRecipient, _ := NewDHIES(recipient)
-	decrypted, err := dhiesRecipient.Decrypt(ciphertext)
+	decrypted, err := dhiesRecipient.Decrypt(ciphertext, km.GetCypherPublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,13 +89,13 @@ func TestDHIES_CrossEncryption(t *testing.T) {
 	encrypted2, _ := dhiesBob.Encrypt(alice.GetCypherPublicKey(), message)
 
 	// Bob decrypts Alice's message
-	decrypted1, _ := dhiesBob.Decrypt(encrypted1)
+	decrypted1, _ := dhiesBob.Decrypt(encrypted1, alice.GetCypherPublicKey())
 	if !bytes.Equal(decrypted1, message) {
 		t.Error("Bob couldn't decrypt Alice's message")
 	}
 
 	// Alice decrypts Bob's message
-	decrypted2, _ := dhiesAlice.Decrypt(encrypted2)
+	decrypted2, _ := dhiesAlice.Decrypt(encrypted2, bob.GetCypherPublicKey())
 	if !bytes.Equal(decrypted2, message) {
 		t.Error("Alice couldn't decrypt Bob's message")
 	}
@@ -107,13 +107,13 @@ func TestDHIES_InvalidCiphertext(t *testing.T) {
 
 	// Test with invalid ciphertext
 	invalidCiphertext := []byte("invalid")
-	_, err := dhies.Decrypt(invalidCiphertext)
+	_, err := dhies.Decrypt(invalidCiphertext, km.GetCypherPublicKey())
 	if err == nil {
 		t.Error("Should fail with invalid ciphertext")
 	}
 
 	// Test with empty ciphertext
-	_, err = dhies.Decrypt([]byte{})
+	_, err = dhies.Decrypt([]byte{}, km.GetCypherPublicKey())
 	if err == nil {
 		t.Error("Should fail with empty ciphertext")
 	}
@@ -124,7 +124,7 @@ func TestDHIES_InvalidCiphertext(t *testing.T) {
 
 	truncated := validCiphertext[:len(validCiphertext)/2]
 	dhiesRecipient, _ := NewDHIES(validRecipient)
-	_, err = dhiesRecipient.Decrypt(truncated)
+	_, err = dhiesRecipient.Decrypt(truncated, km.GetCypherPublicKey())
 	if err == nil {
 		t.Error("Should fail with truncated ciphertext")
 	}
@@ -145,7 +145,7 @@ func TestDHIES_EmptyMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decrypted, err := dhiesBob.Decrypt(ciphertext)
+	decrypted, err := dhiesBob.Decrypt(ciphertext, alice.GetCypherPublicKey())
 	if err != nil {
 		t.Fatal(err)
 	}

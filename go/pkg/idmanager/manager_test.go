@@ -3,6 +3,7 @@ package idmanager
 import (
 	"encoding/base64"
 	"testing"
+	"time"
 
 	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
 )
@@ -492,5 +493,61 @@ func TestStoreSerializationJSON(t *testing.T) {
 	substores := newStore.ListSubstores()
 	if len(substores) != 1 || substores[0] != "sub" {
 		t.Error("Substore not imported correctly")
+	}
+}
+
+// TestSaveContact_MachineCrossDispatchNoDeadlock is a regression test for a deadlock:
+// SaveContact locked m.mu then called SaveApp for machine identities, and SaveApp
+// mirrored this by calling SaveContact for non-machine identities while holding the
+// lock. sync.RWMutex isn't reentrant, so either cross-call used to hang forever.
+func TestSaveContact_MachineCrossDispatchNoDeadlock(t *testing.T) {
+	id, _ := vaultysid.GeneratePerson()
+	store := NewMemoryStore()
+	manager := NewManager(id, store)
+
+	machine, err := vaultysid.GenerateMachine()
+	if err != nil {
+		t.Fatalf("Failed to generate machine identity: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- manager.SaveContact(machine, nil)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("SaveContact(machine) failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SaveContact(machine) deadlocked dispatching into SaveApp")
+	}
+}
+
+// TestSaveApp_PersonCrossDispatchNoDeadlock is the mirror-image regression test:
+// SaveApp with a non-machine VaultysID dispatches into SaveContact.
+func TestSaveApp_PersonCrossDispatchNoDeadlock(t *testing.T) {
+	id, _ := vaultysid.GeneratePerson()
+	store := NewMemoryStore()
+	manager := NewManager(id, store)
+
+	person, err := vaultysid.GeneratePerson()
+	if err != nil {
+		t.Fatalf("Failed to generate person identity: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- manager.SaveApp(person)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("SaveApp(person) failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SaveApp(person) deadlocked dispatching into SaveContact")
 	}
 }

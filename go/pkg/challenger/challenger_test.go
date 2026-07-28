@@ -192,7 +192,7 @@ func TestChallenger_Timestamp(t *testing.T) {
 		Version:   ProtocolV1,
 		Protocol:  "test",
 		Service:   "service",
-		Timestamp: time.Now().Unix() - 10, // 10 seconds ago
+		Timestamp: time.Now().UnixMilli() - 10000, // 10 seconds ago
 		PK1:       alice.ToBytes(),
 		Nonce:     make([]byte, 16),
 		State:     StateInit,
@@ -205,7 +205,7 @@ func TestChallenger_Timestamp(t *testing.T) {
 	}
 
 	// Create challenge with valid timestamp
-	initChallenge.Timestamp = time.Now().Unix()
+	initChallenge.Timestamp = time.Now().UnixMilli()
 	_, err = bobChallenger.Step1(initChallenge)
 	if err != nil {
 		t.Errorf("Should succeed with valid timestamp: %v", err)
@@ -307,7 +307,7 @@ func TestChallenger_NonceValidation(t *testing.T) {
 		Version:   ProtocolV1,
 		Protocol:  "test",
 		Service:   "service",
-		Timestamp: time.Now().Unix(),
+		Timestamp: time.Now().UnixMilli(),
 		PK1:       alice.ToBytes(),
 		Nonce:     make([]byte, 8), // Wrong size
 		State:     StateInit,
@@ -529,6 +529,63 @@ func TestChallenger_V0Compatibility(t *testing.T) {
 
 	if !aliceChallenger.IsComplete() || !bobChallenger.IsComplete() {
 		t.Error("Both should be complete")
+	}
+}
+
+// TestChallenger_AcceptFullHandshake drives a complete handshake purely through
+// Accept()/Serialize(), simulating what two peers exchange over a real transport.
+// Regression test for Accept() always treating incoming bytes as StateInit because
+// State (msgpack:"-") was read via a raw msgpack.Unmarshal instead of Deserialize's
+// field-based state inference.
+func TestChallenger_AcceptFullHandshake(t *testing.T) {
+	alice, _ := vaultysid.GeneratePerson()
+	bob, _ := vaultysid.GeneratePerson()
+
+	aliceChallenger := NewChallenger(alice, nil)
+	bobChallenger := NewChallenger(bob, nil)
+
+	initChallenge, err := aliceChallenger.Init("protocol", "service")
+	if err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+	initBytes, err := Serialize(initChallenge)
+	if err != nil {
+		t.Fatalf("Serialize init failed: %v", err)
+	}
+
+	step1Challenge, err := bobChallenger.Accept(initBytes)
+	if err != nil {
+		t.Fatalf("Bob Accept(init) failed: %v", err)
+	}
+	if step1Challenge.State != StateStep1 {
+		t.Fatalf("expected STEP1 response, got state %d", step1Challenge.State)
+	}
+	step1Bytes, err := Serialize(step1Challenge)
+	if err != nil {
+		t.Fatalf("Serialize step1 failed: %v", err)
+	}
+
+	completeChallenge, err := aliceChallenger.Accept(step1Bytes)
+	if err != nil {
+		t.Fatalf("Alice Accept(step1) failed: %v", err)
+	}
+	if completeChallenge.State != StateComplete {
+		t.Fatalf("expected COMPLETE response, got state %d", completeChallenge.State)
+	}
+	completeBytes, err := Serialize(completeChallenge)
+	if err != nil {
+		t.Fatalf("Serialize complete failed: %v", err)
+	}
+
+	resp, err := bobChallenger.Accept(completeBytes)
+	if err != nil {
+		t.Fatalf("Bob Accept(complete) failed: %v", err)
+	}
+	if resp != nil {
+		t.Errorf("expected nil response on finalize, got %+v", resp)
+	}
+	if !bobChallenger.IsComplete() {
+		t.Error("Bob challenger should be complete")
 	}
 }
 
