@@ -405,7 +405,7 @@ export default class SoftCredentials {
           return {};
         }
       },
-      toJSON() {},
+      toJSON() { },
       response: {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         attestationObject: cbor.encode(attestationObject),
@@ -559,7 +559,7 @@ export default class SoftCredentials {
           return {};
         }
       },
-      toJSON() {},
+      toJSON() { },
       response: {
         authenticatorData,
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),

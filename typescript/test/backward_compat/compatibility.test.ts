@@ -1,6 +1,6 @@
 import { expect } from "chai";
 import * as path from "path";
-import { VaultysId as VaultysIdOld } from "@vaultys/id";
+import { VaultysId as VaultysIdOld, KeyManager as KeyManagerOld } from "@vaultys/id";
 import { VaultysId as VaultysIdCurrent } from "../../dist/node/index.js";
 
 describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
@@ -122,4 +122,119 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
       }
     });
   });
-});
+
+  describe("Deprecated ID Format Tests", () => {
+    describe("V0 Deprecated IDs", () => {
+      it("should deserialize type 1 deprecated ID (Ed25519 with proof)", async () => {
+        const deprecatedId1 = "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
+
+        // Deserialize with old version
+        const oldVid = VaultysIdOld.fromId(Buffer.from(deprecatedId1, "base64"));
+        expect(oldVid).to.exist;
+
+        // Deserialize with current version
+        const currentVid = VaultysIdCurrent.fromId(Buffer.from(deprecatedId1, "base64"));
+        expect(currentVid).to.exist;
+
+        // Both should have the same core properties
+        expect(oldVid.id.toString("base64")).to.equal(currentVid.id.toString("base64"));
+      });
+
+      it("should deserialize type 4 deprecated ID (P256)", async () => {
+        const deprecatedId4 = "BIOhdgGhY8RNpQECAyYgASFYIAahPdTq/F42/PU9WcYGaF4k7BQ1gnD9QIwX2wAcfjKoIlggO56gS5dUKbQZSeBrcYZcOZHZF5F568tgRiDLO2mv5/KhZcQgQ136sOFkQ6Ywe3GbYeGF8bZkLxM0D3Ym7JmdZAubAxE=";
+
+        // Deserialize with old version
+        const oldVid = VaultysIdOld.fromId(Buffer.from(deprecatedId4, "base64"));
+        expect(oldVid).to.exist;
+
+        // Deserialize with current version
+        const currentVid = VaultysIdCurrent.fromId(Buffer.from(deprecatedId4, "base64"));
+        expect(currentVid).to.exist;
+
+        // Both should have the same core properties
+        expect(oldVid.id.toString("base64")).to.equal(currentVid.id.toString("base64"));
+      });
+
+      it("should create IDs using old KeyManager (v2.x) and deserialize in current version", async () => {
+        // KeyManager in v2.x is now called DeprecatedKeyManager in v3.x
+        const oldKm = await KeyManagerOld.generate_Id25519();
+        const oldVid = new VaultysIdOld(oldKm as any, undefined, 1);
+
+        // Deserialize the generated ID with current version
+        const currentVid = VaultysIdCurrent.fromId(oldVid.id);
+        expect(currentVid).to.exist;
+
+        // Verify we can read the same core properties
+        expect(currentVid.id.toString("base64")).to.equal(oldVid.id.toString("base64"));
+      });
+    });
+
+    describe("ID Migration", () => {
+      it("should migrate deprecated ID structure correctly", async () => {
+        const oldVersionId = "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
+        const expectedMigratedId = "AYOhdgGheMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
+
+        // Import migration utility from current version
+        const { migrateVaultysId } = await import("../../dist/node/utils/migration.js");
+
+        const migrated = migrateVaultysId(Buffer.from(oldVersionId, "base64"));
+        expect(migrated.toString("base64")).to.equal(expectedMigratedId);
+      });
+
+      it("should deserialize same data after migration", async () => {
+        const oldVersionId = "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
+        const migratedId = "AYOhdgGheMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
+
+        const { migrateVaultysId } = await import("../../dist/node/utils/migration.js");
+
+        // Old version
+        const oldVid = VaultysIdOld.fromId(Buffer.from(oldVersionId, "base64"));
+
+        // Migrated version
+        const migratedBuffer = migrateVaultysId(Buffer.from(oldVersionId, "base64"));
+        const currentVid = VaultysIdCurrent.fromId(migratedBuffer);
+
+        // The core signer and cypher public keys should match
+        const oldKeyManager = (oldVid as any).keyManager;
+        const currentKeyManager = (currentVid as any).keyManager;
+
+        expect(oldKeyManager.signer.publicKey.toString("base64"))
+          .to.equal(currentKeyManager.signer.publicKey.toString("base64"));
+        expect(oldKeyManager.cypher.publicKey.toString("base64"))
+          .to.equal(currentKeyManager.cypher.publicKey.toString("base64"));
+      });
+    });
+
+    describe("Signature Verification with Deprecated IDs", () => {
+      it("should validate signature of deprecated ID with v0 format", async () => {
+        const data = {
+          serverId: "AIShdgGhcMQgElUJZ+qkMSASY7D/3RHa7ONo3X58XYYmtNdDs+H+UJSheMQgQMzbrE2ADcwHYY/XOjQm9UmmaGq9hnH2bQ64vTw+ZVmhZcQg+Ubxwfp1Y+dNOi49vJWJE0CHt/8Ebw+vYpYkjelr5zc=",
+          signature: "anDSvD0r/q7Ozczt40R7Cc2HdjQ0SwFVooU/GWCXfsEtMJ6keUrvfX0wTO2M0uwoPgIr0dZs7Is6JtRPTxU5Ag==",
+          timestamp: 1756929814984,
+        };
+
+        // Create with old version
+        const oldVid = VaultysIdOld.fromId(Buffer.from(data.serverId, "base64"));
+        expect(oldVid.verifyChallenge_v0("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false, Buffer.from(data.serverId, "base64"))).to.be.true;
+
+        // Verify with current version - should also support this old format
+        const currentVid = VaultysIdCurrent.fromId(Buffer.from(data.serverId, "base64"));
+        expect(currentVid.verifyChallenge_v0("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false, Buffer.from(data.serverId, "base64"))).to.be.true;
+      });
+
+      it("should work with KeyManager.generate_Id25519() from v2.x", async () => {
+        // Generate with old version's KeyManager (which is DeprecatedKeyManager in v3.x)
+        const oldKm = await KeyManagerOld.generate_Id25519();
+        const oldVid = new VaultysIdOld(oldKm as any);
+
+        // Sign with old version
+        const message = "test message";
+        const signature = await oldVid.signChallenge(message);
+
+        // Verify with old version
+        const verifyOld = oldVid.verifyChallenge(message, signature, false);
+        expect(verifyOld).to.be.true;
+      });
+    });
+  });
+}); 

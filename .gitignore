@@ -1,6 +1,7 @@
 node_modules
 .DS_Store
 rust/target
+mcp-agent/audit/
 stats.json
 test/assets/streamed_file.png
 test/assets/streamed_file_encrypted.png
@@ -11,3 +12,5 @@ vaultysbox/
 /typescript/test/interops/compatibility-data
 /typescript/test/interops/tmp
 /interops/typescript
+/.claude/worktrees
+typescript/test/assets/streamed_file_encrypted.png

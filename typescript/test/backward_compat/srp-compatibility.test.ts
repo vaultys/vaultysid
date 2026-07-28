@@ -1,6 +1,5 @@
 import { expect } from "chai";
-import { MemoryStorage as OldMemoryStorage, IdManager as OldIdManager, VaultysId as VaultysIdOld, Challenger as OldChallenger } from "@vaultys/id";
-import { MemoryStorage as NewMemoryStorage, IdManager as NewIdManager, VaultysId as VaultysIdCurrent, MemoryChannel, Challenger as NewChallenger } from "../../dist/node/index.js";
+import { MemoryStorage as OldMemoryStorage, IdManager as OldIdManager, VaultysId as VaultysIdOld, Challenger as OldChallenger } from "@vaultys/id_2";
 import { decode } from "@msgpack/msgpack";
 
 const oldChallengeNext = async (vaultysId: VaultysIdOld, newCertificate?: Buffer, oldCertificate?: Buffer) => {
@@ -117,11 +116,11 @@ describe("SRP Challenge Compatibility Tests - @vaultys/id@2.4.9 vs Current", () 
 
       const manager1 = new OldIdManager(
         oldId1,
-        OldMemoryStorage(() => {}),
+        OldMemoryStorage(() => { }),
       );
       const manager2 = new NewIdManager(
         currentId2,
-        NewMemoryStorage(() => {}),
+        NewMemoryStorage(() => { }),
       );
 
       manager1.setProtocolVersion(0);

@@ -5,7 +5,6 @@ import { getWebAuthnProvider } from "./platform/webauthn";
 import { Buffer } from "buffer/";
 import { PQ_COSE_ALG } from "./pqCrypto";
 import CypherManager from "./KeyManager/CypherManager";
-import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
@@ -91,13 +90,12 @@ export default class VaultysId {
       } else if (cleanId.length === 77) {
         const km = Ed25519Manager.fromId(cleanId.slice(1));
         return new VaultysId(km, certificate, type);
-      } else {
-        const km = DeprecatedKeyManager.fromId(cleanId.slice(1));
-        return new VaultysId(km, certificate, type);
       }
+      else throw new Error("Invalid ID format");
     }
   }
 
+  // non standard, waiting for webauthn to support custom attestation for PQC credentials
   static createPublicKeyCredentialOptionsPQC = (): PublicKeyCredentialCreationOptions => {
     const safari = /^((?!chrome|android).)*applewebkit/i.test(navigator.userAgent);
     const hint = "security-key";
@@ -281,10 +279,8 @@ export default class VaultysId {
       } else if (secretBuffer.length === 77) {
         const km = Ed25519Manager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(km, undefined, type);
-      } else {
-        const km = DeprecatedKeyManager.fromSecret(secretBuffer.slice(1));
-        return new VaultysId(km, undefined, type);
       }
+      else throw new Error("Invalid secret format");
     }
   }
 

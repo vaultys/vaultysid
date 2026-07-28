@@ -1,0 +1,131 @@
+# ── VaultysID Execution Integration Tests ──
+#
+# Three test scenarios:
+#
+#  1. happy-path   – agent + broker, allowed capability  → receipt returned
+#  2. denied-path  – agent + broker, denied capability   → rejected
+#  3. multi-agent  – 2 agents + 1 broker, sequential     → both get receipts
+#
+# Run with:
+#   docker compose -f test/docker-integration/docker-compose.yml up --build --abort-on-container-exit
+#
+# Or use the wrapper script:
+#   ./test/docker-integration/run.sh
+
+services:
+
+  # ╔═══════════════════════════════════════╗
+  # ║  Scenario 1: Happy Path              ║
+  # ╚═══════════════════════════════════════╝
+
+  broker:
+    build:
+      context: ../..
+      dockerfile: test/docker-integration/Dockerfile
+    command: [ "pnpm", "tsx", "test/docker-integration/broker.ts" ]
+    environment:
+      BROKER_PORT: "9000"
+      BROKER_NAME: "broker"
+      ALGORITHM: "ed25519"
+    networks:
+      - happy-net
+
+  agent:
+    build:
+      context: ../..
+      dockerfile: test/docker-integration/Dockerfile
+    command: [ "pnpm", "tsx", "test/docker-integration/agent.ts" ]
+    environment:
+      BROKER_HOST: "broker"
+      BROKER_PORT: "9000"
+      AGENT_NAME: "agent"
+      ALGORITHM: "ed25519"
+    depends_on:
+      - broker
+    networks:
+      - happy-net
+
+  # ╔═══════════════════════════════════════╗
+  # ║  Scenario 2: Denied Capability       ║
+  # ╚═══════════════════════════════════════╝
+
+  denied-broker:
+    build:
+      context: ../..
+      dockerfile: test/docker-integration/Dockerfile
+    command: [ "pnpm", "tsx", "test/docker-integration/denied-broker.ts" ]
+    environment:
+      BROKER_PORT: "9010"
+      BROKER_NAME: "denied-broker"
+      ALGORITHM: "ed25519"
+    networks:
+      - denied-net
+
+  denied-agent:
+    build:
+      context: ../..
+      dockerfile: test/docker-integration/Dockerfile
+    command: [ "pnpm", "tsx", "test/docker-integration/denied-agent.ts" ]
+    environment:
+      BROKER_HOST: "denied-broker"
+      BROKER_PORT: "9010"
+      AGENT_NAME: "denied-agent"
+      ALGORITHM: "ed25519"
+    depends_on:
+      - denied-broker
+    networks:
+      - denied-net
+
+  # ╔═══════════════════════════════════════╗
+  # ║  Scenario 3: Multi-Agent             ║
+  # ╚═══════════════════════════════════════╝
+
+  multi-broker:
+    build:
+      context: ../..
+      dockerfile: test/docker-integration/Dockerfile
+    command: [ "pnpm", "tsx", "test/docker-integration/multi-broker.ts" ]
+    environment:
+      BROKER_PORT: "9020"
+      BROKER_NAME: "multi-broker"
+      AGENT_COUNT: "2"
+      ALGORITHM: "ed25519"
+    networks:
+      - multi-net
+
+  multi-agent-0:
+    build:
+      context: ../..
+      dockerfile: test/docker-integration/Dockerfile
+    command: [ "pnpm", "tsx", "test/docker-integration/multi-agent.ts" ]
+    environment:
+      BROKER_HOST: "multi-broker"
+      BROKER_PORT: "9020"
+      AGENT_NAME: "multi-agent-0"
+      AGENT_INDEX: "0"
+      ALGORITHM: "ed25519"
+    depends_on:
+      - multi-broker
+    networks:
+      - multi-net
+
+  multi-agent-1:
+    build:
+      context: ../..
+      dockerfile: test/docker-integration/Dockerfile
+    command: [ "pnpm", "tsx", "test/docker-integration/multi-agent.ts" ]
+    environment:
+      BROKER_HOST: "multi-broker"
+      BROKER_PORT: "9020"
+      AGENT_NAME: "multi-agent-1"
+      AGENT_INDEX: "1"
+      ALGORITHM: "dilithium_ed25519"
+    depends_on:
+      - multi-broker
+    networks:
+      - multi-net
+
+networks:
+  happy-net:
+  denied-net:
+  multi-net:

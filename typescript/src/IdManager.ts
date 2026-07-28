@@ -11,7 +11,6 @@ import { Buffer } from "buffer/";
 import nacl from "tweetnacl";
 import { VaultysBackup } from "./platform/abstract";
 import { platformCrypto } from "./platform";
-import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 import { crypto } from "..";
 
 // "vaultys/encryption/" + version = 0x01
@@ -30,7 +29,7 @@ const getSignatureType = (challenge: string) => {
 
 export type StoredContact = {
   type: number;
-  keyManager: KeyManager | DeprecatedKeyManager;
+  keyManager: KeyManager;
   certificate: Buffer;
 };
 
@@ -63,9 +62,6 @@ export const instanciateContact = (c: StoredContact) => {
       vaultysId = new VaultysId(DilithiumManager.instantiate(c.keyManager), c.certificate, c.type);
     } else if (c.keyManager.signer.publicKey.length === 2592 + 32) {
       vaultysId = new VaultysId(HybridManager.instantiate(c.keyManager), c.certificate, c.type);
-    } else if ((c.keyManager as DeprecatedKeyManager).proof) {
-      //console.log(c);
-      vaultysId = new VaultysId(DeprecatedKeyManager.instantiate(c.keyManager), c.certificate, c.type);
     } else {
       vaultysId = new VaultysId(Ed25519Manager.instantiate(c.keyManager), c.certificate, c.type);
     }
@@ -157,8 +153,8 @@ export default class IdManager {
       // console.log(importedData, decode(importedData));
       const store = storagify(
         decode(importedData) as object,
-        () => {},
-        () => {},
+        () => { },
+        () => { },
       );
       return await IdManager.fromStore(store);
     } catch (error) {

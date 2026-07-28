@@ -1,7 +1,7 @@
 import SoftCredentials from "../src/platform/SoftCredentials";
 import assert from "assert";
 import "./shims";
-import { randomBytes } from "../src/crypto";
+import { randomBytes, Buffer } from "../src/crypto";
 
 // credentials request payload
 const createRequest = (alg: number) => {
@@ -52,6 +52,7 @@ describe("SoftCredentials", () => {
       },
     };
     const assertion = await SoftCredentials.get(payload);
+    // @ts-ignore because of the mockup
     assert.equal(SoftCredentials.extractChallenge(Buffer.from(assertion.response.clientDataJSON)), payload.publicKey.challenge.toString("base64"));
     const verified = SoftCredentials.verify(attestation, assertion);
     assert.ok(verified);
@@ -81,7 +82,9 @@ describe("SoftCredentials", () => {
       },
       clientExtensionResults: {},
     };
+    // @ts-ignore because of the mockup
     assert.equal(SoftCredentials.extractChallenge(attestationSafe.response.clientDataJSON), "fIwlU94sMqK21Sk/PXlR3ShKSBUsKztUi/Jj4NXjjR8=");
+    // @ts-ignore because of the mockup
     assert.equal(SoftCredentials.extractChallenge(assertion.response.clientDataJSON), "AOmfgdnuxr/2ul8OZLzAWRMRbGt5y3lr11DqrqwQGLU=");
     // @ts-expect-error mockup
     const verified = SoftCredentials.verify(attestationSafe, assertion);
@@ -147,7 +150,9 @@ describe("SoftCredentials", () => {
       },
       clientExtensionResults: {},
     };
+    // @ts-ignore because of the mockup
     assert.equal(SoftCredentials.extractChallenge(attestationSafe.response.clientDataJSON), "aRE1egZ6G1+AEEOIzPmlNrAgOSyEeVDn89KCDE1DdOE=");
+    // @ts-ignore because of the mockup
     assert.equal(SoftCredentials.extractChallenge(assertion.response.clientDataJSON), "mIrJ3lUll5tZv8/knd0BDyMvVUErxAc/BYcd/hNCiYg=");
     // @ts-expect-error mockup
     const verified = SoftCredentials.verify(attestationSafe, assertion, true);

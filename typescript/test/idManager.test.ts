@@ -13,7 +13,6 @@ import encrypted_backup from "./assets/backup.encrypted.bin.json";
 import { migrateIdManager } from "../src/utils/migration";
 import { Ed25519Manager } from "../src/KeyManager";
 import { deserialize, MessagePackStorage, storagify } from "../src/MemoryStorage";
-import DeprecatedKeyManager from "../src/KeyManager/DeprecatedKeyManager";
 
 const passphrase = "deal develop devote mail agree try tide expand indicate poverty chuckle target";
 
@@ -199,25 +198,61 @@ describe("WoT", () => {
       () => "",
     );
     assert.equal(store.listSubstores().length, 3);
-    const contacts = ["did:vaultys:0222cf6797fb5d997d9ca9bf650af26e986b8b18", "did:vaultys:04f9f57c532d525407c4f07c46d5868794dfdb44", "did:vaultys:04fbd2781a354e8d3636c7884ca6d87775fadc6a", "did:vaultys:02a3da6fb68019dfd77d8825a254d0e26f13074e", "did:vaultys:031ce55a84f388767ee8861b1f52c1faef7047e7"];
-    const apps = ["did:vaultys:003813d0639f103023909498b8101424a01ea458", "did:vaultys:007eeed55c703c23db23a3f965a5ca2c26f5c428", "did:vaultys:0062a0efff32c131617115df4525a234e58e5710", "did:vaultys:0033eb847e64d56b6e604eb42fe744d4eec02644", "did:vaultys:001c53a28e606a1c3250b4065df370dc300b26fe"];
+    const contacts = [
+      'did:vaultys:03f54c918548587448492780705493784dc3b14e',
+      'did:vaultys:0105abc83ccaaf30a2912fd6d7a82eb8b4a36c95',
+      'did:vaultys:02296c11e9c45a41be7a85e9759a3f2a85538c48',
+      'did:vaultys:042c80eee19d63931860f8fe09c06651653adea1',
+      'did:vaultys:04a6cb17960b1e9435cc329419b340ef20f49c07'
+    ];
+    const apps = [
+      'did:vaultys:0058d3dc3985eba1cf7e88ba4bff1e1e5d93c6b5',
+      'did:vaultys:00a64b9d8491dc63cac3f8df507b1f8dae8d695c',
+      'did:vaultys:00653067ef5085bb7a37192572cf2f91d80b4e36',
+      'did:vaultys:00b3c110863ab63f1835f98cafec5048cc4f7b9d',
+      'did:vaultys:00dec3b98c24edf55f39bc1d9b8c98f78f41e2be'
+    ];
+    const wot = [
+      '1770707449524',
+      '1770707449537',
+      '1770707449550',
+      '1770707449561',
+      '1770707449572',
+      '1770707449584',
+      '1770707449596',
+      '1770707449608',
+      '1770707449620',
+      '1770707449632'
+    ];
     assert.deepEqual(store.substore("contacts").list(), contacts);
     assert.deepEqual(store.substore("registrations").list(), apps);
-    assert.deepEqual(store.substore("wot").list(), ["1750418334298", "1750418334312", "1750418334325", "1750418334341", "1750418334353", "1750418334370", "1750418334385", "1750418334401", "1750418334418", "1750418334433"]);
+    assert.deepEqual(store.substore("wot").list(), wot);
     const idManager = await IdManager.fromStore(store);
     // migration
     migrateIdManager(idManager);
     //await new Promise((r) => setTimeout(r, 300));
-    const newContats = ["did:vaultys:0222cf6797fb5d997d9ca9bf650af26e986b8b18", "did:vaultys:04f9f57c532d525407c4f07c46d5868794dfdb44", "did:vaultys:04fbd2781a354e8d3636c7884ca6d87775fadc6a", "did:vaultys:02a3da6fb68019dfd77d8825a254d0e26f13074e", "did:vaultys:031ce55a84f388767ee8861b1f52c1faef7047e7"];
-    const newApps = ["did:vaultys:003813d0639f103023909498b8101424a01ea458", "did:vaultys:007eeed55c703c23db23a3f965a5ca2c26f5c428", "did:vaultys:0062a0efff32c131617115df4525a234e58e5710", "did:vaultys:0033eb847e64d56b6e604eb42fe744d4eec02644", "did:vaultys:001c53a28e606a1c3250b4065df370dc300b26fe"];
+    const newContats = [
+      'did:vaultys:03f54c918548587448492780705493784dc3b14e',
+      'did:vaultys:0105abc83ccaaf30a2912fd6d7a82eb8b4a36c95',
+      'did:vaultys:02296c11e9c45a41be7a85e9759a3f2a85538c48',
+      'did:vaultys:042c80eee19d63931860f8fe09c06651653adea1',
+      'did:vaultys:04a6cb17960b1e9435cc329419b340ef20f49c07'
+    ];
+    const newApps = [
+      'did:vaultys:0058d3dc3985eba1cf7e88ba4bff1e1e5d93c6b5',
+      'did:vaultys:00a64b9d8491dc63cac3f8df507b1f8dae8d695c',
+      'did:vaultys:00653067ef5085bb7a37192572cf2f91d80b4e36',
+      'did:vaultys:00b3c110863ab63f1835f98cafec5048cc4f7b9d',
+      'did:vaultys:00dec3b98c24edf55f39bc1d9b8c98f78f41e2be'
+    ];
     assert.deepEqual(store.substore("contacts").list(), newContats);
     assert.deepEqual(store.substore("registrations").list(), newApps);
-    assert.deepEqual(store.substore("wot").list(), ["1750418334298", "1750418334312", "1750418334325", "1750418334341", "1750418334353", "1750418334370", "1750418334385", "1750418334401", "1750418334418", "1750418334433"]);
+    assert.deepEqual(store.substore("wot").list(), wot);
 
     //assert.equal(idManager.vaultysId.did, "did:vaultys:00f2b4cab97b9bb95f375e17d3f58966da52202f");
-    assert.equal(idManager.vaultysId.did, "did:vaultys:00a6effd86d237d99117c68dcf0b843e3c2f9e4c");
+    assert.equal(idManager.vaultysId.did, "did:vaultys:001a791f19d12f20decb943f589a3d4baf53b65c");
     const keyManager = await Ed25519Manager.createFromEntropy(store.get("entropy"));
-    assert.equal(keyManager.id.toString("hex"), "83a17601a178c42002593d5fcd0e42b33f57c96a5cdc1daa1ac0b63952085d75ee8e485dc42c20e9a165c4203ca1b470b4505842a9b6446273759a6ae4b3a019bc9b48d563e0398cb2cbec7e");
+    assert.equal(keyManager.id.toString("hex"), "83a17601a178c420bdcc8c49732ea0c15ec812fa1736e00d64f081f00a5b41771a3500722be97335a165c420c26f23e17b60d8089be14b663c2afb0bde0e0693bb3d2a636ad53938b16b1543");
     const vid = new VaultysId(keyManager, undefined, 0);
     assert.equal(vid.did, idManager.vaultysId.did);
     for (const certid of store.substore("wot").list()) {
@@ -235,11 +270,6 @@ describe("WoT", () => {
     for (const contact of newContats) {
       const c = idManager.getContact(contact)!;
       assert.equal(contact, c.did);
-      if (c.did === "did:vaultys:0222cf6797fb5d997d9ca9bf650af26e986b8b18") {
-        const dkm = c.keyManager as DeprecatedKeyManager;
-        assert.equal(dkm.proof!.toString("base64"), "p1jMXsOQfgD6NHIgT0PbY3FBnzTtm7/ud7XGd99GJuc=");
-        assert.equal(dkm.level, 2);
-      }
       assert.equal(await Challenger.verifyCertificate(c.certificate!), true);
     }
     assert.equal(idManager.apps.length, 5);
@@ -261,15 +291,39 @@ describe("WoT", () => {
       () => "",
     );
     assert.equal(store.listSubstores().length, 3);
-    const contacts = ["did:vaultys:039868dabdfa5b2b93a42837adb56264f503827f", "did:vaultys:044d24c906f5a585e065271793792f93cc2a588e", "did:vaultys:02ba1810d8f453da15469643b305fca91667458d", "did:vaultys:03a9aef25b7aeb6d3fbe244d5628fa2d3c204212", "did:vaultys:01d6a4fbc7ad3c3959e16bd8e6b13d359fa716dd"];
-    const apps = ["did:vaultys:00c63e39b800ba52d10e2186ef273302088c9f6d", "did:vaultys:00be5e25cf45b386da62947c98ab56fa72f93398", "did:vaultys:00d7f1829ba0717753699cd444cbe5b13e2b593f", "did:vaultys:007014a482f672c8b462955a69b38faeaf750789", "did:vaultys:0021bebd098c332957cbe9fd088597b4dd5a07d7"];
+    const contacts = [
+      'did:vaultys:03f54c918548587448492780705493784dc3b14e',
+      'did:vaultys:0105abc83ccaaf30a2912fd6d7a82eb8b4a36c95',
+      'did:vaultys:02296c11e9c45a41be7a85e9759a3f2a85538c48',
+      'did:vaultys:042c80eee19d63931860f8fe09c06651653adea1',
+      'did:vaultys:04a6cb17960b1e9435cc329419b340ef20f49c07'
+    ];
+    const apps = [
+      'did:vaultys:0058d3dc3985eba1cf7e88ba4bff1e1e5d93c6b5',
+      'did:vaultys:00a64b9d8491dc63cac3f8df507b1f8dae8d695c',
+      'did:vaultys:00653067ef5085bb7a37192572cf2f91d80b4e36',
+      'did:vaultys:00b3c110863ab63f1835f98cafec5048cc4f7b9d',
+      'did:vaultys:00dec3b98c24edf55f39bc1d9b8c98f78f41e2be'
+    ];
+    const wot = [
+      '1770707449524',
+      '1770707449537',
+      '1770707449550',
+      '1770707449561',
+      '1770707449572',
+      '1770707449584',
+      '1770707449596',
+      '1770707449608',
+      '1770707449620',
+      '1770707449632'
+    ];
     assert.deepEqual(store.substore("contacts").list(), contacts);
     assert.deepEqual(store.substore("registrations").list(), apps);
-    assert.deepEqual(store.substore("wot").list(), ["1750441335308", "1750441335318", "1750441335326", "1750441335334", "1750441335341", "1750441335349", "1750441335357", "1750441335364", "1750441335372", "1750441335379"]);
+    assert.deepEqual(store.substore("wot").list(), wot);
     const idManager = await IdManager.fromStore(store);
-    assert.equal(idManager.vaultysId.did, "did:vaultys:001feb17d2d85718dee401fc2e776f21142ebaf1");
+    assert.equal(idManager.vaultysId.did, "did:vaultys:001a791f19d12f20decb943f589a3d4baf53b65c");
     const keyManager = await Ed25519Manager.createFromEntropy(store.get("entropy"));
-    assert.equal(keyManager.id.toString("hex"), "83a17601a178c42038242fb2cd2352a584af35515efbb7757d7997943750541bef4db8f4a57c78eea165c4207f44f58019be61744095611788153748ca7f9f5cba68ce4cc1391b8fc4f3d45b");
+    assert.equal(keyManager.id.toString("hex"), "83a17601a178c420bdcc8c49732ea0c15ec812fa1736e00d64f081f00a5b41771a3500722be97335a165c420c26f23e17b60d8089be14b663c2afb0bde0e0693bb3d2a636ad53938b16b1543");
     const vid = new VaultysId(keyManager, undefined, 0);
     assert.equal(vid.did, idManager.vaultysId.did);
     for (const certid of store.substore("wot").list()) {

@@ -2,8 +2,14 @@
   "compilerOptions": {
     "target": "ES2021",
     "module": "commonjs",
-    "lib": ["ES2021", "DOM"],
-    "types": ["node", "mocha"],
+    "lib": [
+      "ES2021",
+      "DOM"
+    ],
+    "types": [
+      "node",
+      "mocha"
+    ],
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
@@ -13,6 +19,11 @@
     "declaration": true,
     "resolveJsonModule": true
   },
-  "include": ["index.ts", "src"],
-  "exclude": ["node_modules", "dist/node"]
+  "include": [
+    "index.ts",
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
