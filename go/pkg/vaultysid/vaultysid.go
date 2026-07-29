@@ -50,13 +50,62 @@ func GenerateOrganization() (*VaultysID, error) {
 	return FromEntropy(entropy, TypeOrganization)
 }
 
-// FromEntropy creates a VaultysID from the given entropy bytes
+// GenerateMachineAlg, GeneratePersonAlg, and GenerateOrganizationAlg create
+// a new identity of the given algorithm ("ed25519" or "dilithium") with
+// random entropy. See FromEntropyAlg.
+
+func GenerateMachineAlg(alg string) (*VaultysID, error) {
+	entropy, err := crypto.RandomBytes(32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate entropy: %w", err)
+	}
+	return FromEntropyAlg(entropy, TypeMachine, alg)
+}
+
+func GeneratePersonAlg(alg string) (*VaultysID, error) {
+	entropy, err := crypto.RandomBytes(32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate entropy: %w", err)
+	}
+	return FromEntropyAlg(entropy, TypePerson, alg)
+}
+
+func GenerateOrganizationAlg(alg string) (*VaultysID, error) {
+	entropy, err := crypto.RandomBytes(32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate entropy: %w", err)
+	}
+	return FromEntropyAlg(entropy, TypeOrganization, alg)
+}
+
+// FromEntropy creates a VaultysID from the given entropy bytes, using
+// Ed25519. Use FromEntropyAlg to select a post-quantum algorithm.
 func FromEntropy(entropy []byte, idType IdentityType) (*VaultysID, error) {
+	return FromEntropyAlg(entropy, idType, "ed25519")
+}
+
+// FromEntropyAlg creates a VaultysID from the given entropy bytes using
+// the named algorithm, matching TS VaultysId.fromEntropy's alg parameter:
+// "ed25519" (default), "dilithium" (post-quantum ML-DSA-87), or
+// "dilithium_ed25519" (hybrid -- not yet implemented in Go).
+func FromEntropyAlg(entropy []byte, idType IdentityType, alg string) (*VaultysID, error) {
 	if len(entropy) != 32 {
 		return nil, fmt.Errorf("entropy must be 32 bytes, got %d", len(entropy))
 	}
 
-	km, err := keymanager.CreateFromEntropy(entropy)
+	var km KeyManager
+	var err error
+
+	switch alg {
+	case "dilithium":
+		km, err = keymanager.DilithiumCreateFromEntropy(entropy)
+	case "dilithium_ed25519":
+		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
+	case "", "ed25519":
+		km, err = keymanager.CreateFromEntropy(entropy)
+	default:
+		return nil, fmt.Errorf("unknown algorithm: %s", alg)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create key manager: %w", err)
 	}
@@ -98,15 +147,28 @@ func FromID(id []byte, certificate []byte) (*VaultysID, error) {
 	var km KeyManager
 	var err error
 
-	// Parse the key manager based on the identity type
-	switch idType {
-	case TypeFIDO2, TypeFIDO2PRF:
-		km, err = keymanager.FIDO2FromID(id[1:])
+	// Parse the key manager based on the identity type. Non-FIDO2 types are
+	// further disambiguated by key-manager payload length, matching TS
+	// VaultysId.fromId exactly: TS checks the *full* id length (2638
+	// bytes = Dilithium, 2638+32 = Hybrid) including its own type byte, so
+	// the length check on kmData (id with the type byte already stripped)
+	// is one less: 2637 and 2637+32 respectively.
+	kmData := id[1:]
+	switch {
+	case idType == TypeFIDO2 || idType == TypeFIDO2PRF:
+		km, err = keymanager.FIDO2FromID(kmData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse FIDO2 key manager: %w", err)
 		}
+	case len(kmData) == 2637:
+		km, err = keymanager.DilithiumFromID(kmData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse Dilithium key manager: %w", err)
+		}
+	case len(kmData) == 2637+32:
+		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
 	default:
-		km, err = keymanager.FromID(id[1:])
+		km, err = keymanager.FromID(kmData)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse key manager: %w", err)
 		}
@@ -156,15 +218,28 @@ func FromSecret(secret []byte) (*VaultysID, error) {
 	var km KeyManager
 	var err error
 
-	// Parse the key manager based on the identity type
-	switch idType {
-	case TypeFIDO2, TypeFIDO2PRF:
-		km, err = keymanager.FIDO2FromSecret(secret[1:])
+	// Parse the key manager based on the identity type. Non-FIDO2 types are
+	// further disambiguated by secret payload length, matching TS
+	// VaultysId.fromSecret exactly: TS checks the *full* secret length (73
+	// bytes = Dilithium, 84 = Hybrid) including its own type byte, so the
+	// length check on kmSecret (secret with the type byte already
+	// stripped) is one less: 72 and 83 respectively.
+	kmSecret := secret[1:]
+	switch {
+	case idType == TypeFIDO2 || idType == TypeFIDO2PRF:
+		km, err = keymanager.FIDO2FromSecret(kmSecret)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create FIDO2 key manager from secret: %w", err)
 		}
+	case len(kmSecret) == 72:
+		km, err = keymanager.DilithiumFromSecret(kmSecret)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Dilithium key manager from secret: %w", err)
+		}
+	case len(kmSecret) == 83:
+		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
 	default:
-		km, err = keymanager.FromSecret(secret[1:])
+		km, err = keymanager.FromSecret(kmSecret)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create key manager from secret: %w", err)
 		}

@@ -19,6 +19,9 @@ var (
 	outputFormat string
 	encoding     string
 	verbose      bool
+
+	// generate/from-entropy flag
+	algorithm string
 )
 
 var rootCmd = &cobra.Command{
@@ -230,6 +233,10 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&encoding, "encoding", "e", "hex", "Encoding format (hex, base64)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
 
+	// generate/from-entropy flag
+	generateCmd.Flags().StringVar(&algorithm, "alg", "ed25519", "Signature algorithm (ed25519, dilithium)")
+	fromEntropyCmd.Flags().StringVar(&algorithm, "alg", "ed25519", "Signature algorithm (ed25519, dilithium)")
+
 	// Build command tree
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(fromEntropyCmd)
@@ -312,11 +319,11 @@ func generateIdentity(cmd *cobra.Command, args []string) error {
 
 	switch idType {
 	case "machine":
-		vid, err = vaultysid.GenerateMachine()
+		vid, err = vaultysid.GenerateMachineAlg(algorithm)
 	case "person":
-		vid, err = vaultysid.GeneratePerson()
+		vid, err = vaultysid.GeneratePersonAlg(algorithm)
 	case "organization":
-		vid, err = vaultysid.GenerateOrganization()
+		vid, err = vaultysid.GenerateOrganizationAlg(algorithm)
 	default:
 		return fmt.Errorf("invalid identity type: %s (use machine, person, or organization)", idType)
 	}
@@ -347,19 +354,12 @@ func fromEntropy(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to decode entropy: %w", err)
 	}
 
-	var vid *vaultysid.VaultysID
-
-	switch idType {
-	case "machine":
-		vid, err = vaultysid.MachineFromEntropy(entropy)
-	case "person":
-		vid, err = vaultysid.PersonFromEntropy(entropy)
-	case "organization":
-		vid, err = vaultysid.OrganizationFromEntropy(entropy)
-	default:
+	parsedType, err := vaultysid.ParseIdentityType(idType)
+	if err != nil {
 		return fmt.Errorf("invalid identity type: %s", idType)
 	}
 
+	vid, err := vaultysid.FromEntropyAlg(entropy, parsedType, algorithm)
 	if err != nil {
 		return fmt.Errorf("failed to create identity from entropy: %w", err)
 	}

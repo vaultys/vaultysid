@@ -40,6 +40,14 @@ var (
 	FIDO2FromID     = CreateFIDO2FromID
 )
 
+// Exported functions for DilithiumManager
+var (
+	DilithiumCreateFromEntropy = CreateDilithiumFromEntropyInternal
+	DilithiumGenerate          = GenerateDilithiumInternal
+	DilithiumFromSecret        = FromSecretDilithiumInternal
+	DilithiumFromID            = FromIDDilithiumInternal
+)
+
 // CreateEd25519FromEntropy creates an Ed25519Manager from entropy
 func CreateEd25519FromEntropy(entropy []byte) (KeyManager, error) {
 	return createEd25519FromEntropy(entropy)
