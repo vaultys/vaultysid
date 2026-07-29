@@ -61,7 +61,7 @@ func (c *Challenger) Init(protocol, service string) (*Challenge, error) {
 		Version:   c.options.Version,
 		Protocol:  protocol,
 		Service:   service,
-		Timestamp: c.state.Timestamp,
+		Timestamp: uint64(c.state.Timestamp),
 		PK1:       c.vaultysID.ToBytes(),
 		Nonce:     nonce,
 		Metadata: ChallengeMetadata{
@@ -86,7 +86,7 @@ func (c *Challenger) Step1(initChallenge *Challenge) (*Challenge, error) {
 	}
 
 	// Check timestamp
-	if err := c.validateTimestamp(initChallenge.Timestamp); err != nil {
+	if err := c.validateTimestamp(int64(initChallenge.Timestamp)); err != nil {
 		return nil, err
 	}
 
@@ -95,7 +95,7 @@ func (c *Challenger) Step1(initChallenge *Challenge) (*Challenge, error) {
 	c.state.RemoteNonce = initChallenge.Nonce
 	c.state.Protocol = initChallenge.Protocol
 	c.state.Service = initChallenge.Service
-	c.state.Timestamp = initChallenge.Timestamp
+	c.state.Timestamp = int64(initChallenge.Timestamp)
 
 	// Generate our 16-byte nonce
 	ourNonce, err := crypto.RandomBytes(16)
@@ -439,36 +439,19 @@ func (c *Challenger) validateTimestamp(timestamp int64) error {
 	return nil
 }
 
-// Serialize serializes a challenge to bytes
+// Serialize serializes a challenge to bytes.
+//
+// This marshals the Challenge struct directly rather than building a
+// map[string]interface{}: msgpack.Marshal on a map has no stable key
+// order (Go map iteration is randomized per call), which produced
+// non-reproducible wire bytes and could never byte-match TS's
+// insertion-ordered serialize(). The Challenge struct's own msgpack
+// tags already declare the correct field order and correct
+// per-field omitempty (pk2/sign1/sign2), so marshaling it directly
+// reproduces TS's exact field order and field set for every state
+// (State/Error are tagged `msgpack:"-"` and excluded automatically).
 func Serialize(challenge *Challenge) ([]byte, error) {
-	// Create a copy without State and Error fields for serialization
-	data := map[string]interface{}{
-		"version":   challenge.Version,
-		"protocol":  challenge.Protocol,
-		"service":   challenge.Service,
-		"timestamp": challenge.Timestamp,
-		"metadata":  challenge.Metadata,
-	}
-
-	// Add fields based on state
-	switch challenge.State {
-	case StateInit:
-		data["pk1"] = challenge.PK1
-		data["nonce"] = challenge.Nonce
-	case StateStep1:
-		data["pk1"] = challenge.PK1
-		data["pk2"] = challenge.PK2
-		data["nonce"] = challenge.Nonce
-		data["sign2"] = challenge.Sign2
-	case StateComplete:
-		data["pk1"] = challenge.PK1
-		data["pk2"] = challenge.PK2
-		data["nonce"] = challenge.Nonce
-		data["sign1"] = challenge.Sign1
-		data["sign2"] = challenge.Sign2
-	}
-
-	return msgpack.Marshal(data)
+	return msgpack.Marshal(challenge)
 }
 
 // orderedChallengeData is used to ensure consistent field ordering in msgpack
@@ -477,7 +460,7 @@ type orderedChallengeData struct {
 	Version   uint8             `msgpack:"version"`
 	Protocol  string            `msgpack:"protocol"`
 	Service   string            `msgpack:"service"`
-	Timestamp int64             `msgpack:"timestamp"`
+	Timestamp uint64            `msgpack:"timestamp"`
 	PK1       []byte            `msgpack:"pk1"`
 	PK2       []byte            `msgpack:"pk2"`
 	Nonce     []byte            `msgpack:"nonce"`

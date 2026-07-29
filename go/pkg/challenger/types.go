@@ -24,7 +24,14 @@ type Challenge struct {
 	Version   uint8             `msgpack:"version"`
 	Protocol  string            `msgpack:"protocol"`
 	Service   string            `msgpack:"service"`
-	Timestamp int64             `msgpack:"timestamp"`
+	// Timestamp is uint64, not int64: vmihailenco/msgpack encodes int64
+	// fields with the signed msgpack type (0xd3), while TS's
+	// @msgpack/msgpack encodes the same non-negative Date.now() value with
+	// the unsigned type (0xcf) -- same numeric value, different bytes on
+	// the wire, which breaks byte-exact signature verification across
+	// languages. Timestamps are never negative, so uint64 matches TS's
+	// actual encoding without any semantic loss.
+	Timestamp uint64            `msgpack:"timestamp"`
 	PK1       []byte            `msgpack:"pk1,omitempty"`
 	PK2       []byte            `msgpack:"pk2,omitempty"`
 	Nonce     []byte            `msgpack:"nonce,omitempty"`
