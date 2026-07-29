@@ -4,6 +4,8 @@
 
 This document specifies the VaultysID Encryption Protocol, a secure method for encrypting and decrypting data using the NaCl secretbox authenticated encryption scheme. The protocol is designed to provide confidentiality, integrity, and authenticity for file encryption while supporting both local and remote key derivation.
 
+**Not to be confused with `DHIES.md`**: this document covers self/whole-file encryption, where the encryption key is derived from the *encrypting party's own* identity (optionally via a remote PRF exchange). `DHIES.md` covers a separate scheme for encrypting a message *to a specific recipient's* public key with no prior key exchange -- the two use different key derivation, different wire formats, and are not interchangeable.
+
 ### 1.1. Terminology
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in RFC 2119.

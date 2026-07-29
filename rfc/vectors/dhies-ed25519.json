@@ -1,0 +1,35 @@
+{
+  "derived": {
+    "encKeyHex": "44300b7dc675415eff0789a92c67b1c0a08b1cf3fc6d6b028e73975076ebe66a",
+    "macHex": "1b99f0f7cc9901665e29912d03eff14dfe9317fb2d37dcec13fa516de16aa5cc",
+    "macKeyHex": "cbeb2bb97c5f9fd1fe139568c9a1b6fe854afd6b00ff8c710d8b627d2f2e4ba3",
+    "sharedSecretHex": "35c140373cf76fc2fbb0874fa81935ff54f037918dfddb2a21f47b555b63bd32"
+  },
+  "description": "Deterministic DHIES (Diffie-Hellman Integrated Encryption Scheme) reference vector, fixing the normally-random ephemeral key and nonce so the ciphertext is reproducible. Validated with the real, unmodified DHIES.Decrypt(); a tamper check and an independent production (random ephemeral) round trip are included for completeness.",
+  "identities": {
+    "alice": {
+      "cypherPublicKeyHex": "511b45fceb845ee857cb48ed6e4a4a9633dafd9ec19183fc193bce3790a9922d",
+      "entropyHex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+    },
+    "bob": {
+      "cypherPublicKeyHex": "96a9a7e69edd7ac3580afa527c4100df9569503537f7931b0515917072163530",
+      "entropyHex": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f"
+    }
+  },
+  "inputs": {
+    "ephemeralPrivateHex": "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+    "ephemeralPublicHex": "07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c",
+    "nonceHex": "02030405060708090a0b0c0d0e0f10111213141516171819",
+    "plaintextUtf8": "Vaultys DHIES reference vector: this message is encrypted by Alice for Bob."
+  },
+  "kdf": "encKey = SHA-512(sharedSecret || \"DHIES-KDF\" || senderStaticPub || recipientStaticPub || 0x01)[0:32]; macKey = same with 0x02 instead of 0x01",
+  "mac": "SHA-256(macKey || senderStaticPublicKey || nonce || ciphertext)",
+  "output": {
+    "decryptedByRealDecrypt": true,
+    "messageHex": "02030405060708090a0b0c0d0e0f1011121314151617181907a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7cb247773324fcb583db2b83bb627ad64cd1a0a00ab4de3ba4c579d7a2c30067ad25e1e08b6d7dc28f7f3822a55dce7c4fe505201caa7ba485bbed830eaea45e888246432157efcf846c738a56af3b5a0bb02fe6302edead59544b381b99f0f7cc9901665e29912d03eff14dfe9317fb2d37dcec13fa516de16aa5cc",
+    "messageLength": 179,
+    "tamperErrorMessage": "DHIES: MAC verification failed",
+    "tamperedMessageRejected": true
+  },
+  "wireFormat": "nonce(24) || ephemeralPublicKey(32) || secretbox_ciphertext(len(plaintext)+16) || mac(32)"
+}

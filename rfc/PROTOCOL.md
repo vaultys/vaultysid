@@ -35,18 +35,39 @@ The challenge is the core element of the trust establishment protocol. It is enc
 
 ```
 {
-  "protocol": string,      // Protocol identifier
-  "service": string,       // Service identifier
-  "timestamp": number,     // Unix timestamp
-  "pk1": Buffer,           // Public key of initiator
-  "pk2": Buffer,           // Public key of responder
-  "nonce": Buffer,         // Random nonce (16 bytes initially, 32 bytes complete)
-  "sign1": Buffer,         // Signature from initiator
-  "sign2": Buffer,         // Signature from responder
-  "metadata": object,      // Optional context-specific metadata
-  "state": number          // Protocol state
+  "version": integer,     // Protocol wire version: 0 or 1 (see 3.4)
+  "protocol": string,     // Protocol identifier
+  "service": string,      // Service identifier
+  "timestamp": integer,   // Unix timestamp in MILLISECONDS (see 3.3), unsigned
+  "pk1": Buffer,          // Public key of initiator
+  "pk2": Buffer,          // Public key of responder (absent in INIT)
+  "nonce": Buffer,        // Random nonce (16 bytes initially, 32 bytes from STEP1 on)
+  "sign1": Buffer,        // Signature from initiator (present only from COMPLETE on)
+  "sign2": Buffer,        // Signature from responder (present from STEP1 on)
+  "metadata": object,     // Context-specific metadata, always present (MAY be empty)
 }
 ```
+
+`state` is a local/in-memory concept used to drive the protocol state machine (see 3.2); it is NEVER part of the wire encoding. Implementations MUST infer state on receipt from which of `pk2`/`sign1`/`sign2` are present and from `nonce` length (16 bytes = INIT, 32 bytes = STEP1 or COMPLETE), exactly as described in 3.2 and 4.2, not from a transmitted state field.
+
+### 3.1.1. Wire Field Presence Per State
+
+The wire message is NOT a single fixed-shape structure -- fields are only present for the fields that apply to that state, and implementations MUST reproduce this exactly for cross-language byte compatibility (see 3.5):
+
+| Field       | INIT | STEP1 | COMPLETE |
+|-------------|:----:|:-----:|:--------:|
+| version     |  X   |   X   |    X     |
+| protocol    |  X   |   X   |    X     |
+| service     |  X   |   X   |    X     |
+| timestamp   |  X   |   X   |    X     |
+| pk1         |  X   |   X   |    X     |
+| pk2         |      |   X   |    X     |
+| nonce       |  X   |   X   |    X     |
+| sign1       |      |       |    X     |
+| sign2       |      |   X   |    X     |
+| metadata    |  X   |   X   |    X     |
+
+Field order on the wire MUST be exactly the order shown in this table (top to bottom, skipping absent fields) -- this matches struct/field declaration order in both reference implementations. `metadata` is always last.
 
 ### 3.2. Protocol States
 
@@ -59,6 +80,27 @@ The challenge progresses through the following states:
 | 0           | INIT            | Challenge created, not yet sent                |
 | 1           | STEP1           | Response received from second party            |
 | 2           | COMPLETE        | Both signatures verified, challenge complete   |
+
+### 3.3. Timestamp Encoding
+
+`timestamp` MUST be Unix time in **milliseconds** (matching JavaScript's `Date.now()`), and MUST be encoded on the wire as an **unsigned** integer type.
+
+This is not a stylistic preference: it was the root cause of a real, deterministic cross-language interoperability failure. A signed 64-bit MessagePack field (msgpack type `0xd3`) and an unsigned 64-bit field (`0xcf`) produce different bytes for the identical non-negative numeric value. Since `sign1`/`sign2` are computed over the exact serialized bytes of the unsigned challenge (4.2), any implementation that encodes `timestamp` as a signed integer will produce signatures that fail to verify against every other conforming implementation, on every single handshake -- this is not an edge case, it reproduces on every message. See 3.5 and Appendix D for the general rule this falls out of, and `vectors/challenger-handshake-ed25519.json` for a byte-exact vector demonstrating the correct encoding.
+
+### 3.4. Wire Version and a Known Compatibility Gap
+
+`version` (0 or 1) selects the wire format used for `serializeUnsigned` (4.2). **Implementations MUST treat this as a genuinely different byte format, not a metadata flag**: version 0 historically used a bespoke, hand-rolled positional MessagePack encoder (no generic map, no `version` field on the wire at all, and its own idiosyncratic integer-width rules) predating the general MessagePack-map encoding that version 1 (and version 0 in some code paths -- see below) uses.
+
+This has produced real, confirmed divergence between implementations: as of this writing, the TypeScript reference implementation's `serializeUnsigned` still branches internally on `version === 0` to the legacy encoder, while other implementations that have adopted the general MessagePack-map format for all versions do NOT reproduce that legacy byte layout for version 0. **Practical implication: version 0 challenges are not currently guaranteed byte-compatible across implementations.** Until this is resolved (either by every implementation reproducing the legacy v0 encoder exactly, or by deprecating v0 in favor of always negotiating v1), implementations SHOULD default to and prefer version 1, and MUST NOT assume version 0 interoperates cross-language without testing against the specific peer implementation in question. All reference vectors in Appendix D use version 1 for this reason, except where explicitly noted otherwise.
+
+### 3.5. Canonical MessagePack Encoding Requirements
+
+Because `sign1`/`sign2` are verified by independently re-serializing the unsigned challenge and checking the signature against those bytes (4.2) -- never by trusting the raw bytes as received -- **every implementation's serializer MUST produce byte-identical output for the same logical challenge, for every integer field, not just field order.** MessagePack, unlike e.g. JSON, is not canonical by default: a compliant encoder is free to represent the same integer value with different type-tagged widths, and different libraries commonly choose differently. Two encodings observed to diverge in practice between implementations of this protocol:
+
+1. **Signed vs. unsigned tag at the same width** (see 3.3): a 64-bit non-negative value encoded as signed (`0xd3`) vs. unsigned (`0xcf`).
+2. **Fixed-width vs. minimal-width integers**: some encoders always use the byte-width of the source language's static type (e.g. a byte value declared as an 8-bit integer type always emits the explicit 1-byte-tag form, `0xcc 0x01`), while others -- including the JavaScript reference implementation -- always emit the smallest MessagePack representation the value fits in regardless of the source type (e.g. `0x01`, a bare positive fixint, with no type tag at all, for the same value).
+
+Implementations MUST encode every integer field (`version`, `timestamp`) using the smallest MessagePack representation the value fits (positive/negative fixint where possible, growing only as needed) and MUST use the unsigned family of MessagePack integer types for fields that are never negative (`timestamp`). A fixed-width or signed-family encoder will produce a technically-valid, correctly-decodable MessagePack message that nonetheless fails every cross-language signature verification, because the bytes actually signed differ from the bytes an unsigned/minimal-width encoder would produce for the same value. `vectors/challenger-handshake-ed25519.json` is a byte-exact demonstration of correct encoding for both `version` and `timestamp`, verified against two independent implementations.
 
 ## 4. Trust Establishment Protocol
 
@@ -412,9 +454,9 @@ Requester                                  Provider
 
 Challenges are serialized using MessagePack for compact binary representation. The protocol supports two serialization versions for backward compatibility:
 
-#### A.1.1. Version 0 Serialization (Legacy)
+#### A.1.1. Version 0 `serializeUnsigned` (Legacy)
 
-Uses a custom encoding function for challenge fields:
+The bytes actually signed/verified for version 0 (see 3.4) use a bespoke, hand-rolled positional encoder, NOT the generic MessagePack map encoding described in A.1.2 -- note the field set here has no `version` key at all, and `writeInt`'s width selection does not follow the unsigned/minimal-width rule of 3.5 (this is itself part of why version 0 is flagged as a known compatibility gap in 3.4 -- this encoder predates that rule and has not been consistently reimplemented by every implementation):
 
 ```typescript
 const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }) => {
@@ -434,21 +476,24 @@ const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }) 
 };
 ```
 
-#### A.1.2. Version 1 Serialization (Current)
+#### A.1.2. Version 1 Serialization (Current, Recommended)
 
-Uses standard MessagePack encoding:
+Uses standard MessagePack map encoding, subject to the canonical-encoding rules in 3.5 (minimal-width, unsigned-family integers). Field order and presence per state follow 3.1.1; the `picked` object below shows the INIT case:
 
 ```typescript
 const serialize = (data: ChallengeType) => {
   if (data.state == INIT) {
-    const { protocol, service, timestamp, pk1, nonce, metadata } = data;
-    const picked = { protocol, service, timestamp, pk1, nonce, metadata };
-    const encoded = encode(picked);  // Standard MessagePack encode
+    const { version, protocol, service, timestamp, pk1, nonce, metadata } = data;
+    const picked = { version, protocol, service, timestamp, pk1, nonce, metadata };
+    const encoded = encode(picked);  // Standard MessagePack encode, minimal-width integers
     return Buffer.from(encoded);
   }
-  // Other states...
+  // STEP1 additionally includes pk2 (after pk1) and sign2 (after nonce);
+  // COMPLETE additionally includes sign1 (before sign2). See 3.1.1.
 };
 ```
+
+A conforming non-TypeScript implementation MUST reproduce the *effect* of this encoding (field order, field presence per state, minimal-width unsigned integers) -- it need not use MessagePack's generic "encode any object" API; e.g. the Go reference implementation marshals a tagged struct whose field order and `omitempty` tags are chosen to reproduce this exactly, combined with an encoder option forcing minimal-width integer encoding (3.5). See `vectors/challenger-handshake-ed25519.json` for byte-exact ground truth.
 
 ### A.2. Challenge Deserialization
 
@@ -509,6 +554,38 @@ The protocol can be integrated with existing identity systems by:
 
 ### C.3. Performance Considerations
 
-- Challenges are typically small (< 1KB)
-- Certificate verification is computationally lightweight
-- The protocol is suitable for low-bandwidth, high-latency connections
+- Challenges are typically small (< 1KB) for classical (Ed25519) identities; post-quantum (Dilithium/ML-DSA) identities are two orders of magnitude larger (public keys and signatures are multiple KB each -- see `vectors/challenger-handshake-dilithium.json`) and implementations SHOULD size buffers/transports accordingly rather than assuming a fixed small upper bound
+- Certificate verification is computationally lightweight for Ed25519; Dilithium verification is more expensive and larger, though still practical for interactive handshakes
+- The protocol is suitable for low-bandwidth, high-latency connections for classical identities; post-quantum identities increase bandwidth requirements substantially
+
+## Appendix D: Reference Vectors
+
+The `rfc/vectors/` directory contains machine-checkable reference vectors generated directly from a reference implementation and, where noted, independently cross-validated against a second implementation. Implementers SHOULD use these to validate their own encoder/signer before attempting live interop testing -- they catch the class of bug described in 3.3/3.5 immediately, without needing a second running implementation to test against.
+
+### D.1. `challenger-handshake-ed25519.json`
+
+A full INIT -> STEP1 -> COMPLETE handshake between two Ed25519 identities, using fixed entropy, nonces, and timestamp so every field is reproducible. **Cross-validated byte-for-byte between the Go and TypeScript reference implementations**, including:
+- Identity `id`/DID bytes derived from fixed entropy
+- The exact wire bytes for all three messages
+- The exact "unsigned" bytes that `sign1`/`sign2` are computed and verified over
+- `sign2` produced independently by each implementation being **byte-identical** (Ed25519 signing is deterministic per RFC 8032, so this is a meaningful check, not just "both signatures verify")
+
+This is the vector to check first when porting the protocol to a new language: if your implementation's INIT/unsigned bytes don't match this vector's `wireBytesHex`/`unsignedBytesHex` for the same fixed inputs, your encoding has a bug that will manifest as signature-verification failures against every real peer, exactly as described in 3.3/3.5.
+
+### D.2. `challenger-handshake-dilithium.json`
+
+The same handshake shape, using Dilithium (post-quantum ML-DSA-65) identities. **This vector is currently TypeScript-only**: as of this writing the Go reference implementation has no post-quantum key manager at all, so there is no second implementation to cross-validate against yet (unlike D.1). It is included so a future Go or Rust post-quantum implementation has byte-exact ground truth to match rather than starting from prose. The Rust implementation does have working Dilithium support and an existing TS<->Rust Dilithium interop test path (`interops/run-cross-language-test.sh dilithium`); cross-validating this vector against Rust is a natural next step.
+
+Note the dramatically larger field sizes versus D.1 (public keys ~2.6KB, signatures ~4.6KB) -- see C.3.
+
+### D.3. `dhies.json`
+
+A deterministic vector for the DHIES encrypted-messaging scheme (see RFC ENCRYPTION.md / DHIES.md), fixing the normally-random ephemeral key and nonce so the ciphertext is reproducible. Validated against the real, unmodified decryption function (not a hand-rolled reimplementation on both ends), plus a tamper check (flipping one ciphertext byte MUST be rejected) and an independent production round trip with real randomness.
+
+### D.4. Regenerating Vectors
+
+Each vector has a corresponding generator, kept alongside the reference implementation's own compatibility test tooling:
+- `go/test/compatibility/generate_rfc_challenger_vectors.go` (`go run` it; regenerates D.1)
+- `go/test/compatibility/generate_rfc_dhies_vector.go` (`go run` it; regenerates D.3)
+- `typescript/test/interops/generate-pq-vectors.ts` (`npx tsx` it; regenerates D.2)
+- `typescript/test/interops/verify-rfc-vectors.ts` (`npx tsx` it, passing a D.1-shaped vector file path; independently re-derives and checks every byte string in the vector using the TypeScript implementation -- this is the script that produced the D.1 cross-validation claim above)
