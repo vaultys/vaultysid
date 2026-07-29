@@ -192,7 +192,7 @@ func TestChallenger_Timestamp(t *testing.T) {
 		Version:   ProtocolV1,
 		Protocol:  "test",
 		Service:   "service",
-		Timestamp: time.Now().UnixMilli() - 10000, // 10 seconds ago
+		Timestamp: uint64(time.Now().UnixMilli() - 10000), // 10 seconds ago
 		PK1:       alice.ToBytes(),
 		Nonce:     make([]byte, 16),
 		State:     StateInit,
@@ -205,7 +205,7 @@ func TestChallenger_Timestamp(t *testing.T) {
 	}
 
 	// Create challenge with valid timestamp
-	initChallenge.Timestamp = time.Now().UnixMilli()
+	initChallenge.Timestamp = uint64(time.Now().UnixMilli())
 	_, err = bobChallenger.Step1(initChallenge)
 	if err != nil {
 		t.Errorf("Should succeed with valid timestamp: %v", err)
@@ -307,7 +307,7 @@ func TestChallenger_NonceValidation(t *testing.T) {
 		Version:   ProtocolV1,
 		Protocol:  "test",
 		Service:   "service",
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: uint64(time.Now().UnixMilli()),
 		PK1:       alice.ToBytes(),
 		Nonce:     make([]byte, 8), // Wrong size
 		State:     StateInit,

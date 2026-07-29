@@ -61,7 +61,7 @@ func (c *Challenger) Init(protocol, service string) (*Challenge, error) {
 		Version:   c.options.Version,
 		Protocol:  protocol,
 		Service:   service,
-		Timestamp: c.state.Timestamp,
+		Timestamp: uint64(c.state.Timestamp),
 		PK1:       c.vaultysID.ToBytes(),
 		Nonce:     nonce,
 		Metadata: ChallengeMetadata{
@@ -86,7 +86,7 @@ func (c *Challenger) Step1(initChallenge *Challenge) (*Challenge, error) {
 	}
 
 	// Check timestamp
-	if err := c.validateTimestamp(initChallenge.Timestamp); err != nil {
+	if err := c.validateTimestamp(int64(initChallenge.Timestamp)); err != nil {
 		return nil, err
 	}
 
@@ -95,7 +95,7 @@ func (c *Challenger) Step1(initChallenge *Challenge) (*Challenge, error) {
 	c.state.RemoteNonce = initChallenge.Nonce
 	c.state.Protocol = initChallenge.Protocol
 	c.state.Service = initChallenge.Service
-	c.state.Timestamp = initChallenge.Timestamp
+	c.state.Timestamp = int64(initChallenge.Timestamp)
 
 	// Generate our 16-byte nonce
 	ourNonce, err := crypto.RandomBytes(16)
@@ -460,7 +460,7 @@ type orderedChallengeData struct {
 	Version   uint8             `msgpack:"version"`
 	Protocol  string            `msgpack:"protocol"`
 	Service   string            `msgpack:"service"`
-	Timestamp int64             `msgpack:"timestamp"`
+	Timestamp uint64            `msgpack:"timestamp"`
 	PK1       []byte            `msgpack:"pk1"`
 	PK2       []byte            `msgpack:"pk2"`
 	Nonce     []byte            `msgpack:"nonce"`
