@@ -439,6 +439,24 @@ func (c *Challenger) validateTimestamp(timestamp int64) error {
 	return nil
 }
 
+// marshalCompact encodes v the way TS's @msgpack/msgpack does: integers use
+// the smallest representation that fits the value (e.g. version=1 encodes as
+// a bare 0x01 positive fixint, not vmihailenco's default 0xcc 0x01 uint8
+// tag). Without this, any integer field whose Go type is wider than the
+// value strictly needs (uint8, int64, ...) encodes to different bytes than
+// TS for the identical value, which silently breaks byte-exact signature
+// verification across languages -- this bit both `version` and `timestamp`
+// before this was added.
+func marshalCompact(v interface{}) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := msgpack.NewEncoder(&buf)
+	enc.UseCompactInts(true)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 // Serialize serializes a challenge to bytes.
 //
 // This marshals the Challenge struct directly rather than building a
@@ -451,7 +469,7 @@ func (c *Challenger) validateTimestamp(timestamp int64) error {
 // reproduces TS's exact field order and field set for every state
 // (State/Error are tagged `msgpack:"-"` and excluded automatically).
 func Serialize(challenge *Challenge) ([]byte, error) {
-	return msgpack.Marshal(challenge)
+	return marshalCompact(challenge)
 }
 
 // orderedChallengeData is used to ensure consistent field ordering in msgpack
@@ -490,7 +508,7 @@ func SerializeUnsigned(challenge *Challenge) ([]byte, error) {
 		Metadata:  metadata,
 	}
 
-	return msgpack.Marshal(data)
+	return marshalCompact(data)
 }
 
 // Deserialize deserializes a challenge from bytes
