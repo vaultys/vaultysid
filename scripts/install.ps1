@@ -16,7 +16,7 @@ param(
 )
 
 # Configuration
-$GithubRepo = "vaultys/vaultysid-go"
+$GithubRepo = "vaultys/vaultysid"
 $BinaryName = "vaultysid-cli"
 
 # Colors and formatting

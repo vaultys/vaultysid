@@ -8,8 +8,8 @@ A command-line interface for VaultysID - decentralized identity management for m
 
 ```bash
 # Clone the repository
-git clone https://github.com/vaultys/vaultysid-go.git
-cd vaultysid-go
+git clone https://github.com/vaultys/vaultysid.git
+cd vaultysid/go
 
 # Build the CLI
 make build-cli
@@ -20,7 +20,7 @@ make install-cli
 
 ### Pre-built Binaries
 
-Download pre-built binaries from the [releases page](https://github.com/vaultys/vaultysid-go/releases).
+Download pre-built binaries from the [releases page](https://github.com/vaultys/vaultysid/releases).
 
 ## Usage
 

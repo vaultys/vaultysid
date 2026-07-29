@@ -1,4 +1,4 @@
-module github.com/vaultys/vaultysid-go
+module github.com/vaultys/vaultysid/go
 
 go 1.21
 

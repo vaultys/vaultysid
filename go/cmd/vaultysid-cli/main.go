@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/vaultys/vaultysid-go/pkg/idmanager"
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/idmanager"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 var (

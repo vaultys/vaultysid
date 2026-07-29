@@ -69,6 +69,5 @@ docker-compose.override.yml
 
 # Project specific
 
-!vaultysid-go/
 test-vectors/
 interop-results/

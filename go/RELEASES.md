@@ -9,13 +9,13 @@ The VaultysID CLI is available as pre-compiled binaries for all major operating 
 ### Unix/Linux/macOS (Shell)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vaultys/vaultysid-go/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vaultys/vaultysid/main/scripts/install.sh | bash
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/vaultys/vaultysid-go/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/vaultys/vaultysid/main/scripts/install.ps1 | iex
 ```
 
 ## 🖥️ Supported Platforms
@@ -71,7 +71,7 @@ irm https://raw.githubusercontent.com/vaultys/vaultysid-go/main/scripts/install.
 #### AMD64 (x86_64)
 ```bash
 VERSION="v1.0.0"  # Replace with desired version
-curl -L "https://github.com/vaultys/vaultysid-go/releases/download/${VERSION}/vaultysid-cli-${VERSION}-linux-amd64.tar.gz" | tar xz
+curl -L "https://github.com/vaultys/vaultysid/releases/download/${VERSION}/vaultysid-cli-${VERSION}-linux-amd64.tar.gz" | tar xz
 sudo mv vaultysid-cli-${VERSION}-linux-amd64 /usr/local/bin/vaultysid-cli
 sudo chmod +x /usr/local/bin/vaultysid-cli
 ```
@@ -79,7 +79,7 @@ sudo chmod +x /usr/local/bin/vaultysid-cli
 #### ARM64 (aarch64)
 ```bash
 VERSION="v1.0.0"
-curl -L "https://github.com/vaultys/vaultysid-go/releases/download/${VERSION}/vaultysid-cli-${VERSION}-linux-arm64.tar.gz" | tar xz
+curl -L "https://github.com/vaultys/vaultysid/releases/download/${VERSION}/vaultysid-cli-${VERSION}-linux-arm64.tar.gz" | tar xz
 sudo mv vaultysid-cli-${VERSION}-linux-arm64 /usr/local/bin/vaultysid-cli
 sudo chmod +x /usr/local/bin/vaultysid-cli
 ```
@@ -87,7 +87,7 @@ sudo chmod +x /usr/local/bin/vaultysid-cli
 #### ARM v7 (32-bit ARM)
 ```bash
 VERSION="v1.0.0"
-curl -L "https://github.com/vaultys/vaultysid-go/releases/download/${VERSION}/vaultysid-cli-${VERSION}-linux-armv7.tar.gz" | tar xz
+curl -L "https://github.com/vaultys/vaultysid/releases/download/${VERSION}/vaultysid-cli-${VERSION}-linux-armv7.tar.gz" | tar xz
 sudo mv vaultysid-cli-${VERSION}-linux-armv7 /usr/local/bin/vaultysid-cli
 sudo chmod +x /usr/local/bin/vaultysid-cli
 ```
@@ -97,7 +97,7 @@ sudo chmod +x /usr/local/bin/vaultysid-cli
 #### Intel Mac
 ```bash
 VERSION="v1.0.0"
-curl -L "https://github.com/vaultys/vaultysid-go/releases/download/${VERSION}/vaultysid-cli-${VERSION}-darwin-amd64.tar.gz" | tar xz
+curl -L "https://github.com/vaultys/vaultysid/releases/download/${VERSION}/vaultysid-cli-${VERSION}-darwin-amd64.tar.gz" | tar xz
 sudo mv vaultysid-cli-${VERSION}-darwin-amd64 /usr/local/bin/vaultysid-cli
 sudo chmod +x /usr/local/bin/vaultysid-cli
 ```
@@ -105,7 +105,7 @@ sudo chmod +x /usr/local/bin/vaultysid-cli
 #### Apple Silicon (M1/M2/M3)
 ```bash
 VERSION="v1.0.0"
-curl -L "https://github.com/vaultys/vaultysid-go/releases/download/${VERSION}/vaultysid-cli-${VERSION}-darwin-arm64.tar.gz" | tar xz
+curl -L "https://github.com/vaultys/vaultysid/releases/download/${VERSION}/vaultysid-cli-${VERSION}-darwin-arm64.tar.gz" | tar xz
 sudo mv vaultysid-cli-${VERSION}-darwin-arm64 /usr/local/bin/vaultysid-cli
 sudo chmod +x /usr/local/bin/vaultysid-cli
 ```
@@ -119,7 +119,7 @@ $VERSION = "v1.0.0"
 $ARCH = "amd64"  # or "386", "arm64"
 
 # Download
-Invoke-WebRequest -Uri "https://github.com/vaultys/vaultysid-go/releases/download/$VERSION/vaultysid-cli-$VERSION-windows-$ARCH.exe.zip" -OutFile "vaultysid-cli.zip"
+Invoke-WebRequest -Uri "https://github.com/vaultys/vaultysid/releases/download/$VERSION/vaultysid-cli-$VERSION-windows-$ARCH.exe.zip" -OutFile "vaultysid-cli.zip"
 
 # Extract
 Expand-Archive -Path "vaultysid-cli.zip" -DestinationPath "."
@@ -147,7 +147,7 @@ $PATH = [Environment]::GetEnvironmentVariable("PATH", "Machine")
 VERSION="v1.0.0"
 ARCH="amd64"  # or "386", "arm64", "arm"
 
-fetch "https://github.com/vaultys/vaultysid-go/releases/download/${VERSION}/vaultysid-cli-${VERSION}-freebsd-${ARCH}.tar.gz"
+fetch "https://github.com/vaultys/vaultysid/releases/download/${VERSION}/vaultysid-cli-${VERSION}-freebsd-${ARCH}.tar.gz"
 tar -xzf "vaultysid-cli-${VERSION}-freebsd-${ARCH}.tar.gz"
 sudo mv "vaultysid-cli-${VERSION}-freebsd-${ARCH}" /usr/local/bin/vaultysid-cli
 sudo chmod +x /usr/local/bin/vaultysid-cli
@@ -237,7 +237,7 @@ All releases include SHA256 and SHA512 checksums for verification.
 
 ```bash
 # Download checksums
-curl -L "https://github.com/vaultys/vaultysid-go/releases/download/v1.0.0/checksums-sha256.txt" -o checksums-sha256.txt
+curl -L "https://github.com/vaultys/vaultysid/releases/download/v1.0.0/checksums-sha256.txt" -o checksums-sha256.txt
 
 # Verify your download
 sha256sum -c checksums-sha256.txt 2>/dev/null | grep OK
@@ -247,7 +247,7 @@ sha256sum -c checksums-sha256.txt 2>/dev/null | grep OK
 
 ```powershell
 # Download checksums
-Invoke-WebRequest -Uri "https://github.com/vaultys/vaultysid-go/releases/download/v1.0.0/checksums-sha256.txt" -OutFile checksums-sha256.txt
+Invoke-WebRequest -Uri "https://github.com/vaultys/vaultysid/releases/download/v1.0.0/checksums-sha256.txt" -OutFile checksums-sha256.txt
 
 # Calculate hash of your download
 $hash = Get-FileHash -Path "vaultysid-cli-v1.0.0-windows-amd64.exe.zip" -Algorithm SHA256
@@ -302,10 +302,10 @@ vaultysid-cli completion powershell | Out-String | Invoke-Expression
 
 ```bash
 # Unix/Linux/macOS
-curl -fsSL https://raw.githubusercontent.com/vaultys/vaultysid-go/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vaultys/vaultysid/main/scripts/install.sh | bash
 
 # Windows PowerShell
-irm https://raw.githubusercontent.com/vaultys/vaultysid-go/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/vaultys/vaultysid/main/scripts/install.ps1 | iex
 ```
 
 ### Manual Update
@@ -322,8 +322,8 @@ Simply download the new version and replace the existing binary.
 
 ```bash
 # Clone the repository
-git clone https://github.com/vaultys/vaultysid-go.git
-cd vaultysid-go/go
+git clone https://github.com/vaultys/vaultysid.git
+cd vaultysid/go
 
 # Build for current platform
 make build-cli
@@ -380,14 +380,14 @@ source ~/.bashrc
 
 ## 📝 Release Notes
 
-See [CHANGELOG.md](https://github.com/vaultys/vaultysid-go/blob/main/go/CHANGELOG.md) for detailed release notes.
+See [CHANGELOG.md](https://github.com/vaultys/vaultysid/blob/main/go/CHANGELOG.md) for detailed release notes.
 
 ## 🤝 Support
 
-- **Issues**: [GitHub Issues](https://github.com/vaultys/vaultysid-go/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/vaultys/vaultysid-go/discussions)
-- **Documentation**: [README.md](https://github.com/vaultys/vaultysid-go/blob/main/go/README.md)
+- **Issues**: [GitHub Issues](https://github.com/vaultys/vaultysid/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/vaultys/vaultysid/discussions)
+- **Documentation**: [README.md](https://github.com/vaultys/vaultysid/blob/main/go/README.md)
 
 ## 📄 License
 
-VaultysID CLI is released under the MIT License. See [LICENSE](https://github.com/vaultys/vaultysid-go/blob/main/LICENSE) for details.
+VaultysID CLI is released under the MIT License. See [LICENSE](https://github.com/vaultys/vaultysid/blob/main/LICENSE) for details.

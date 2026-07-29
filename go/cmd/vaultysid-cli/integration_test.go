@@ -12,8 +12,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vaultys/vaultysid-go/pkg/idmanager"
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/idmanager"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 func TestCompleteWorkflow(t *testing.T) {

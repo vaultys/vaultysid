@@ -7,8 +7,8 @@ import (
 	"log"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/vaultys/vaultysid-go/pkg/keymanager"
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/keymanager"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 	"github.com/vmihailenco/msgpack/v5"
 )
 

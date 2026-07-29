@@ -1,7 +1,7 @@
 package idmanager
 
 import (
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 // ProtocolVersion represents the protocol version (0 or 1)

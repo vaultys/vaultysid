@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/vaultys/vaultysid-go/pkg/crypto"
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/crypto"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 	"github.com/vmihailenco/msgpack/v5"
 )
 

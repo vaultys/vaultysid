@@ -17,7 +17,7 @@ IdManager is the main interface for managing VaultysID identities and their rela
 ## Installation
 
 ```bash
-go get github.com/vaultys/vaultysid-go/pkg/idmanager
+go get github.com/vaultys/vaultysid/go/pkg/idmanager
 ```
 
 ## Usage
@@ -26,8 +26,8 @@ go get github.com/vaultys/vaultysid-go/pkg/idmanager
 
 ```go
 import (
-    "github.com/vaultys/vaultysid-go/pkg/idmanager"
-    "github.com/vaultys/vaultysid-go/pkg/vaultysid"
+    "github.com/vaultys/vaultysid/go/pkg/idmanager"
+    "github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 // Generate a new identity

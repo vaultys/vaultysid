@@ -4,7 +4,7 @@ import (
 	"crypto/ed25519"
 	"fmt"
 
-	"github.com/vaultys/vaultysid-go/pkg/crypto"
+	"github.com/vaultys/vaultysid/go/pkg/crypto"
 	"github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/crypto/curve25519"
 )

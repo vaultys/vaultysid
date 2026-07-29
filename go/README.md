@@ -16,7 +16,7 @@ A high-performance Go implementation of the VaultysID decentralized identity fra
 ### Using Go Modules
 
 ```bash
-go get github.com/vaultys/vaultysid-go
+go get github.com/vaultys/vaultysid/go
 ```
 
 ### Building from Source
@@ -38,7 +38,7 @@ import (
     "fmt"
     "log"
     
-    "github.com/vaultys/vaultysid-go/pkg/vaultysid"
+    "github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 func main() {
@@ -79,8 +79,8 @@ fmt.Printf("Signature valid: %v\n", valid)
 package main
 
 import (
-    "github.com/vaultys/vaultysid-go/pkg/challenger"
-    "github.com/vaultys/vaultysid-go/pkg/vaultysid"
+    "github.com/vaultys/vaultysid/go/pkg/challenger"
+    "github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 func main() {
@@ -109,7 +109,7 @@ func main() {
 ### Post-Quantum Cryptography
 
 ```go
-import "github.com/vaultys/vaultysid-go/pkg/keymanager"
+import "github.com/vaultys/vaultysid/go/pkg/keymanager"
 
 // Generate a post-quantum resistant identity
 pqManager, err := keymanager.GenerateDilithium()

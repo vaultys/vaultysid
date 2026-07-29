@@ -6,7 +6,7 @@
 set -e
 
 # Configuration
-GITHUB_REPO="vaultys/vaultysid-go"
+GITHUB_REPO="vaultys/vaultysid"
 BINARY_NAME="vaultysid-cli"
 INSTALL_DIR="/usr/local/bin"
 

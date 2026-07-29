@@ -15,9 +15,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/vaultys/vaultysid-go/pkg/crypto"
-	"github.com/vaultys/vaultysid-go/pkg/idmanager"
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/crypto"
+	"github.com/vaultys/vaultysid/go/pkg/idmanager"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 type IdManagerTestVectors struct {

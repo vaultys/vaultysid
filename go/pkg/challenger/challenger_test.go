@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 func TestChallenger_BasicFlow(t *testing.T) {

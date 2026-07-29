@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/vaultys/vaultysid-go/pkg/keymanager"
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/keymanager"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 // Test vectors generated from TypeScript implementation

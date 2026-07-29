@@ -7,8 +7,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/vaultys/vaultysid-go/pkg/crypto"
-	"github.com/vaultys/vaultysid-go/pkg/keymanager"
+	"github.com/vaultys/vaultysid/go/pkg/crypto"
+	"github.com/vaultys/vaultysid/go/pkg/keymanager"
 )
 
 // SIGN_INCIPIT is the prefix used for challenge signing

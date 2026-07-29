@@ -3,7 +3,7 @@ package vaultysid
 import (
 	"fmt"
 
-	"github.com/vaultys/vaultysid-go/pkg/keymanager"
+	"github.com/vaultys/vaultysid/go/pkg/keymanager"
 )
 
 // FIDO2FromSecret creates a VaultysID from a FIDO2Manager secret

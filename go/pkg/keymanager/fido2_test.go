@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/vaultys/vaultysid-go/pkg/crypto"
+	"github.com/vaultys/vaultysid/go/pkg/crypto"
 	"github.com/vmihailenco/msgpack/v5"
 )
 

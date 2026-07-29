@@ -56,5 +56,5 @@ CMD ["--help"]
 LABEL org.opencontainers.image.title="VaultysID CLI"
 LABEL org.opencontainers.image.description="Decentralized Identity Management CLI"
 LABEL org.opencontainers.image.vendor="Vaultys"
-LABEL org.opencontainers.image.source="https://github.com/vaultys/vaultysid-go"
-LABEL org.opencontainers.image.documentation="https://github.com/vaultys/vaultysid-go/blob/main/go/README.md"
+LABEL org.opencontainers.image.source="https://github.com/vaultys/vaultysid"
+LABEL org.opencontainers.image.documentation="https://github.com/vaultys/vaultysid/blob/main/go/README.md"

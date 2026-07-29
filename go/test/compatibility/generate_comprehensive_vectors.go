@@ -14,9 +14,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/vaultys/vaultysid-go/pkg/challenger"
-	"github.com/vaultys/vaultysid-go/pkg/keymanager"
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/challenger"
+	"github.com/vaultys/vaultysid/go/pkg/keymanager"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 type ComprehensiveTestVectors struct {

@@ -5,7 +5,7 @@ import (
 	"crypto/subtle"
 	"fmt"
 
-	"github.com/vaultys/vaultysid-go/pkg/crypto"
+	"github.com/vaultys/vaultysid/go/pkg/crypto"
 	"golang.org/x/crypto/curve25519"
 )
 

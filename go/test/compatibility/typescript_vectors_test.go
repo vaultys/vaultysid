@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vaultys/vaultysid-go/pkg/keymanager"
-	"github.com/vaultys/vaultysid-go/pkg/vaultysid"
+	"github.com/vaultys/vaultysid/go/pkg/keymanager"
+	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
 type TestVectors struct {

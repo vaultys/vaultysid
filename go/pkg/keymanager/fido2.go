@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"github.com/fxamacker/cbor/v2"
-	vaultyscrypto "github.com/vaultys/vaultysid-go/pkg/crypto"
+	vaultyscrypto "github.com/vaultys/vaultysid/go/pkg/crypto"
 	"github.com/vmihailenco/msgpack/v5"
 	"golang.org/x/crypto/curve25519"
 )
