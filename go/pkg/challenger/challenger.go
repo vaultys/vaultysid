@@ -439,36 +439,19 @@ func (c *Challenger) validateTimestamp(timestamp int64) error {
 	return nil
 }
 
-// Serialize serializes a challenge to bytes
+// Serialize serializes a challenge to bytes.
+//
+// This marshals the Challenge struct directly rather than building a
+// map[string]interface{}: msgpack.Marshal on a map has no stable key
+// order (Go map iteration is randomized per call), which produced
+// non-reproducible wire bytes and could never byte-match TS's
+// insertion-ordered serialize(). The Challenge struct's own msgpack
+// tags already declare the correct field order and correct
+// per-field omitempty (pk2/sign1/sign2), so marshaling it directly
+// reproduces TS's exact field order and field set for every state
+// (State/Error are tagged `msgpack:"-"` and excluded automatically).
 func Serialize(challenge *Challenge) ([]byte, error) {
-	// Create a copy without State and Error fields for serialization
-	data := map[string]interface{}{
-		"version":   challenge.Version,
-		"protocol":  challenge.Protocol,
-		"service":   challenge.Service,
-		"timestamp": challenge.Timestamp,
-		"metadata":  challenge.Metadata,
-	}
-
-	// Add fields based on state
-	switch challenge.State {
-	case StateInit:
-		data["pk1"] = challenge.PK1
-		data["nonce"] = challenge.Nonce
-	case StateStep1:
-		data["pk1"] = challenge.PK1
-		data["pk2"] = challenge.PK2
-		data["nonce"] = challenge.Nonce
-		data["sign2"] = challenge.Sign2
-	case StateComplete:
-		data["pk1"] = challenge.PK1
-		data["pk2"] = challenge.PK2
-		data["nonce"] = challenge.Nonce
-		data["sign1"] = challenge.Sign1
-		data["sign2"] = challenge.Sign2
-	}
-
-	return msgpack.Marshal(data)
+	return msgpack.Marshal(challenge)
 }
 
 // orderedChallengeData is used to ensure consistent field ordering in msgpack
