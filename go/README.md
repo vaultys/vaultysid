@@ -1,15 +1,13 @@
 # VaultysID Go Implementation
 
-A high-performance Go implementation of the VaultysID decentralized identity framework, fully compatible with the TypeScript reference implementation.
+A Go implementation of the VaultysID decentralized identity framework, interoperable with the TypeScript reference implementation.
 
 ## Features
 
-- 🚀 **High Performance**: Native Go implementation with optimized cryptographic operations
-- 🔐 **Complete Cryptography Suite**: Ed25519, X25519, Dilithium (post-quantum), and hybrid schemes
-- 🔄 **Full Compatibility**: 100% interoperable with TypeScript and Rust implementations
-- 📦 **Single Binary**: Easy deployment with no runtime dependencies
-- ⚡ **Concurrent Processing**: Leverages Go's goroutines for parallel operations
-- 🛡️ **Memory Safe**: Automatic memory management with secure key handling
+- 🔐 **Cryptography**: Ed25519/X25519 for classical signing and key exchange, ML-DSA-87 (FIPS 204, formerly Dilithium5) for post-quantum signing
+- 🔄 **Cross-Implementation Compatibility**: msgpack wire format matches the TypeScript implementation byte-for-byte
+- 📦 **Single Binary**: `vaultysid-cli` deploys with no runtime dependencies
+- 🛡️ **Memory Handling**: Secret material is zeroed on `CleanSecureData`/`SecureErase`
 
 ## Installation
 
@@ -37,7 +35,7 @@ package main
 import (
     "fmt"
     "log"
-    
+
     "github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
@@ -47,10 +45,10 @@ func main() {
     if err != nil {
         log.Fatal(err)
     }
-    
+
     // Get the DID (Decentralized Identifier)
     fmt.Printf("DID: %s\n", id.DID())
-    
+
     // Get the identity bytes for sharing
     idBytes := id.ToBytes()
     fmt.Printf("Identity: %x\n", idBytes)
@@ -67,10 +65,14 @@ if err != nil {
     log.Fatal(err)
 }
 
-// Verify the signature (can be done by anyone with the public identity)
-publicID := vaultysid.FromID(id.ToBytes())
-valid := publicID.Verify(data, signature)
-fmt.Printf("Signature valid: %v\n", valid)
+// Verify the signature (can be done by anyone with the public identity;
+// certificate may be nil if none was issued)
+publicID, err := vaultysid.FromID(id.ToBytes(), nil)
+if err != nil {
+    log.Fatal(err)
+}
+err = publicID.Verify(data, signature)
+fmt.Printf("Signature valid: %v\n", err == nil)
 ```
 
 ### Handcheck Protocol (Challenge-Response)
@@ -87,49 +89,45 @@ func main() {
     // Create two identities
     alice, _ := vaultysid.GeneratePerson()
     bob, _ := vaultysid.GeneratePerson()
-    
+
     // Initialize challengers
     aliceChallenger := challenger.New(alice)
     bobChallenger := challenger.New(bob)
-    
+
     // Alice initiates
     aliceInit, _ := aliceChallenger.Init("protocol", "service")
-    
+
     // Bob responds with step1
     bobStep1, _ := bobChallenger.Step1(aliceInit)
-    
+
     // Alice completes with step2
     aliceStep2, _ := aliceChallenger.Step2(bobStep1)
-    
-    // Both parties are now authenticated
-    fmt.Println("Handcheck protocol completed!")
+
+    // Bob finalizes and both parties are authenticated
+    bobChallenger.Finalize(aliceStep2)
 }
 ```
 
 ### Post-Quantum Cryptography
 
 ```go
-import "github.com/vaultys/vaultysid/go/pkg/keymanager"
+import "github.com/vaultys/vaultysid/go/pkg/vaultysid"
 
-// Generate a post-quantum resistant identity
-pqManager, err := keymanager.GenerateDilithium()
+// Generate a post-quantum (ML-DSA-87) identity
+pqID, err := vaultysid.GeneratePersonAlg("dilithium")
 if err != nil {
     log.Fatal(err)
 }
-
-pqID := vaultysid.New(pqManager, vaultysid.TypeMachine)
-
-// Or use hybrid (classical + post-quantum) for transitional security
-hybridManager, err := keymanager.GenerateHybrid()
-hybridID := vaultysid.New(hybridManager, vaultysid.TypeMachine)
 ```
+
+Combined classical + post-quantum ("dilithium_ed25519") identities are not yet implemented; requesting that algorithm returns an error.
 
 ## API Reference
 
 ### Core Types
 
 #### VaultysID
-The main identity container that manages cryptographic operations.
+The main identity container that pairs an identity type with a key manager.
 
 ```go
 type VaultysID struct {
@@ -143,18 +141,17 @@ const (
     TypeMachine      IdentityType = 0
     TypePerson       IdentityType = 1
     TypeOrganization IdentityType = 2
-    TypeFIDO2        IdentityType = 3  // Limited support
-    TypeFIDO2PRF     IdentityType = 4  // Limited support
+    TypeFIDO2        IdentityType = 3  // verification only, see Limitations
+    TypeFIDO2PRF     IdentityType = 4  // verification only, see Limitations
 )
 ```
 
-#### Key Managers
-Different key management strategies for various use cases:
+`Certificate` is an opaque byte string carried alongside the identity; it is not an X.509 certificate and nothing in this package parses or validates it as one.
 
-- `Ed25519Manager`: Standard Ed25519/X25519 cryptography (recommended)
-- `DilithiumManager`: Post-quantum resistant signatures
-- `HybridManager`: Combined Ed25519 + Dilithium
-- `DeprecatedKeyManager`: Backward compatibility with v0
+#### Key Managers
+- `Ed25519Manager`: Ed25519 signing, X25519 Diffie-Hellman (default, recommended)
+- `DilithiumManager`: ML-DSA-87 post-quantum signing paired with an X25519 encryption key
+- `FIDO2Manager`: WebAuthn/FIDO2 signature verification (no signing, see Limitations)
 
 ### Main Functions
 
@@ -163,17 +160,20 @@ Different key management strategies for various use cases:
 func GenerateMachine() (*VaultysID, error)
 func GeneratePerson() (*VaultysID, error)
 func GenerateOrganization() (*VaultysID, error)
+func GeneratePersonAlg(alg string) (*VaultysID, error) // alg: "ed25519" or "dilithium"
 
 // Import/Export
-func FromID(idBytes []byte) (*VaultysID, error)
+func FromID(id []byte, certificate []byte) (*VaultysID, error)
 func (v *VaultysID) ToBytes() []byte
 func (v *VaultysID) DID() string
 
 // Cryptographic operations
 func (v *VaultysID) Sign(data []byte) ([]byte, error)
-func (v *VaultysID) Verify(data, signature []byte) bool
+func (v *VaultysID) Verify(data, signature []byte) error
 func (v *VaultysID) DiffieHellman(peerPublicKey []byte) ([]byte, error)
 ```
+
+`Verify` returns `nil` on a valid signature and a non-nil `error` otherwise; it does not return a `bool`.
 
 ## Development
 
@@ -217,84 +217,63 @@ make vet    # Run go vet
 make check  # Run all checks
 ```
 
-## Performance
-
-Benchmarks on Apple M1:
-
-| Operation | Go | TypeScript | Speedup |
-|-----------|---|------------|---------|
-| Ed25519 Sign | 45μs | 200μs | 4.4x |
-| Ed25519 Verify | 95μs | 300μs | 3.2x |
-| X25519 DH | 85μs | 250μs | 2.9x |
-| Dilithium Sign | 420μs | 2ms | 4.8x |
-| Identity Generation | 8ms | 50ms | 6.3x |
-
 ## Compatibility
 
 ### TypeScript Interoperability
 
-The Go implementation maintains full compatibility with the TypeScript reference:
+The Go implementation's wire format (msgpack encoding of identities, challenges, and signed payloads) matches the TypeScript reference implementation:
 
 ```go
 // Load identity created by TypeScript
 tsIdentityBytes, _ := os.ReadFile("identity.bin")
-id, err := vaultysid.FromID(tsIdentityBytes)
+id, err := vaultysid.FromID(tsIdentityBytes, nil)
 
 // Signatures are cross-compatible
 signature := tsGeneratedSignature
-valid := id.Verify(data, signature)  // Works!
+err = id.Verify(data, signature)  // err == nil on a valid signature
 ```
 
 ### Test Vectors
 
-Compatibility is ensured through shared test vectors:
+Compatibility is checked against vectors shared with the TypeScript implementation, under `go/test/compatibility/`:
 
 ```bash
-# Run compatibility tests
 make test-compatibility
-
-# Generate test vectors for TypeScript
-go run cmd/generate-vectors/main.go
 ```
 
 ## Architecture
 
 ```
 pkg/
-├── vaultysid/      # Core identity types and operations
-├── keymanager/     # Key management implementations
-├── challenger/     # Handcheck protocol
-├── crypto/         # Cryptographic utilities
-├── idmanager/      # High-level identity management
-└── utils/          # Helper functions
+├── vaultysid/      # Core identity type, DID, challenge signing, DHIES
+├── keymanager/     # Ed25519Manager, DilithiumManager, FIDO2Manager, DHIES
+├── challenger/     # Handcheck (challenge-response) protocol
+├── crypto/         # Hashing, HMAC, secretbox/scrypt encryption primitives
+├── idmanager/      # Contact/app storage, key derivation, file signing and encryption
+└── utils/          # Hex/base64/UTF-8 conversions
 ```
 
 ## Security Considerations
 
-- **Key Storage**: Private keys are kept in memory only, never persisted unless explicitly exported
+- **Key Storage**: Private keys are kept in memory only, never persisted unless explicitly exported via `GetSecret`
 - **Secure Random**: Uses `crypto/rand` for all random number generation
-- **Constant Time**: Critical operations use constant-time algorithms where applicable
-- **Memory Clearing**: Sensitive data is cleared from memory after use
-- **Input Validation**: All public APIs validate inputs before processing
+- **Memory Clearing**: `CleanSecureData`/`SecureErase` zero sensitive buffers after use
 
 ## Limitations
 
 ### FIDO2/WebAuthn
-The Go implementation has limited FIDO2 support:
-- Server-side verification only
+- `FIDO2Manager` verifies FIDO2/WebAuthn signatures produced elsewhere; it cannot itself sign, since that requires a hardware authenticator and a browser WebAuthn ceremony
 - No direct hardware key access
-- WebAuthn operations not available
 
-For full FIDO2 support, use the TypeScript implementation in browser environments.
+For creating FIDO2 signatures, use the TypeScript implementation in a browser environment.
 
-### Platform Differences
-Some features behave differently across platforms:
-- File system operations use OS-specific paths
-- Hardware security modules require platform-specific drivers
+### Not yet implemented
+- Hybrid classical + post-quantum identities (`dilithium_ed25519`)
+- `VaultysID.Encrypt`, `Decrypt`, `Signcrypt`, `GetOTP`, `GetOTPHMAC` are present as stubs and return errors
 
 ## Contributing
 
-Please see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the development roadmap and contribution guidelines.
+Please see [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for design notes and remaining work.
 
 ### Running Tests Before Submitting
 
@@ -305,20 +284,8 @@ make test-compatibility  # Ensure TypeScript compatibility
 
 ## Examples
 
-Complete examples are available in the `cmd/examples/` directory:
-
 ```bash
-# Basic identity operations
-go run cmd/examples/basic/main.go
-
-# Challenge protocol demonstration
-go run cmd/examples/challenge/main.go
-
-# Post-quantum cryptography
-go run cmd/examples/pqc/main.go
-
-# Identity management
-go run cmd/examples/idmanager/main.go
+go run go/examples/fido2_vaultysid_example.go
 ```
 
 ## Troubleshooting
@@ -347,11 +314,8 @@ go tool pprof mem.prof
 ### Debugging
 
 ```bash
-# Run with debug logging
-VAULTYSID_DEBUG=1 ./build/vaultysid
-
 # Use delve debugger
-dlv debug cmd/vaultysid/main.go
+dlv debug cmd/vaultysid-cli/main.go
 ```
 
 ## License
@@ -364,22 +328,3 @@ MIT License - See [LICENSE](../../LICENSE) file for details.
 - **Documentation**: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 - **TypeScript Reference**: [../typescript/README.md](../typescript/README.md)
 - **Rust Implementation**: [../rust/README.md](../rust/README.md)
-
-## Status
-
-🚧 **Under Development** - This implementation is currently being built according to the [Implementation Plan](IMPLEMENTATION_PLAN.md).
-
-### Completed
-- [x] Project structure
-- [x] Build system (Makefile)
-- [x] Documentation
-
-### In Progress
-- [ ] Core types and interfaces
-- [ ] Ed25519 key manager
-- [ ] Basic identity operations
-
-### Upcoming
-- [ ] Challenge protocol
-- [ ] Post-quantum cryptography
-- [ ] Full TypeScript compatibility

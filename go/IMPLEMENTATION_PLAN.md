@@ -23,6 +23,9 @@ This document outlines the plan to create a Go implementation of VaultysID, main
 ## Architecture Design
 
 ### Package Structure
+
+This was the structure planned at the outset. The as-built structure differs in several places — see `.ai.md` for the current layout: the CLI package is `cmd/vaultysid-cli`, DHIES lives in `pkg/keymanager/dhies.go` rather than `pkg/crypto`, and there is no `hybrid.go`, `deprecated.go`, `pqc.go`, or `channel.go`.
+
 ```
 go/
 ├── cmd/
@@ -120,12 +123,12 @@ go/
 - Full serialization support
 
 ### Phase 4: Challenger Protocol
-- [ ] Challenger implementation
-- [ ] Protocol state machine
-- [ ] Message encoding/decoding
-- [ ] Metadata handling
+- [x] Challenger implementation
+- [x] Protocol state machine
+- [x] Message encoding/decoding
+- [x] Metadata handling
 - [ ] Error recovery
-- [ ] Protocol version negotiation
+- [x] Protocol version negotiation
 
 **Deliverables:**
 - Working handcheck protocol
@@ -133,12 +136,12 @@ go/
 - Protocol documentation
 
 ### Phase 5: Identity Management (Weeks 12-13)
-- [ ] IdManager implementation
-- [ ] Storage interface design
-- [ ] Memory storage implementation
-- [ ] File-based storage
-- [ ] Metadata management
-- [ ] Protocol/service key derivation
+- [x] IdManager implementation
+- [x] Storage interface design
+- [x] Memory storage implementation
+- [x] File-based storage
+- [x] Metadata management
+- [x] Protocol/service key derivation
 
 **Deliverables:**
 - Complete IdManager
@@ -234,11 +237,12 @@ func TestTypeScriptCompatibility(t *testing.T) {
 ### Version Support Matrix
 | Feature | TypeScript | Go | Notes |
 |---------|------------|-----|-------|
-| Protocol v0 | ✅ | ✅ | Via DeprecatedKeyManager |
+| Protocol v0 | ✅ | ✅ | Handled directly by `VaultysID.SignChallengeV0`/`VerifyChallengeV0` |
 | Protocol v1 | ✅ | ✅ | Current version |
 | Ed25519 | ✅ | ✅ | Full support |
-| Dilithium | ✅ | ✅ | Via circl library |
-| FIDO2 | ✅ | ⚠️ | Limited (server-side only) |
+| Dilithium (ML-DSA-87 / FIPS 204) | ✅ | ✅ | Via `cloudflare/circl`'s `mldsa87` |
+| Dilithium + Ed25519 (hybrid) | ✅ | ❌ | Not implemented; requesting it returns an error |
+| FIDO2 | ✅ | ⚠️ | Verification only (server-side); no signing |
 | WebAuthn | ✅ | ❌ | Not applicable |
 
 ## API Design
@@ -267,10 +271,15 @@ type KeyManager interface {
     Sign(data []byte) ([]byte, error)
     Verify(data, signature []byte) error
     GetPublicKey() []byte
-    GetCypherOps() (CypherOps, error)
+    GetCypherPublicKey() []byte
+    DiffieHellman(peerPublicKey []byte) ([]byte, error)
+    HMAC(message string) ([]byte, error)
     ToBytes() []byte
+    // see pkg/keymanager/interface.go for the full, current method set
 }
 ```
+
+This interface is duplicated verbatim in `pkg/vaultysid/types.go` under the same name `KeyManager`; the two are structurally but not nominally linked, so a method added to one doesn't produce a compile error if the other is left behind.
 
 ### Usage Examples
 ```go
@@ -369,16 +378,18 @@ jobs:
 
 ## Timeline
 
-| Milestone | Target Date | Status |
+The week numbers below were the original estimate, not a record of when each milestone actually landed — see git history for actual dates.
+
+| Milestone | Target | Status |
 |-----------|------------|--------|
-| Project Setup | Week 1 | Pending |
-| Ed25519 Support | Week 4 | Pending |
-| Core Identity | Week 6 | Pending |
-| Challenge Protocol | Week 8 | Pending |
-| PQC Support | Week 11 | Pending |
-| Beta Release | Week 13 | Pending |
-| Security Audit | Week 15 | Pending |
-| v1.0 Release | Week 16 | Pending |
+| Project Setup | Week 1 | Done |
+| Ed25519 Support | Week 4 | Done |
+| Core Identity | Week 6 | Done |
+| Challenge Protocol | Week 8 | Done |
+| PQC Support | Week 11 | Done |
+| Beta Release | Week 13 | Not started |
+| Security Audit | Week 15 | Not started |
+| v1.0 Release | Week 16 | Not started |
 
 ## Risk Assessment
 

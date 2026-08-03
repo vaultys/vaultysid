@@ -20,7 +20,7 @@ make install-cli
 
 ### Pre-built Binaries
 
-Download pre-built binaries from the [releases page](https://github.com/vaultys/vaultysid/releases).
+No pre-built binaries are published yet; see [../RELEASES.md](../RELEASES.md) for the current status. Build from source until a release exists.
 
 ## Usage
 
@@ -47,7 +47,12 @@ vaultysid-cli from-entropy machine <hex-entropy> -e hex
 
 # From base64-encoded entropy
 vaultysid-cli from-entropy person <base64-entropy> -e base64
+
+# Post-quantum (ML-DSA-87) identity
+vaultysid-cli from-entropy machine <hex-entropy> --alg dilithium
 ```
+
+`generate` and `from-entropy` also accept `--alg` (`ed25519`, the default, or `dilithium`).
 
 #### Create Identity from Existing Secret
 
@@ -186,8 +191,8 @@ vaultysid-cli manager import <secret> <store-file> <base64-data>
 
 ## Global Flags
 
-- `-o, --output`: Output format (`text` or `json`, default: `text`)
-- `-e, --encoding`: Input/output encoding (`base64` or `hex`, default: `base64`)
+- `-o, --output`: Output format (`text` or `json`, default: `json`)
+- `-e, --encoding`: Input/output encoding (`base64` or `hex`, default: `hex`)
 - `-v, --verbose`: Enable verbose output
 
 ## Examples
@@ -291,7 +296,7 @@ go test -bench=. ./cmd/vaultysid-cli/...
 
 2. **"Store file not found" error**: Make sure the store file path is correct and the file exists.
 
-3. **"Invalid ID format" error**: VaultysID public IDs should be in the format `vid:type:base58string`.
+3. **"Invalid ID format" error**: VaultysID public IDs are the raw identity bytes (type byte followed by msgpack-encoded key manager data), encoded per `-e` (hex by default); there is no `vid:type:...` prefix.
 
 4. **Encoding issues**: Use the `-e` flag to specify the correct encoding (base64 or hex).
 
@@ -305,7 +310,7 @@ vaultysid-cli -v <command> <args>
 
 ## Contributing
 
-Please see the main [CONTRIBUTING.md](../../CONTRIBUTING.md) file for guidelines.
+Please see [../IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md) for design notes and remaining work.
 
 ## License
 

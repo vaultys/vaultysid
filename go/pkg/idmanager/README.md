@@ -43,6 +43,8 @@ store := idmanager.NewMemoryStore()
 manager := idmanager.NewManager(id, store)
 ```
 
+`NewManager` always persists the identity's secret (`getEntropy` is currently a stub that always returns `nil`), so restoring from raw entropy rather than from the persisted secret is not yet supported through this path.
+
 ### Setting Identity Properties
 
 ```go
@@ -79,21 +81,25 @@ manager.SetContactMetadata(contactID.DID(), "nickname", "Bobby")
 // List all contacts
 contacts := manager.Contacts()
 for _, c := range contacts {
-    fmt.Printf("Contact: %s\n", c.OldDID)
+    fmt.Printf("Contact: %x\n", c.ID) // c.ID is the raw VaultysID bytes; OldDID is unset for contacts saved this way
 }
 ```
 
 ### Managing Applications
 
+`SaveApp` accepts either a machine `*vaultysid.VaultysID` or a legacy `(site string, serverIDHex string)` pair, and dispatches on the type of its first argument:
+
 ```go
-// Save an application
-site := "app.example.com"
-serverID := []byte("server-id-123")
-certificate := []byte("cert-data")
-err := manager.SaveApp(site, serverID, certificate)
+// VaultysID form: registers the app under its own DID, optionally under a
+// custom display name (second argument)
+appID, _ := vaultysid.GenerateMachine()
+err := manager.SaveApp(appID, "app.example.com")
+
+// Legacy form: site name plus a hex-encoded server ID
+err = manager.SaveApp("app.example.com", "736572766572")
 
 // Retrieve application
-app, err := manager.GetApp(site)
+app, err := manager.GetApp("app.example.com")
 
 // List all applications
 apps := manager.Apps()
@@ -113,74 +119,27 @@ file := &idmanager.File{
 // Sign the file
 signature, err := manager.SignFile(file)
 
-// Verify a file signature
-err = manager.VerifyFile(file, signature)
+// Verify a file signature; contactID is the signer's public VaultysID and
+// userVerification enables the FIDO2 user-verification flag when the
+// contact's KeyManager is FIDO2-backed
+err = manager.VerifyFile(file, signature, contactID, false)
 ```
 
 #### Encrypting Files
 
+`EncryptFile`/`DecryptFile` take no password: the encryption key is an HMAC derived from the manager's own identity, not from user-supplied material.
+
 ```go
-// Encrypt a file with password
-encryptedFile, err := manager.EncryptFile(file, "password123")
+// Encrypt a file
+encryptedFile, err := manager.EncryptFile(file)
 
 // Decrypt the file
-decryptedFile, err := manager.DecryptFile(encryptedFile, "password123")
+decryptedFile, err := manager.DecryptFile(encryptedFile)
 ```
 
 ### Key Derivation
 
-#### Protocol and Service Keys
-
-```go
-// Derive a protocol-specific key
-protocolKey, err := manager.DeriveProtocolKey("https", 1)
-
-// Derive a service-specific key
-serviceKey, err := manager.DeriveServiceKey("api.example.com", "https")
-
-// Custom key derivation
-params := &idmanager.KeyDerivationParams{
-    Protocol: "custom",
-    Service:  "myservice",
-    Length:   32, // 256 bits
-}
-derivedKey, err := manager.DeriveKey(params)
-```
-
-#### Specialized Keys
-
-```go
-// Derive encryption key for a recipient
-encKey, err := manager.DeriveEncryptionKey("did:vaultys:recipient123")
-
-// Derive signing key for a context
-signingKey, err := manager.DeriveSigningKey("document-signing")
-
-// Derive session key with TTL (in milliseconds)
-sessionKey, err := manager.DeriveSessionKey("session-123", 3600000) // 1 hour
-
-// Derive channel keys for encrypted communication
-encKey, macKey, err := manager.DeriveChannelKeys(peerPublicKey, nonce)
-```
-
-#### Storing and Retrieving Derived Keys
-
-```go
-// Store a derived key
-derivedKey := &idmanager.DerivedKey{
-    Purpose:   "api/authentication",
-    Key:       keyData,
-    CreatedAt: time.Now().UnixMilli(),
-    ExpiresAt: time.Now().Add(24*time.Hour).UnixMilli(),
-}
-err := manager.StoreDerivedKey(derivedKey)
-
-// Retrieve stored key
-storedKey, err := manager.GetStoredDerivedKey("api/authentication")
-
-// Clean up expired keys
-err = manager.CleanupExpiredKeys()
-```
+`derivation.go` implements HKDF-based protocol keys, service keys, encryption/signing/session keys, and channel key derivation as `Manager` methods — but every one of them (`deriveProtocolKey`, `deriveServiceKey`, `deriveKey`, `deriveEncryptionKey`, `deriveSigningKey`, `deriveSessionKey`, `deriveChannelKeys`, `storeDerivedKey`, `getStoredDerivedKey`, `cleanupExpiredKeys`) is unexported. They are not part of this package's public API and cannot be called from outside `idmanager`. Exporting them, if needed, is unstarted work.
 
 ### PRF (Pseudo-Random Function)
 
@@ -278,11 +237,11 @@ The IdManager supports two protocol versions:
 Set the protocol version based on your compatibility requirements:
 
 ```go
-// Use v0 for backward compatibility
-manager.SetProtocolVersion(0)
-
-// Use v1 for new implementations (default)
+// NewManager defaults to v0; call this to opt in to v1
 manager.SetProtocolVersion(1)
+
+// Explicit v0 for backward compatibility
+manager.SetProtocolVersion(0)
 ```
 
 ## Security Considerations
