@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/id",
-  "version": "3.0.0",
+  "version": "3.0.0-beta9.0",
   "exports": {
     ".": {
       "types": "./dist/node/index.d.ts",
