@@ -451,7 +451,7 @@ export default class Challenger {
         if (metadata) this.challenge.metadata.pk2 = metadata;
         this.challenge.nonce = Buffer.concat([this.challenge.nonce!, randomBytes(16)]);
         const serialized = this.getUnsignedChallenge();
-        this.challenge.sign2 = await this.vaultysId.signChallenge(serialized);
+        this.challenge.sign2 = this.version === 0 ? await this.vaultysId.signChallenge_v0(serialized, this.mykey) : await this.vaultysId.signChallenge(serialized);
         this.challenge.state = this.state = STEP1;
         return;
       }
@@ -462,7 +462,7 @@ export default class Challenger {
           throw new Error("challenge is not corresponding to the right id");
         }
         const serialized = serializeUnsigned(tempchallenge);
-        tempchallenge.sign1 = await this.vaultysId.signChallenge(serialized);
+        tempchallenge.sign1 = this.version === 0 ? await this.vaultysId.signChallenge_v0(serialized, tempchallenge.pk1!) : await this.vaultysId.signChallenge(serialized);
         this.challenge = tempchallenge;
         this.mykey = this.challenge.pk1;
         this.hisKey = this.challenge.pk2;

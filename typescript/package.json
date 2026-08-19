@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/id",
-  "version": "3.0.0-beta8.0",
+  "version": "3.0.0",
   "exports": {
     ".": {
       "types": "./dist/node/index.d.ts",
@@ -26,7 +26,7 @@
     "build:node": "rm -fr ./dist && tsc -p tsconfig.json",
     "build:browser": "webpack --config webpack.config.js",
     "prettier": "find src -name \"*.ts\" | xargs prettier --write",
-    "test": "mocha ./test/*.test.[jt]s",
+    "test": "mocha \"./test/*.test.[jt]s\" \"./test/backward_compat/*.test.ts\" --ignore \"test/backward_compat/srp-compatibility.test.ts\"",
     "test:pqc": "mocha ./test/pqc.test.ts ",
     "test:server": "http-server . -p 8080",
     "test:web": "pnpm build:browser && webpack --config webpack.test.config.js && mocha --require tsx test/runner.ts",
@@ -35,7 +35,8 @@
     "test:compatibility:rust": "cd rust && cargo test --test typescript_compatibility",
     "test:compatibility": "pnpm run test:compatibility:export && npm run test:compatibility:rust",
     "test:interops:reverse": "test/interops/run-cross-language-test.sh reverse",
-    "test:interops": "test/interops/run-cross-language-test.sh"
+    "test:interops": "test/interops/run-cross-language-test.sh",
+    "test:compat": "mocha \"./test/backward_compat/*.test.ts\" --ignore \"test/backward_compat/srp-compatibility.test.ts\""
   },
   "keywords": [],
   "author": "",
@@ -78,6 +79,7 @@
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@noble/post-quantum": "^0.6.1",
+    "@stricahq/bip32ed25519": "^1.1.2",
     "@vaultys/saltpack": "1.0.0-beta4",
     "cbor": "^10.0.12",
     "tweetnacl": "^1.0.3"

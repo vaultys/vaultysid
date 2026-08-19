@@ -1,7 +1,8 @@
 import { expect } from "chai";
 import * as path from "path";
-import { VaultysId as VaultysIdOld, KeyManager as KeyManagerOld } from "@vaultys/id";
-import { VaultysId as VaultysIdCurrent } from "../../dist/node/index.js";
+import { VaultysId as VaultysIdOld, KeyManager as KeyManagerOld } from "@vaultys/id_2";
+import VaultysIdCurrent from "../../src/VaultysId";
+import { migrateVaultysId } from "../../src/utils/migration";
 
 describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
   describe("VaultysId Core Functionality", () => {
@@ -175,7 +176,6 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
         const expectedMigratedId = "AYOhdgGheMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
 
         // Import migration utility from current version
-        const { migrateVaultysId } = await import("../../dist/node/utils/migration.js");
 
         const migrated = migrateVaultysId(Buffer.from(oldVersionId, "base64"));
         expect(migrated.toString("base64")).to.equal(expectedMigratedId);
@@ -184,8 +184,6 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
       it("should deserialize same data after migration", async () => {
         const oldVersionId = "AYShdgGhcMQgAkdXeakmUj369/IVsxtgfZDvIl5H20sMr4Hvscd6vv2heMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
         const migratedId = "AYOhdgGheMQg087CgsDqArlFnddT45WIE4q5ASE29yMy2ymtYF7wayqhZcQgc6ZsnBDgIVgudow5lIhodS2/hS8OL0lah8m9XE9QDng=";
-
-        const { migrateVaultysId } = await import("../../dist/node/utils/migration.js");
 
         // Old version
         const oldVid = VaultysIdOld.fromId(Buffer.from(oldVersionId, "base64"));
@@ -198,10 +196,8 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
         const oldKeyManager = (oldVid as any).keyManager;
         const currentKeyManager = (currentVid as any).keyManager;
 
-        expect(oldKeyManager.signer.publicKey.toString("base64"))
-          .to.equal(currentKeyManager.signer.publicKey.toString("base64"));
-        expect(oldKeyManager.cypher.publicKey.toString("base64"))
-          .to.equal(currentKeyManager.cypher.publicKey.toString("base64"));
+        expect(oldKeyManager.signer.publicKey.toString("base64")).to.equal(currentKeyManager.signer.publicKey.toString("base64"));
+        expect(oldKeyManager.cypher.publicKey.toString("base64")).to.equal(currentKeyManager.cypher.publicKey.toString("base64"));
       });
     });
 
@@ -213,9 +209,11 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
           timestamp: 1756929814984,
         };
 
-        // Create with old version
+        // Create with old version. v2.4.x has no verifyChallenge_v0: its plain
+        // verifyChallenge already computes sha256(id || challenge), which is
+        // exactly what v3 renamed to verifyChallenge_v0.
         const oldVid = VaultysIdOld.fromId(Buffer.from(data.serverId, "base64"));
-        expect(oldVid.verifyChallenge_v0("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false, Buffer.from(data.serverId, "base64"))).to.be.true;
+        expect(oldVid.verifyChallenge("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false)).to.be.true;
 
         // Verify with current version - should also support this old format
         const currentVid = VaultysIdCurrent.fromId(Buffer.from(data.serverId, "base64"));
@@ -237,4 +235,4 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
       });
     });
   });
-}); 
+});

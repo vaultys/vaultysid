@@ -5,6 +5,7 @@ import Fido2Manager from "./Fido2Manager";
 import Fido2PRFManager from "./Fido2PRFManager";
 import Ed25519Manager from "./Ed25519Manager";
 import KeyManager from "./AbstractKeyManager";
+import DeprecatedKeyManager from "./DeprecatedKeyManager";
 
 export type KeyPair = {
   publicKey: Buffer;
@@ -20,4 +21,4 @@ export type HISCP = {
 
 export default KeyManager;
 
-export { HybridManager, DilithiumManager, Fido2Manager, Fido2PRFManager, Ed25519Manager };
+export { HybridManager, DilithiumManager, Fido2Manager, Fido2PRFManager, Ed25519Manager, DeprecatedKeyManager };
