@@ -19,9 +19,9 @@ declare global {
 }
 
 type Fido2Signature = {
-  s: ArrayBuffer;
-  c: ArrayBuffer;
-  a: ArrayBuffer;
+  s: Buffer;
+  c: Buffer;
+  a: Buffer;
 };
 
 type ExportFIDO2Data = {
@@ -159,7 +159,7 @@ export default class Fido2Manager extends CypherManager {
   }
 
   static instantiate(obj: any) {
-    const f2m = new Fido2Manager();
+    const f2m = new this();
     f2m.version = obj.version ?? 0;
     f2m.fid = typeof obj.fid === "string" ? Buffer.from(obj.fid, "base64") : obj.fid;
     f2m._transports = obj.t ? obj.t : 15;
@@ -174,7 +174,7 @@ export default class Fido2Manager extends CypherManager {
 
   static fromId(id: Buffer) {
     const data = decode(id) as ExportFIDO2Data;
-    const f2m = new Fido2Manager();
+    const f2m = new this();
     f2m.version = data.v ?? 0;
     f2m.capability = "public";
     f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : data.f;
@@ -209,10 +209,13 @@ export default class Fido2Manager extends CypherManager {
         };
         const { response } = (await this.webAuthn.get(publicKey)) as PublicKeyCredential;
         const publicKeyResponse = response as AuthenticatorAssertionResponse;
+        // Must be Buffers, not the raw ArrayBuffers WebAuthn returns: msgpack encodes
+        // a bare ArrayBuffer as an empty map instead of a bin, which silently
+        // destroys the signature payload.
         const output: Fido2Signature = {
-          s: publicKeyResponse.signature,
-          c: publicKeyResponse.clientDataJSON,
-          a: publicKeyResponse.authenticatorData,
+          s: Buffer.from(publicKeyResponse.signature),
+          c: Buffer.from(publicKeyResponse.clientDataJSON),
+          a: Buffer.from(publicKeyResponse.authenticatorData),
         };
         return Buffer.from(encode(output));
       },

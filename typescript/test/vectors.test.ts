@@ -51,6 +51,7 @@ const IDs: Record<string, object> = {
         publicKey: "Q136sOFkQ6Ywe3GbYeGF8bZkLxM0D3Ym7JmdZAubAxE=",
       },
       _transports: 0,
+      prfsalt: "VmF1bHR5c0lEIHNhbHQ=",
       authType: "P256VerificationKey2020",
       encType: "X25519KeyAgreementKey2019",
       ckey: "pQECAyYgASFYIAahPdTq/F42/PU9WcYGaF4k7BQ1gnD9QIwX2wAcfjKoIlggO56gS5dUKbQZSeBrcYZcOZHZF5F568tgRiDLO2mv5/I=",
