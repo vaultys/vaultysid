@@ -117,6 +117,7 @@ const parseAuthData = (buffer: Buffer) => {
   let aaguid = undefined;
   let credID = undefined;
   let COSEPublicKey = undefined;
+  let extensionData = undefined;
 
   if (flags.at) {
     aaguid = buffer.slice(0, 16);
@@ -126,7 +127,14 @@ const parseAuthData = (buffer: Buffer) => {
     const credIDLen = credIDLenBuf.readUInt16BE(0);
     credID = buffer.slice(0, credIDLen);
     buffer = buffer.slice(credIDLen);
-    COSEPublicKey = buffer;
+    // The credential public key is followed by authenticator extension data
+    // whenever the ED flag is set - a security key answering the prf extension
+    // appends {"hmac-secret": true}. Taking the whole tail here made every later
+    // cbor.decode of the COSE key fail with "Unexpected data: 0xa1", so decode the
+    // key to find where it actually ends.
+    const decoded = cbor.decodeFirstSync(buffer, { extendedResults: true });
+    COSEPublicKey = buffer.slice(0, decoded.length);
+    if (flags.ed) extensionData = buffer.slice(decoded.length);
   }
   //console.log(aaguid);
 
@@ -139,6 +147,7 @@ const parseAuthData = (buffer: Buffer) => {
     aaguid,
     credID,
     COSEPublicKey,
+    extensionData,
   };
 };
 
