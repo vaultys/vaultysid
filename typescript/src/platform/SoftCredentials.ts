@@ -244,7 +244,13 @@ class MyPublicKeyCredential {
 }
 
 const verifyECDSA = (data: Buffer, publicKey: Buffer, signature: Buffer) => {
-  return p256.verify(signature, data, publicKey, { format: signature.length === 64 ? "compact" : "der" });
+  // lowS must be off. @noble defaults it to true, which rejects any signature
+  // whose s is in the upper half of the curve order - and WebAuthn
+  // authenticators do not normalise s, so about half of the assertions they
+  // produce are exactly that. Malleability is irrelevant here: the signature is
+  // verified against a challenge we generated and is never used as an
+  // identifier, so re-encoding it into its low-s twin proves nothing.
+  return p256.verify(signature, data, publicKey, { format: signature.length === 64 ? "compact" : "der", lowS: false });
 };
 
 const verifyEdDSA = (data: Buffer, publicKey: Buffer, signature: Buffer) => {
@@ -558,7 +564,11 @@ export default class SoftCredentials {
     let signature: Uint8Array = new Uint8Array();
 
     if (credential.alg === -7) {
-      signature = p256.sign(toSign, credential.keyPair.privateKey, { prehash: true });
+      // Real authenticators answer with a DER signature and never normalise s,
+      // so half of their assertions carry a high s. @noble normalises on sign,
+      // so emit the high-s twin to keep the pessimistic case covered.
+      const sig = p256.Signature.fromBytes(p256.sign(toSign, credential.keyPair.privateKey, { prehash: true }), "compact");
+      signature = (sig.hasHighS() ? sig : new p256.Signature(sig.r, p256.Point.Fn.ORDER - sig.s)).toBytes("der");
     } else if (credential.alg === -8) {
       signature = ed25519.sign(toSign, credential.keyPair.privateKey);
     } else if (credential.alg === PQ_COSE_ALG.DILITHIUM5) {
