@@ -37,7 +37,9 @@
     "test:backward-compat": "cd test/backward_compat && npm install && npm test",
     "test:backward-compat:setup": "cd test/backward_compat && npm install && npm run setup",
     "test:interops:reverse": "test/interops/run-cross-language-test.sh reverse",
-    "test:interops": "test/interops/run-cross-language-test.sh"
+    "test:interops": "test/interops/run-cross-language-test.sh",
+    "test:saltpack:vectors": "tsx test/interops/generate-saltpack-vectors.ts",
+    "test:saltpack:go": "mocha test/interops/go-saltpack-compatibility.test.ts"
   },
   "keywords": [],
   "author": "",
