@@ -170,6 +170,15 @@ cd rust && cargo test
 ./interops/run-all-interops.sh
 ```
 
+**Saltpack encryption (TypeScript ⇄ Go)** — `encrypt` / `signcrypt` / `decrypt` must open across languages. Each side writes vectors the other opens (CI regenerates both on every change, `.github/workflows/go.yml`):
+
+```bash
+cd typescript && pnpm test:saltpack:vectors          # TypeScript encrypts…
+cd ../go && go test ./test/compatibility -run Saltpack   # …Go decrypts
+cd test/compatibility && go run generate_saltpack_vectors.go   # Go encrypts…
+cd ../../../typescript && pnpm test:saltpack:go       # …TypeScript decrypts
+```
+
 ### Contributing
 
 New features land in the TypeScript reference implementation first, then in Go and Rust, with interop tests proving the three stay byte-compatible. Please keep backward compatibility with existing identities and update the RFCs when the wire format changes.

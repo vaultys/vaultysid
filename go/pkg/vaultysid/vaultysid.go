@@ -638,30 +638,6 @@ func (v *VaultysID) DHIESDecrypt(ciphertext []byte, sender *VaultysID) ([]byte, 
 	return dhies.Decrypt(ciphertext, sender.KeyManager.GetCypherPublicKey())
 }
 
-// Encrypt encrypts data for a set of recipients
-// This would implement saltpack or similar multi-recipient encryption
-func (v *VaultysID) Encrypt(plaintext string, recipients []*VaultysID) (string, error) {
-	// TODO: Implement saltpack encryption for multiple recipients
-	// For now, return error to indicate not yet implemented
-	return "", fmt.Errorf("multi-recipient encryption not yet implemented")
-}
-
-// Decrypt decrypts data encrypted for this identity
-// This would implement saltpack or similar decryption
-func (v *VaultysID) Decrypt(ciphertext string) (string, error) {
-	// TODO: Implement saltpack decryption
-	// For now, return error to indicate not yet implemented
-	return "", fmt.Errorf("decryption not yet implemented")
-}
-
-// Signcrypt signs and encrypts data for recipients
-// This would implement saltpack signcryption combining signing and encryption
-func (v *VaultysID) Signcrypt(plaintext string, recipients []*VaultysID) (string, error) {
-	// TODO: Implement saltpack signcryption
-	// For now, return error to indicate not yet implemented
-	return "", fmt.Errorf("signcryption not yet implemented")
-}
-
 // GetOTP generates a one-time password based on the provided data
 // This uses the identity's secret for OTP generation
 func (v *VaultysID) GetOTP(data []byte) (string, error) {
