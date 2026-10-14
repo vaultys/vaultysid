@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/id",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "exports": {
     ".": {
       "types": "./dist/node/index.d.ts",
@@ -82,6 +82,7 @@
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@noble/post-quantum": "^0.6.1",
+    "@stricahq/bip32ed25519": "^1.1.2",
     "@vaultys/saltpack": "1.0.0-beta4",
     "cbor": "^10.0.12",
     "tweetnacl": "^1.0.3"
