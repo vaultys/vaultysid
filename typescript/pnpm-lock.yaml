@@ -20,6 +20,9 @@ importers:
       '@noble/post-quantum':
         specifier: ^0.6.1
         version: 0.6.1
+      '@stricahq/bip32ed25519':
+        specifier: ^1.1.2
+        version: 1.1.2
       '@vaultys/saltpack':
         specifier: 1.0.0-beta4
         version: 1.0.0-beta4

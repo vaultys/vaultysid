@@ -5,6 +5,7 @@ import { getWebAuthnProvider } from "./platform/webauthn";
 import { Buffer } from "buffer/";
 import { PQ_COSE_ALG } from "./pqCrypto";
 import CypherManager from "./KeyManager/CypherManager";
+import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
@@ -90,8 +91,14 @@ export default class VaultysId {
       } else if (cleanId.length === 77) {
         const km = Ed25519Manager.fromId(cleanId.slice(1));
         return new VaultysId(km, certificate, type);
+      } else {
+        // Legacy (bip32-ed25519) ids carry an extra `p` proof field and do not
+        // match any of the lengths above (a v1 person id is 113 bytes, v0 116).
+        // Keep reading them so identities created before the @stricahq/bip32ed25519
+        // removal stay resolvable, with a byte-identical DID.
+        const km = DeprecatedKeyManager.fromId(cleanId.slice(1));
+        return new VaultysId(km, certificate, type);
       }
-      else throw new Error("Invalid ID format");
     }
   }
 
@@ -279,8 +286,13 @@ export default class VaultysId {
       } else if (secretBuffer.length === 77) {
         const km = Ed25519Manager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(km, undefined, type);
+      } else {
+        // Legacy secrets are 177 bytes (96-byte extended bip32 signing key + 32-byte
+        // proof + 32-byte cypher key). They cannot be re-derived by Ed25519Manager,
+        // so this fallback is the only way an existing wallet keeps its identity.
+        const km = DeprecatedKeyManager.fromSecret(secretBuffer.slice(1));
+        return new VaultysId(km, undefined, type);
       }
-      else throw new Error("Invalid secret format");
     }
   }
 
