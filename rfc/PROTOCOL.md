@@ -60,6 +60,21 @@ The challenge progresses through the following states:
 | 1           | STEP1           | Response received from second party            |
 | 2           | COMPLETE        | Both signatures verified, challenge complete   |
 
+Only `version = 1` challenges are valid. Implementations MUST reject any other version; the legacy version 0 encoding has been removed because it did not sign metadata and allowed downgrades.
+
+### 3.3. State Transitions
+
+Implementations MUST enforce exactly the following transitions. Any other combination of local state and received message MUST move the session to `ERROR`.
+
+| Local state   | Received | Required checks                                                                                                   | New state |
+|---------------|----------|-------------------------------------------------------------------------------------------------------------------|-----------|
+| UNINITIALISED | (create) | initiator stores protocol, service, timestamp, pk1, metadata.pk1, nonce[0:16]                                     | INIT      |
+| UNINITIALISED | INIT     | version = 1; timestamp is live; pk1 parses and differs from own id; pk2 absent; 16-byte nonce                      | STEP1 (responder signs sign2) |
+| INIT          | STEP1    | protocol, service, timestamp, version, pk1, metadata.pk1, nonce[0:16] equal to the stored INIT; pk2 differs from own id; sign2 valid | COMPLETE (initiator signs sign1) |
+| STEP1         | COMPLETE | every field, including the full nonce, both metadata maps and sign2, equal to the STEP1 sent; sign1 valid         | COMPLETE  |
+
+In particular, a party in `UNINITIALISED` MUST NOT accept a `STEP1` or `COMPLETE` message: signing a `STEP1` it did not initiate turns the party into a signing oracle, and accepting a `COMPLETE` it did not take part in allows replaying old certificates. Loading or verifying a stored certificate is a read-only operation and MUST NOT mark a live session as complete.
+
 ## 4. Trust Establishment Protocol
 
 ### 4.1. Challenge Creation and Exchange
@@ -86,9 +101,11 @@ The trust establishment follows a three-step exchange:
 
 Each party verifies the other's signature using the following process:
 
-1. Extract the unsigned challenge data (protocol, service, timestamp, pk1, pk2, nonce)
-2. Verify that the signature corresponds to the hash of this data
-3. Verify that the signature is valid for the counterparty's public key
+1. Extract the unsigned challenge data (version, protocol, service, timestamp, pk1, pk2, nonce, metadata) and serialize it as described in Appendix A
+2. Compute `h = SHA-256("VAULTYS_HANDSHAKE_V1" || unsignedBytes)`
+3. Verify that the signature over `h` is valid for the counterparty's public key
+
+The `VAULTYS_HANDSHAKE_V1` prefix is reserved for handshake signatures. Implementations MUST NOT expose any API that signs caller-supplied data under this prefix. General-purpose challenge signing (`signChallenge`, used for file signatures) uses the distinct prefix `VAULTYS_SIGN`, and raw data signing on an identity uses `VAULTYS_RAW`.
 
 ### 4.3. Liveliness Verification
 
@@ -113,12 +130,7 @@ A completed challenge is serialized into a certificate that serves as cryptograp
 
 Certificates can be independently verified by third parties using the public keys and signatures they contain:
 
-```
-static async verifyCertificate(certificate: Buffer) {
-  const deser = deserialize(certificate);
-  return deser.state === COMPLETE;
-}
-```
+A certificate is valid only if its version is 1, both `pk1` and `pk2` parse as identities, and both `sign1` and `sign2` verify as handshake signatures (section 4.2) over the certificate's unsigned data. Checking the `state` field alone is not sufficient.
 
 ## 6. Protocol-Specific Services
 
@@ -289,6 +301,7 @@ To prevent replay attacks:
 - Challenges include timestamps
 - Liveliness verification ensures timestamps are within an acceptable window
 - Nonces are used to ensure uniqueness
+- Each party binds the exchange to its own nonce half and to the exact fields it sent, and never accepts a `STEP1` or `COMPLETE` it did not take part in (section 3.3)
 
 ### 11.2. Man-in-the-Middle Attacks
 
@@ -296,6 +309,10 @@ The protocol mitigates man-in-the-middle attacks through:
 - Mutual authentication
 - Cryptographic signatures
 - Certificate verification
+- Metadata is covered by both signatures, so it cannot be altered in transit
+- The initiator rejects a `STEP1` whose protocol, service, timestamp or version differ from its `INIT`, so a responder cannot make it sign different terms
+
+Note that the handshake authenticates the two parties but does not derive a session key. Data exchanged on the channel after the handshake is not cryptographically bound to it; applications that relay traffic through untrusted intermediaries need their own channel protection.
 
 ### 11.3. Key Compromise
 
@@ -410,31 +427,11 @@ Requester                                  Provider
 
 ### A.1. MessagePack Serialization
 
-Challenges are serialized using MessagePack for compact binary representation. The protocol supports two serialization versions for backward compatibility:
+Challenges are serialized using standard MessagePack. Only version 1 is supported; the legacy version 0 custom encoding has been removed.
 
-#### A.1.1. Version 0 Serialization (Legacy)
+The bytes covered by `sign1` and `sign2` are the MessagePack encoding of the map `{version, protocol, service, timestamp, pk1, pk2, nonce, metadata}`, exactly as produced by the TypeScript reference implementation's `serializeUnsigned`. Metadata (both the `pk1` and `pk2` maps) is part of the signed data.
 
-Uses a custom encoding function for challenge fields:
-
-```typescript
-const encode_v0 = ({ protocol, service, timestamp, pk1, pk2, nonce, metadata }) => {
-  const p = Buffer.concat([
-    Buffer.from([0x87]),  // Map with 7 elements
-    writeString("protocol", protocol),
-    writeString("service", service),
-    writeInt("timestamp", timestamp),
-    writeBuffer("pk1", pk1),
-    writeBuffer("pk2", pk2),
-    writeBuffer("nonce", nonce),
-    Buffer.from([0xa0 + "metadata".length]),
-    Buffer.from("metadata", "ascii"),
-    Buffer.from([0x80]), // empty metadata
-  ]);
-  return p;
-};
-```
-
-#### A.1.2. Version 1 Serialization (Current)
+#### A.1.1. Version 1 Serialization
 
 Uses standard MessagePack encoding:
 

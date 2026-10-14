@@ -253,7 +253,39 @@ encryption/a1b2c3d4.../encryption
 - Implementations MUST handle binary data correctly, especially when transmitting between platforms with different endianness
 - All multi-byte integers MUST be encoded in big-endian format
 
-## 11. References
+## 11. DHIES v2 (Message Encryption Between Identities)
+
+This section defines the public-key message encryption used by `dhiesEncrypt` / `dhiesDecrypt`. Version 2 replaces the previous construction, which only performed an ephemeral-static Diffie-Hellman and therefore did not authenticate the sender: anyone knowing a sender's public key could produce a ciphertext that decrypted "from" that sender. Implementations MUST NOT accept the previous format.
+
+### 11.1. Inputs
+
+- `S_sk`, `S_pk`: the sender's static X25519 key pair (the identity's cypher key, 32 bytes each)
+- `R_sk`, `R_pk`: the recipient's static X25519 key pair
+
+### 11.2. Encryption
+
+```
+(e_sk, e_pk) = fresh X25519 key pair
+es    = X25519(e_sk, R_pk)
+ss    = X25519(S_sk, R_pk)          ; abort if es or ss is all zeros
+info  = "VAULTYS_DHIES_V2" || e_pk || S_pk || R_pk
+k     = SHA-512(es || ss || info)[0:32]
+nonce = 24 random bytes
+ct    = XSalsa20-Poly1305 secretbox(plaintext, nonce, k)
+out   = 0x02 || nonce || e_pk || ct
+```
+
+### 11.3. Decryption
+
+Given `out` and the expected sender public key `S_pk`:
+
+1. Reject unless `len(out) >= 1 + 24 + 32 + 16` and `out[0] == 0x02`.
+2. Compute `es = X25519(R_sk, e_pk)`, `ss = X25519(R_sk, S_pk)`, rejecting all-zero outputs.
+3. Derive `k` as above and open the secretbox. Any failure MUST be reported as a decryption error.
+
+Successful decryption proves that the holder of `S_sk` (or of `R_sk`) produced the message. The scheme does not provide forward secrecy for the sender component, and it is not deniable towards third parties holding `R_sk`.
+
+## 12. References
 
 ### 11.1. Normative References
 
