@@ -7,6 +7,7 @@ import { decode, encode } from "@msgpack/msgpack";
 import Fido2Manager from "./Fido2Manager";
 import { Buffer } from "buffer/";
 import { PQ_COSE_ALG, PQ_COSE_KEY_PARAMS } from "../pqCrypto";
+import { decodeRecord, readVersion, requireBytes } from "./validation";
 
 declare global {
   interface Window {
@@ -33,7 +34,7 @@ const lookup: Record<LookupType, number> = {
   "smart-card": 32,
 };
 
-const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]);
+const getTransports = (num: number) => Object.keys(lookup).filter((i) => num & lookup[i as LookupType]);
 const fromTransports = (transports: string[]): number => transports.reduceRight((memo, i) => memo + (lookup[i as LookupType] ? lookup[i as LookupType] : 0), 0);
 
 const getAuthTypeFromCkey = (ckey: Buffer) => {
@@ -53,7 +54,8 @@ const getSignerFromCkey = (ckey: Buffer) => {
   if (k.get(3) == -7) publicKey = Buffer.concat([Buffer.from("04", "hex"), k.get(-2), k.get(-3)]);
   else if (k.get(3) == -8) publicKey = k.get(-2);
   else if (k.get(3) == PQ_COSE_ALG.DILITHIUM5) publicKey = k.get(PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
-  return { publicKey } as KeyPair;
+  if (!(publicKey instanceof Uint8Array) || publicKey.length === 0) throw new Error("Unsupported or malformed FIDO2 COSE key");
+  return { publicKey: Buffer.from(publicKey) } as KeyPair;
 };
 
 export default class Fido2PRFManager extends Fido2Manager {
@@ -105,16 +107,16 @@ export default class Fido2PRFManager extends Fido2Manager {
   }
 
   static fromSecret(secret: Buffer) {
-    const data = decode(secret) as ExportFIDO2Data;
+    const data = decodeRecord(secret, "FIDO2 PRF secret");
     const f2m = new Fido2PRFManager();
-    f2m.version = data.v ?? 0;
+    f2m.version = readVersion(data.v);
     f2m.capability = "private";
-    f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : data.f;
-    f2m._transports = data.t ? data.t : 15;
-    f2m.ckey = data.c;
+    f2m.fid = typeof data.f === "string" ? Buffer.from(data.f, "base64") : requireBytes(data.f, "FIDO2 credential id");
+    f2m._transports = typeof data.t === "number" && data.t ? data.t : 15;
+    f2m.ckey = requireBytes(data.c, "FIDO2 COSE key");
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
-    f2m.signer = getSignerFromCkey(data.c);
-    f2m.cypher = { publicKey: data.e };
+    f2m.signer = getSignerFromCkey(f2m.ckey);
+    f2m.cypher = { publicKey: requireBytes(data.e, "X25519 public key", 32) };
     return f2m;
   }
 

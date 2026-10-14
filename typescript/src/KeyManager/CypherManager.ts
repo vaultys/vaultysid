@@ -1,32 +1,13 @@
 import { dearmorAndDecrypt, encryptAndArmor } from "@vaultys/saltpack";
-import { hash, hmac, randomBytes, secureErase } from "../crypto";
+import { hash, hmac, secureErase } from "../crypto";
 import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { KeyPair } from ".";
 import KeyManager from "./AbstractKeyManager";
-import { decode } from "@msgpack/msgpack";
+import { dhiesV2Decrypt, dhiesV2Encrypt } from "./dhies";
+import { decodeRecord, requireBytes } from "./validation";
 
 const sha256 = (data: Buffer) => hash("sha256", data);
-
-// export const publicDerivePath = (node: InstanceType<typeof bip32.Bip32PublicKey>, path: string) => {
-//   let result = node;
-//   if (path.startsWith("m/")) path = path.slice(2);
-//   path.split("/").forEach((d) => {
-//     if (d[d.length - 1] == "'") result = result.derive(2147483648 + parseInt(d.substring(0, d.length - 1)));
-//     else result = result.derive(parseInt(d));
-//   });
-//   return result;
-// };
-
-// export const privateDerivePath = (node: InstanceType<typeof bip32.Bip32PrivateKey>, path: string) => {
-//   let result = node;
-//   if (path.startsWith("m/")) path = path.slice(2);
-//   path.split("/").forEach((d) => {
-//     if (d[d.length - 1] == "'") result = result.derive(2147483648 + parseInt(d.substring(0, d.length - 1)));
-//     else result = result.derive(parseInt(d));
-//   });
-//   return result;
-// };
 
 export type HISCP = {
   newId: Buffer;
@@ -36,193 +17,12 @@ export type HISCP = {
 };
 
 /**
- * DHIES (Diffie-Hellman Integrated Encryption Scheme) for KeyManager
- * Provides authenticated encryption using Diffie-Hellman key exchange
+ * Extract the X25519 ("cypher") public key from a serialized key manager id.
+ * Throws a descriptive Error when the id is malformed or the key is not 32 bytes.
  */
-export class DHIES {
-  private keyManager: KeyManager;
-
-  constructor(keyManager: KeyManager) {
-    this.keyManager = keyManager;
-  }
-
-  /**
-   * Encrypts a message for a recipient using DHIES
-   *
-   * @param message The plaintext message to encrypt
-   * @param recipientPublicKey The recipient's public key
-   * @returns Encrypted message with ephemeral public key and authentication tag, or null if encryption fails
-   */
-  async encrypt(message: string | Buffer, recipientPublicKey: Buffer): Promise<Buffer | null> {
-    if (this.keyManager.capability === "public") {
-      console.error("Cannot encrypt with DHIES using a public KeyManager");
-      return null;
-    }
-
-    const cypher = await this.keyManager.getCypher();
-
-    // Convert message to Buffer if it's a string
-    const messageBuffer = typeof message === "string" ? Buffer.from(message, "utf8") : message;
-
-    try {
-      // Generate ephemeral keypair for this encryption
-      const ephemeralKeypair = nacl.box.keyPair();
-
-      // Derive shared secret using ephemeral private key and recipient's public key
-      const sharedSecret = Buffer.from(nacl.scalarMult(ephemeralKeypair.secretKey, recipientPublicKey));
-
-      // Key derivation: derive encryption and MAC keys from shared secret
-      // Using sender's public key (not ephemeral) for authentication
-      const kdfOutput = this.kdf(sharedSecret, this.keyManager.cypher.publicKey, recipientPublicKey);
-      const encryptionKey = kdfOutput.encryptionKey;
-      const macKey = kdfOutput.macKey;
-
-      // Encrypt the message using XChaCha20-Poly1305
-      const nonce = randomBytes(24); // 24 bytes nonce for XChaCha20-Poly1305
-      const ciphertext = Buffer.from(nacl.secretbox(messageBuffer, nonce, encryptionKey));
-
-      // Compute MAC (Message Authentication Code)
-      const dataToAuthenticate = Buffer.concat([this.keyManager.cypher.publicKey, nonce, ciphertext]);
-      const mac = this.computeMAC(macKey, dataToAuthenticate);
-
-      // Construct the final encrypted message: nonce + ephemeralPublicKey + ciphertext + MAC
-      const encryptedMessage = Buffer.concat([nonce, ephemeralKeypair.publicKey, ciphertext, mac]);
-
-      // Securely erase sensitive data
-      secureErase(sharedSecret);
-      secureErase(ephemeralKeypair.secretKey);
-      secureErase(encryptionKey);
-      secureErase(macKey);
-
-      return encryptedMessage;
-    } catch (error) {
-      console.error("DHIES encryption failed:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Decrypts a message encrypted with DHIES
-   *
-   * @param encryptedMessage The complete encrypted message from the encrypt method
-   * @returns Decrypted message as a Buffer, or null if decryption fails
-   */
-  async decrypt(encryptedMessage: Buffer, senderPublicKey: Buffer): Promise<Buffer | null> {
-    if (this.keyManager.capability === "public") {
-      console.error("Cannot decrypt with DHIES using a public KeyManager");
-      return null;
-    }
-
-    try {
-      // Extract components from the encrypted message
-      // Format: nonce (24 bytes) + ephemeralPublicKey (32 bytes) + ciphertext + MAC (32 bytes)
-      const nonce = encryptedMessage.slice(0, 24);
-      const ephemeralPublicKey = encryptedMessage.slice(24, 56);
-      const mac = encryptedMessage.slice(encryptedMessage.length - 32);
-      const ciphertext = encryptedMessage.slice(56, encryptedMessage.length - 32);
-      const cypher = await this.keyManager.getCypher();
-
-      // Derive shared secret using recipient's private key and ephemeral public key
-      const sharedSecret = Buffer.from(nacl.scalarMult(this.keyManager.cypher.secretKey!, ephemeralPublicKey));
-
-      // Key derivation: derive encryption and MAC keys
-      const kdfOutput = this.kdf(sharedSecret, senderPublicKey, this.keyManager.cypher.publicKey);
-      const encryptionKey = kdfOutput.encryptionKey;
-      const macKey = kdfOutput.macKey;
-
-      // Verify MAC
-      const dataToAuthenticate = Buffer.concat([senderPublicKey, nonce, ciphertext]);
-      const computedMac = this.computeMAC(macKey, dataToAuthenticate);
-
-      if (!this.constantTimeEqual(mac, computedMac)) {
-        //console.log(mac, computedMac);
-        console.error("DHIES: MAC verification failed");
-        return null;
-      }
-
-      // Decrypt the ciphertext
-      const plaintext = nacl.secretbox.open(ciphertext, nonce, encryptionKey);
-
-      if (!plaintext) {
-        console.error("DHIES: Decryption failed");
-        return null;
-      }
-
-      const result = Buffer.from(plaintext);
-
-      // Securely erase sensitive data
-      secureErase(sharedSecret);
-      secureErase(encryptionKey);
-      secureErase(macKey);
-
-      return result;
-    } catch (error) {
-      console.error("DHIES decryption failed:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Key Derivation Function: Derives encryption and MAC keys from the shared secret
-   */
-  private kdf(sharedSecret: Buffer, ephemeralPublicKey: Buffer, staticPublicKey: Buffer) {
-    // Create a context for the KDF to ensure different keys for different uses
-    const context = Buffer.concat([Buffer.from("DHIES-KDF"), ephemeralPublicKey, staticPublicKey]);
-
-    // Derive encryption key: HKDF-like construction
-    const encryptionKeyMaterial = hash(
-      "sha512",
-      Buffer.concat([
-        sharedSecret,
-        context,
-        Buffer.from([0x01]), // Domain separation byte
-      ]),
-    );
-
-    // Derive MAC key (using a different domain separation byte)
-    const macKeyMaterial = hash(
-      "sha512",
-      Buffer.concat([
-        sharedSecret,
-        context,
-        Buffer.from([0x02]), // Domain separation byte
-      ]),
-    );
-
-    // Use first 32 bytes of each as the actual keys (for NaCl's secretbox)
-    return {
-      encryptionKey: encryptionKeyMaterial.slice(0, 32),
-      macKey: macKeyMaterial.slice(0, 32),
-    };
-  }
-
-  /**
-   * Computes MAC for authenticated encryption
-   */
-  private computeMAC(macKey: Buffer, data: Buffer): Buffer {
-    return hash("sha256", Buffer.concat([macKey, data]));
-  }
-
-  /**
-   * Constant-time comparison of two buffers to prevent timing attacks
-   */
-  private constantTimeEqual(a: Buffer, b: Buffer): boolean {
-    if (a.length !== b.length) {
-      return false;
-    }
-
-    let result = 0;
-    for (let i = 0; i < a.length; i++) {
-      result |= a[i] ^ b[i];
-    }
-
-    return result === 0;
-  }
-}
-
-export function getCypherPublicKeyFromId(id: Buffer) {
-  const data = decode(id) as { e: Buffer };
-  return data.e;
+export function getCypherPublicKeyFromId(id: Buffer | Uint8Array) {
+  const data = decodeRecord(id, "id");
+  return requireBytes(data.e, "X25519 public key", 32);
 }
 
 export default abstract class CypherManager extends KeyManager {
@@ -298,24 +98,37 @@ export default abstract class CypherManager extends KeyManager {
   }
 
   /**
-   * Encrypt a message using DHIES for a recipient
+   * Encrypt a message using DHIES v2 (sender-authenticated) for a recipient
    * @param message Message to encrypt
    * @param recipientId Recipient's KeyManager ID
    * @returns Encrypted message or null if encryption fails
    */
   async dhiesEncrypt(message: string | Buffer, recipientId: Buffer): Promise<Buffer | null> {
-    const dhies = new DHIES(this);
-    return dhies.encrypt(message, getCypherPublicKeyFromId(recipientId));
+    if (this.capability === "public") return null;
+    try {
+      const recipientPublicKey = getCypherPublicKeyFromId(recipientId);
+      const cypher = await this.getCypher();
+      return await dhiesV2Encrypt(message, cypher.diffieHellman, this.cypher.publicKey, recipientPublicKey);
+    } catch {
+      return null;
+    }
   }
 
   /**
-   * Decrypt a message encrypted with DHIES
+   * Decrypt a DHIES v2 message, authenticating the sender
    * @param encryptedMessage Encrypted message from dhiesEncrypt
-   * @returns Decrypted message or null if decryption fails
+   * @param senderId Sender's KeyManager ID
+   * @returns Decrypted message or null if decryption/authentication fails
    */
   async dhiesDecrypt(encryptedMessage: Buffer, senderId: Buffer): Promise<Buffer | null> {
-    const dhies = new DHIES(this);
-    return dhies.decrypt(encryptedMessage, getCypherPublicKeyFromId(senderId));
+    if (this.capability === "public") return null;
+    try {
+      const senderPublicKey = getCypherPublicKeyFromId(senderId);
+      const cypher = await this.getCypher();
+      return await dhiesV2Decrypt(encryptedMessage, cypher.diffieHellman, this.cypher.publicKey, senderPublicKey);
+    } catch {
+      return null;
+    }
   }
 
   static async encrypt(plaintext: string, recipientIds: Buffer[]) {

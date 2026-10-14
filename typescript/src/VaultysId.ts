@@ -1,10 +1,11 @@
-import { hash, randomBytes } from "./crypto";
+import { hash, hmac, randomBytes, secureErase } from "./crypto";
 import KeyManager, { Ed25519Manager, Fido2Manager, Fido2PRFManager, DilithiumManager, HybridManager } from "./KeyManager";
 import SoftCredentials from "./platform/SoftCredentials";
 import { getWebAuthnProvider } from "./platform/webauthn";
 import { Buffer } from "buffer/";
 import { PQ_COSE_ALG } from "./pqCrypto";
 import CypherManager from "./KeyManager/CypherManager";
+import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
@@ -12,7 +13,25 @@ const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
 const TYPE_FIDO2PRF = 4;
 
+const KNOWN_TYPES = [TYPE_MACHINE, TYPE_PERSON, TYPE_ORGANIZATION, TYPE_FIDO2, TYPE_FIDO2PRF];
+
+// Signature domains. Every signature produced through VaultysId is computed over
+// SHA-256(domain || data) so that a signature obtained in one context can never
+// be replayed in another one.
+// - VAULTYS_SIGN: public signChallenge / verifyChallenge (files, app challenges)
+// - VAULTYS_HANDSHAKE_V1: the Challenger handshake only (signHandshake / verifyHandshake)
+// - VAULTYS_RAW: the public raw sign / verify
 const SIGN_INCIPIT = Buffer.from("VAULTYS_SIGN", "utf8");
+export const HANDSHAKE_INCIPIT = Buffer.from("VAULTYS_HANDSHAKE_V1", "utf8");
+export const RAW_INCIPIT = Buffer.from("VAULTYS_RAW", "utf8");
+
+const toBuffer = (data: Buffer | Uint8Array | string, encoding: BufferEncoding = "hex") => (typeof data === "string" ? Buffer.from(data, encoding) : Buffer.from(data));
+
+const isAllZero = (data: Uint8Array) => {
+  let acc = 0;
+  for (let i = 0; i < data.length; i++) acc |= data[i];
+  return acc === 0;
+};
 
 type StringifiedBuffer = {
   data: number[];
@@ -58,20 +77,32 @@ export default class VaultysId {
   //   const revocationCertificate = `vaultys://p2p/revocation?pk=${pk}&npk=${newPk}&xpub=${xpub}&index=${derivation}`;
   // }
 
+  /**
+   * Parse a serialized (public) VaultysId. Untrusted input never triggers an
+   * uncaught TypeError: any malformed id throws `Error("Invalid VaultysId id: ...")`.
+   */
   static fromId(id: StringifiedBuffer | Buffer | Uint8Array | string, certificate?: Buffer, encoding: BufferEncoding = "hex") {
-    let cleanId: Buffer = id as Buffer;
-    if ((id as StringifiedBuffer).data) {
+    try {
+      return VaultysId._fromId(id, certificate, encoding);
+    } catch (error) {
+      throw new Error("Invalid VaultysId id: " + ((error as Error)?.message ?? error));
+    }
+  }
+
+  private static _fromId(id: StringifiedBuffer | Buffer | Uint8Array | string, certificate?: Buffer, encoding: BufferEncoding = "hex") {
+    let cleanId: Buffer | undefined;
+    if (typeof id === "string") {
+      cleanId = Buffer.from(id, encoding);
+    } else if (id instanceof Uint8Array) {
+      // Buffer thing
+      cleanId = Buffer.from(id);
+    } else if (id && Array.isArray((id as StringifiedBuffer).data)) {
       // Buffer thing
       cleanId = Buffer.from((id as StringifiedBuffer).data);
     }
-    if (id instanceof Uint8Array) {
-      // Buffer thing
-      cleanId = Buffer.from(id);
-    }
-    if (typeof id === "string") {
-      cleanId = Buffer.from(id, encoding);
-    }
+    if (!cleanId || cleanId.length < 2) throw new Error("empty or unsupported id");
     const type = cleanId[0];
+    if (!KNOWN_TYPES.includes(type)) throw new Error("unknown identity type " + type);
     if (type === TYPE_FIDO2) {
       const f2m = Fido2Manager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
@@ -90,8 +121,14 @@ export default class VaultysId {
       } else if (cleanId.length === 77) {
         const km = Ed25519Manager.fromId(cleanId.slice(1));
         return new VaultysId(km, certificate, type);
+      } else {
+        // Legacy (bip32-ed25519) ids carry an extra `p` proof field and do not
+        // match any of the lengths above (a v1 person id is 113 bytes, v0 116).
+        // Keep reading them so identities created before the @stricahq/bip32ed25519
+        // removal stay resolvable, with a byte-identical DID.
+        const km = DeprecatedKeyManager.fromId(cleanId.slice(1));
+        return new VaultysId(km, certificate, type);
       }
-      else throw new Error("Invalid ID format");
     }
   }
 
@@ -259,9 +296,24 @@ export default class VaultysId {
     return VaultysId.fromEntropy(entropy, TYPE_PERSON);
   }
 
+  /**
+   * Restore a VaultysId from its secret. Malformed input throws
+   * `Error("Invalid VaultysId secret: ...")`, never an uncaught TypeError.
+   */
   static fromSecret(secret: string, encoding: BufferEncoding = "hex") {
+    try {
+      return VaultysId._fromSecret(secret, encoding);
+    } catch (error) {
+      throw new Error("Invalid VaultysId secret: " + ((error as Error)?.message ?? error));
+    }
+  }
+
+  private static _fromSecret(secret: string, encoding: BufferEncoding = "hex") {
+    if (typeof secret !== "string") throw new Error("secret must be a string");
     const secretBuffer = Buffer.from(secret, encoding);
+    if (secretBuffer.length < 2) throw new Error("empty secret");
     const type = secretBuffer[0];
+    if (!KNOWN_TYPES.includes(type)) throw new Error("unknown identity type " + type);
     if (type == TYPE_FIDO2) {
       const f2m = Fido2Manager.fromSecret(secretBuffer.slice(1));
       return new VaultysId(f2m, undefined, type);
@@ -279,8 +331,13 @@ export default class VaultysId {
       } else if (secretBuffer.length === 77) {
         const km = Ed25519Manager.fromSecret(secretBuffer.slice(1));
         return new VaultysId(km, undefined, type);
+      } else {
+        // Legacy secrets are 177 bytes (96-byte extended bip32 signing key + 32-byte
+        // proof + 32-byte cypher key). They cannot be re-derived by Ed25519Manager,
+        // so this fallback is the only way an existing wallet keeps its identity.
+        const km = DeprecatedKeyManager.fromSecret(secretBuffer.slice(1));
+        return new VaultysId(km, undefined, type);
       }
-      else throw new Error("Invalid secret format");
     }
   }
 
@@ -398,14 +455,32 @@ export default class VaultysId {
     return this.keyManager.getSecretHash(Buffer.from(`OTP-${otp}`)).toString("hex");
   }
 
-  // Need to think about insecure use of this function
-  getOTP(prefix = "password", timelock = 24 * 3600000) {
-    if (this.certificate) {
-      const otp = Math.floor(new Date().getTime() / timelock);
-      const toHash = Buffer.concat([Buffer.from(prefix, "utf-8"), Buffer.from(this.certificate), Buffer.from([otp])]);
-      return hash("SHA256", toHash).toString("hex");
-    }
-    throw new Error("no certificate, cannot derive OTP");
+  /**
+   * One-time password shared between this identity and `remote` (a contact).
+   *   key = SHA-256(X25519(own cypher secret key, remote cypher public key))
+   *   otp = HMAC-SHA256(key, prefix || certificate || uint64be(floor(time / timelock)))
+   * The certificate is the relationship certificate (remote.certificate, or ours).
+   * Only the two parties of the relationship can compute it.
+   */
+  async getOTP(remote: VaultysId, prefix = "password", timelock = 24 * 3600000, time = Date.now()) {
+    if (!remote || !remote.keyManager?.cypher?.publicKey) throw new Error("a remote VaultysId is required to derive an OTP");
+    const certificate = remote.certificate ?? this.certificate;
+    if (!certificate) throw new Error("no certificate, cannot derive OTP");
+    if (!(timelock > 0)) throw new Error("invalid timelock");
+    const remotePublicKey = Buffer.from(remote.keyManager.cypher.publicKey);
+    if (remotePublicKey.length !== 32) throw new Error("invalid remote cypher public key");
+    const cypher = await this.keyManager.getCypher();
+    const shared = Buffer.from(await cypher.diffieHellman(remotePublicKey));
+    if (isAllZero(shared)) throw new Error("degenerate Diffie-Hellman shared secret");
+    const key = hash("sha256", shared);
+    secureErase(shared);
+    const counter = Math.floor(time / timelock);
+    const counterBuffer = Buffer.alloc(8);
+    counterBuffer.writeUInt32BE(Math.floor(counter / 2 ** 32), 0);
+    counterBuffer.writeUInt32BE(counter >>> 0, 4);
+    const otp = hmac("sha256", key, Buffer.concat([Buffer.from(prefix, "utf-8"), Buffer.from(certificate), counterBuffer]));
+    secureErase(key);
+    return otp.toString("hex");
   }
 
   async performDiffieHellman(otherVaultysId: VaultysId): Promise<Buffer | null> {
@@ -453,46 +528,51 @@ export default class VaultysId {
     return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
   }
 
-  async signChallenge_v0(challenge: Buffer | string, oldId: Buffer): Promise<Buffer> {
-    if (typeof challenge == "string") {
-      challenge = Buffer.from(challenge, "hex");
-    }
-    const result = hash("sha256", Buffer.concat([oldId, challenge as Buffer]));
+  private async signInDomain(domain: Buffer, data: Buffer | Uint8Array | string): Promise<Buffer> {
+    const result = hash("sha256", Buffer.concat([domain, toBuffer(data)]));
     const signature = await this.keyManager.sign(result);
     if (!signature) throw new Error("Could not sign challenge");
-    else return signature;
+    else return Buffer.from(signature);
   }
 
-  verifyChallenge_v0(challenge: Buffer | string, signature: Buffer | string, userVerification: boolean, oldId: Buffer) {
-    if (typeof challenge == "string") {
-      challenge = Buffer.from(challenge, "hex");
+  private verifyInDomain(domain: Buffer, data: Buffer | Uint8Array | string, signature: Buffer | Uint8Array | string, userVerification: boolean) {
+    try {
+      const result = hash("sha256", Buffer.concat([domain, toBuffer(data)]));
+      return this.keyManager.verify(result, toBuffer(signature), userVerification);
+    } catch {
+      return false;
     }
-    if (typeof signature == "string") {
-      signature = Buffer.from(signature, "hex");
-    }
-    const result = hash("sha256", Buffer.concat([oldId, challenge as Buffer]));
-    return this.keyManager.verify(result, signature as Buffer, userVerification);
   }
 
+  /** Sign an application challenge: signature over SHA-256("VAULTYS_SIGN" || challenge). */
   async signChallenge(challenge: Buffer | string): Promise<Buffer> {
-    if (typeof challenge == "string") {
-      challenge = Buffer.from(challenge, "hex");
-    }
-    const result = hash("sha256", Buffer.concat([SIGN_INCIPIT, challenge as Buffer]));
-    const signature = await this.keyManager.sign(result);
-    if (!signature) throw new Error("Could not sign challenge");
-    else return signature;
+    return this.signInDomain(SIGN_INCIPIT, challenge);
   }
 
   verifyChallenge(challenge: Buffer | string, signature: Buffer | string, userVerification: boolean) {
-    if (typeof challenge == "string") {
-      challenge = Buffer.from(challenge, "hex");
-    }
-    if (typeof signature == "string") {
-      signature = Buffer.from(signature, "hex");
-    }
-    const result = hash("sha256", Buffer.concat([SIGN_INCIPIT, challenge as Buffer]));
-    return this.keyManager.verify(result, signature as Buffer, userVerification);
+    return this.verifyInDomain(SIGN_INCIPIT, challenge, signature, userVerification);
+  }
+
+  /** Raw signature API: signature over SHA-256("VAULTYS_RAW" || data). */
+  async sign(data: Buffer | Uint8Array | string): Promise<Buffer> {
+    return this.signInDomain(RAW_INCIPIT, data);
+  }
+
+  verify(data: Buffer | Uint8Array | string, signature: Buffer | Uint8Array | string, userVerification = false) {
+    return this.verifyInDomain(RAW_INCIPIT, data, signature, userVerification);
+  }
+
+  /**
+   * @internal Handshake-only signature, over SHA-256("VAULTYS_HANDSHAKE_V1" || unsignedChallenge).
+   * Must ONLY be called by the Challenger state machine.
+   */
+  async signHandshake(unsignedChallenge: Buffer | Uint8Array): Promise<Buffer> {
+    return this.signInDomain(HANDSHAKE_INCIPIT, Buffer.from(unsignedChallenge));
+  }
+
+  /** @internal Handshake-only verification (always requires user verification for FIDO2). */
+  verifyHandshake(unsignedChallenge: Buffer | Uint8Array, signature: Buffer | Uint8Array) {
+    return this.verifyInDomain(HANDSHAKE_INCIPIT, Buffer.from(unsignedChallenge), Buffer.from(signature), true);
   }
 
   async signcrypt(plaintext: string, recipientIds: (Buffer | string)[]) {
@@ -520,7 +600,7 @@ export default class VaultysId {
   async decrypt(encryptedMessage: string, senderId?: Buffer | string) {
     let cleanId: Buffer | undefined;
     if (senderId) {
-      if (typeof senderId === "string") cleanId = Buffer.from(senderId.slice(2));
+      if (typeof senderId === "string") cleanId = Buffer.from(senderId.slice(2), "hex");
       // @ts-ignore
       else cleanId = (senderId as Buffer).subarray(1);
     }

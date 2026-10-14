@@ -7,6 +7,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { p256, p384, p521 } from "@noble/curves/nist.js";
 // import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
 import { PQ_COSE_ALG, PQ_COSE_KEY_TYPE, PQ_COSE_KEY_PARAMS, signDilithium, verifyDilithium, createDilithiumCoseKey, generateDilithiumKeyPair } from "../pqCrypto";
+import { assertSoftCredentialsEnabled, getWebAuthnExpectations, WebAuthnExpectations } from "./softCredentialsConfig";
 
 const credentials: Record<string, SoftCredentials> = {};
 
@@ -117,6 +118,7 @@ const parseAuthData = (buffer: Buffer) => {
   let aaguid = undefined;
   let credID = undefined;
   let COSEPublicKey = undefined;
+  let extensionData = undefined;
 
   if (flags.at) {
     aaguid = buffer.slice(0, 16);
@@ -126,7 +128,14 @@ const parseAuthData = (buffer: Buffer) => {
     const credIDLen = credIDLenBuf.readUInt16BE(0);
     credID = buffer.slice(0, credIDLen);
     buffer = buffer.slice(credIDLen);
-    COSEPublicKey = buffer;
+    // The credential public key is followed by authenticator extension data
+    // whenever the ED flag is set - a security key answering the prf extension
+    // appends {"hmac-secret": true}. Taking the whole tail here made every later
+    // cbor.decode of the COSE key fail with "Unexpected data: 0xa1", so decode the
+    // key to find where it actually ends.
+    const decoded = cbor.decodeFirstSync(buffer, { extendedResults: true });
+    COSEPublicKey = buffer.slice(0, decoded.length);
+    if (flags.ed) extensionData = buffer.slice(decoded.length);
   }
   //console.log(aaguid);
 
@@ -139,6 +148,7 @@ const parseAuthData = (buffer: Buffer) => {
     aaguid,
     credID,
     COSEPublicKey,
+    extensionData,
   };
 };
 
@@ -235,7 +245,13 @@ class MyPublicKeyCredential {
 }
 
 const verifyECDSA = (data: Buffer, publicKey: Buffer, signature: Buffer) => {
-  return p256.verify(signature, data, publicKey, { format: signature.length === 64 ? "compact" : "der" });
+  // lowS must be off. @noble defaults it to true, which rejects any signature
+  // whose s is in the upper half of the curve order - and WebAuthn
+  // authenticators do not normalise s, so about half of the assertions they
+  // produce are exactly that. Malleability is irrelevant here: the signature is
+  // verified against a challenge we generated and is never used as an
+  // identifier, so re-encoding it into its low-s twin proves nothing.
+  return p256.verify(signature, data, publicKey, { format: signature.length === 64 ? "compact" : "der", lowS: false });
 };
 
 const verifyEdDSA = (data: Buffer, publicKey: Buffer, signature: Buffer) => {
@@ -249,6 +265,16 @@ type SoftKeyPair = {
   isDILITHIUM?: boolean; // Flag for DILITHIUM keys
 };
 // Webauthn Partial Implementation for testing
+type Bytes = ArrayBuffer | Uint8Array | Buffer;
+
+/** Structural form of AuthenticatorAssertionResponse that also accepts Buffers. */
+export type AssertionResponseLike = {
+  authenticatorData: Bytes;
+  clientDataJSON: Bytes;
+  signature: Bytes;
+  userHandle?: Bytes | null;
+};
+
 export default class SoftCredentials {
   signCount: number;
   rawId: Buffer;
@@ -310,6 +336,7 @@ export default class SoftCredentials {
   // }
 
   static async create(options: CredentialCreationOptions, origin = "test"): Promise<PublicKeyCredential> {
+    assertSoftCredentialsEnabled();
     const credential = new SoftCredentials();
     const publicKey = options.publicKey!;
     credential.options = publicKey;
@@ -405,7 +432,7 @@ export default class SoftCredentials {
           return {};
         }
       },
-      toJSON() { },
+      toJSON() {},
       response: {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
         attestationObject: cbor.encode(attestationObject),
@@ -419,36 +446,60 @@ export default class SoftCredentials {
     return pkCredentials;
   }
 
-  static simpleVerify(COSEPublicKey: Buffer, response: AuthenticatorAssertionResponse, userVerification = false) {
+  /**
+   * Verify a WebAuthn assertion against a COSE public key.
+   * Requires clientData.type === "webauthn.get" and the UP flag (plus UV when
+   * userVerification is requested). When an expected rpId / origin is provided
+   * (argument or configureWebAuthn()), rpIdHash / clientData.origin are checked too.
+   */
+  static simpleVerify(COSEPublicKey: Buffer, response: AssertionResponseLike, userVerification = false, expected?: WebAuthnExpectations) {
+    try {
+      return SoftCredentials._simpleVerify(COSEPublicKey, response, userVerification, expected ?? getWebAuthnExpectations());
+    } catch {
+      return false;
+    }
+  }
+
+  private static _simpleVerify(COSEPublicKey: Buffer, response: AssertionResponseLike, userVerification: boolean, expected: WebAuthnExpectations) {
     const ckey = cbor.decode(COSEPublicKey, { extendedResults: true }).value;
-    const rpIdHash = response.authenticatorData.slice(0, 32);
-    const flagsInt = Buffer.from(response.authenticatorData)[32];
-    const counter = response.authenticatorData.slice(33, 37);
+    // The caller may hand us ArrayBuffers (real WebAuthn), Buffers (msgpack-decoded
+    // signature payload) or plain Uint8Arrays. Normalise once.
+    const authenticatorData = Buffer.from(response.authenticatorData as ArrayBuffer);
+    const clientDataJSON = Buffer.from(response.clientDataJSON as ArrayBuffer);
+    const signature = Buffer.from(response.signature as ArrayBuffer);
 
-    const goodflags = userVerification ? !!(flagsInt & 0x04) : !!(flagsInt & 0x01);
-    if (!goodflags) return false;
+    // rpIdHash (32) + flags (1) + signCount (4)
+    if (authenticatorData.length < 37) return false;
 
-    const hash = myhash("sha256", Buffer.from(response.clientDataJSON));
-    let data = Buffer.concat([Buffer.from(response.authenticatorData), hash]);
-    // if (data.length !== 64) {
-    //   data = myhash("sha256", data);
-    // }
+    const clientData = JSON.parse(clientDataJSON.toString("utf-8"));
+    if (!clientData || clientData.type !== "webauthn.get") return false;
+    if (expected.origin !== undefined && clientData.origin !== expected.origin) return false;
+    if (expected.rpId !== undefined) {
+      const expectedRpIdHash = myhash("sha256", Buffer.from(expected.rpId, "utf-8"));
+      if (!Buffer.from(authenticatorData.subarray(0, 32)).equals(expectedRpIdHash)) return false;
+    }
+
+    const flagsInt = authenticatorData[32];
+    // user presence is always required, user verification on demand
+    if (!(flagsInt & 0x01)) return false;
+    if (userVerification && !(flagsInt & 0x04)) return false;
+
+    const hash = myhash("sha256", clientDataJSON);
+    const data = Buffer.concat([authenticatorData, hash]);
     if (ckey.get(1) == 1) {
       // EdDSA
       const x = ckey.get(-2);
-      return verifyEdDSA(data, x, Buffer.from(response.signature));
+      return verifyEdDSA(data, x, signature);
     } else if (ckey.get(1) == 2) {
       // ECDSA
       const x = ckey.get(-2);
       const y = ckey.get(-3);
       const pubKey = Buffer.concat([Buffer.from("04", "hex"), x, y]);
-      return verifyECDSA(data, pubKey, Buffer.from(response.signature));
+      return verifyECDSA(data, pubKey, signature);
     } else if (ckey.get(1) === COSEKTY.DILITHIUM) {
       // DILITHIUM
       const publicKey = ckey.get(PQ_COSE_KEY_PARAMS.DILITHIUM_PK);
-      // Verify DILITHIUM signature asynchronously
-      //console.log(data, publicKey, Buffer.from(response.signature));
-      return verifyDilithium(data, Buffer.from(response.signature), publicKey);
+      return verifyDilithium(data, signature, publicKey);
     }
 
     return false;
@@ -469,6 +520,17 @@ export default class SoftCredentials {
     //if (assertion.id !== attestation.id) return false;
     const hash = myhash("sha256", Buffer.from(assertion.response.clientDataJSON));
     const ass = assertion.response as AuthenticatorAssertionResponse;
+    // the assertion itself must be a webauthn.get with user presence (and UV on demand)
+    try {
+      const clientData = JSON.parse(Buffer.from(ass.clientDataJSON).toString("utf-8"));
+      if (clientData?.type !== "webauthn.get") return false;
+    } catch {
+      return false;
+    }
+    const assertionAuthData = Buffer.from(ass.authenticatorData);
+    if (assertionAuthData.length < 37) return false;
+    if (!(assertionAuthData[32] & 0x01)) return false;
+    if (userVerifiation && !(assertionAuthData[32] & 0x04)) return false;
     const att = attestation.response as AuthenticatorAttestationResponse;
     let data = Buffer.concat([Buffer.from(ass.authenticatorData), hash]);
     const ato = cbor.decode(att.attestationObject);
@@ -508,8 +570,11 @@ export default class SoftCredentials {
     return false;
   }
 
-  static extractChallenge(clientDataJSON: ArrayBuffer) {
-    const clientData = JSON.parse(clientDataJSON.toString());
+  static extractChallenge(clientDataJSON: ArrayBuffer | Uint8Array | Buffer) {
+    if (!clientDataJSON || (!(clientDataJSON instanceof ArrayBuffer) && !ArrayBuffer.isView(clientDataJSON))) {
+      throw new Error("clientDataJSON is not a byte buffer, got " + Object.prototype.toString.call(clientDataJSON));
+    }
+    const clientData = JSON.parse(Buffer.from(clientDataJSON as ArrayBuffer).toString("utf-8"));
     const m = clientData.challenge.length % 4;
     return clientData.challenge
       .replace(/-/g, "+")
@@ -518,6 +583,7 @@ export default class SoftCredentials {
   }
 
   static async get({ publicKey }: { publicKey: PublicKeyCredentialRequestOptions }, origin = "test"): Promise<PublicKeyCredential> {
+    assertSoftCredentialsEnabled();
     if (!publicKey.allowCredentials) throw new Error();
     const id = Buffer.from(publicKey.allowCredentials[0].id as ArrayBuffer).toString("base64");
     const credential = credentials[id];
@@ -538,7 +604,11 @@ export default class SoftCredentials {
     let signature: Uint8Array = new Uint8Array();
 
     if (credential.alg === -7) {
-      signature = p256.sign(toSign, credential.keyPair.privateKey, { prehash: true });
+      // Real authenticators answer with a DER signature and never normalise s,
+      // so half of their assertions carry a high s. @noble normalises on sign,
+      // so emit the high-s twin to keep the pessimistic case covered.
+      const sig = p256.Signature.fromBytes(p256.sign(toSign, credential.keyPair.privateKey, { prehash: true }), "compact");
+      signature = (sig.hasHighS() ? sig : new p256.Signature(sig.r, p256.Point.Fn.ORDER - sig.s)).toBytes("der");
     } else if (credential.alg === -8) {
       signature = ed25519.sign(toSign, credential.keyPair.privateKey);
     } else if (credential.alg === PQ_COSE_ALG.DILITHIUM5) {
@@ -559,7 +629,7 @@ export default class SoftCredentials {
           return {};
         }
       },
-      toJSON() { },
+      toJSON() {},
       response: {
         authenticatorData,
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),

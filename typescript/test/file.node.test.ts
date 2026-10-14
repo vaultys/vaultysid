@@ -60,7 +60,7 @@ describe("IdManagerwith files on nodejs", () => {
       const input = readFileSync("./test/assets/testfile.png");
       const file = { arrayBuffer: Buffer.from(input), type: "image/png" };
 
-      manager1.acceptSignFile(channel);
+      manager1.acceptSignFile(channel, async () => true);
       const result = await manager2.requestSignFile(channel.otherend, file);
 
       if (!result) return assert.fail("no result of the sign file request");

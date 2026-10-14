@@ -162,7 +162,7 @@ async function exportTestData() {
     email: idManager1.email,
     phone: idManager1.phone,
     displayName: idManager1.displayName,
-    protocolVersion: idManager1.protocol_version,
+    protocolVersion: 1,
   };
   fs.writeFileSync(path.join(outputDir, "idmanager-basic.json"), JSON.stringify(idManagerData, null, 2));
   console.log(`  Manager DID: ${idManagerData.did}`);

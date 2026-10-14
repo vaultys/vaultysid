@@ -73,40 +73,6 @@ describe("VaultysId Migration", () => {
   }).timeout(5000);
 });
 
-describe("Symetric Proof of Relationship - SRG - V0", () => {
-  it("Perform Protocol with KeyManager", async () => {
-    const vaultysId1 = await createRandomVaultysId();
-    const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await createRandomVaultysId();
-    const challenger2 = new Challenger(vaultysId2.toVersion(0));
-    assert.equal(challenger1.isComplete(), false);
-    assert.equal(challenger1.hasFailed(), false);
-    challenger1.createChallenge("p2p", "auth", 0);
-    await challenger2.update(challenger1.getCertificate());
-    await challenger1.update(challenger2.getCertificate());
-    assert.ok(challenger1.isComplete());
-    assert.ok(!challenger2.isComplete());
-    await challenger2.update(challenger1.getCertificate());
-    // SYMETRIC PROOF
-    assert.ok(challenger1.isComplete());
-    assert.ok(challenger2.isComplete());
-    assert.equal(challenger1.toString(), challenger2.toString());
-  });
-
-  it("Succeed for different vaultysId versions", async () => {
-    const vaultysId1 = await createRandomVaultysId();
-    const challenger1 = new Challenger(vaultysId1);
-    const vaultysId2 = await createRandomVaultysId();
-    const challenger2 = new Challenger(vaultysId2.toVersion(0));
-    assert.ok(!challenger1.isComplete());
-    assert.ok(!challenger1.hasFailed());
-    challenger1.createChallenge("p2p", "auth", 0);
-    await challenger2.update(challenger1.getCertificate());
-    await challenger1.update(challenger2.getCertificate());
-    assert.equal(challenger1.toString(), challenger2.toString());
-  });
-});
-
 describe("Symetric Proof of Relationship - SRG - V1", () => {
   it("Perform Protocol with KeyManager", async () => {
     const vaultysId1 = await createRandomVaultysId();
@@ -115,7 +81,7 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
     const challenger2 = new Challenger(vaultysId2);
     assert.equal(challenger1.isComplete(), false);
     assert.equal(challenger1.hasFailed(), false);
-    challenger1.createChallenge("p2p", "auth", 1);
+    challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
     assert.ok(challenger1.isComplete());
@@ -134,7 +100,7 @@ describe("Symetric Proof of Relationship - SRG - V1", () => {
     const challenger2 = new Challenger(vaultysId2);
     assert.ok(!challenger1.isComplete());
     assert.ok(!challenger1.hasFailed());
-    challenger1.createChallenge("p2p", "auth", 1);
+    challenger1.createChallenge("p2p", "auth");
     await challenger2.update(challenger1.getCertificate());
     await challenger1.update(challenger2.getCertificate());
     await challenger2.update(challenger1.getCertificate());

@@ -37,10 +37,12 @@ mocha compatibility.test.ts --require tsx
 
 # Run data format tests
 mocha data-format.test.ts --require tsx
-
-# Run SRP challenge tests
-mocha srp-compatibility.test.ts --require tsx
 ```
+
+> The SRP (handshake) cross-version suites (`srp-compatibility.test.ts`,
+> `srp-cross-version.test.ts`) were removed in 4.0.0: the v0 handshake and the
+> old handshake signature domain were dropped on purpose (breaking security
+> release), so 2.x/3.x clients can no longer complete a handshake with 4.x.
 
 ### Watch mode for development:
 ```bash
@@ -65,14 +67,6 @@ npm run test:watch
 - **Test Vectors**: Generates and validates test vectors for regression testing
 - **Channel Data**: Tests channel structure compatibility
 - **Key Paths**: Tests various derivation path formats
-
-### `srp-compatibility.test.ts`
-- **Cross-version SRP**: Tests SRP challenges between old and new versions
-- **Channel Communication**: Tests encrypted channel communication
-- **File Operations**: Tests file encryption/decryption between versions
-- **Web of Trust**: Tests trust relationship establishment across versions
-- **PRF Operations**: Tests pseudorandom function operations
-- **Error Handling**: Tests graceful handling of version mismatches
 
 ## Expected Results
 

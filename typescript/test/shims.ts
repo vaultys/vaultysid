@@ -1,5 +1,9 @@
 // nodejs polyfill
 import SoftCredentials from "../src/platform/SoftCredentials";
+import { enableSoftCredentials } from "../src/platform/softCredentialsConfig";
+
+// tests explicitly opt in to the insecure software authenticator
+enableSoftCredentials();
 if (typeof window !== "undefined") {
   window.global = window;
   // @ts-ignore

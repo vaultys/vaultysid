@@ -54,7 +54,6 @@ async function main() {
   const vaultysId = await VaultysId.generatePerson(ALGORITHM);
   const store = MemoryStorage();
   const idManager = new IdManager(vaultysId, store);
-  idManager.setProtocolVersion(1);
   const execManager = new ExecutionManager(idManager);
 
   console.log(`[${AGENT_NAME}] DID = ${vaultysId.did}`);

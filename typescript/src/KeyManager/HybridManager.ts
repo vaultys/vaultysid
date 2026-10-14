@@ -4,6 +4,8 @@ import nacl from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
 import { generateDilithiumKeyPair, signDilithium, verifyDilithium } from "../pqCrypto";
 import CypherManager from "./CypherManager";
+import { DILITHIUM_PK_LENGTH } from "./DilithiumManager";
+import { decodeRecord, readVersion, requireBytes } from "./validation";
 import { KeyPair } from ".";
 import { ed25519 } from "@noble/curves/ed25519.js";
 
@@ -79,12 +81,12 @@ export default class HybridManager extends CypherManager {
   }
 
   static fromSecret(secret: Buffer) {
-    const data = decode(secret) as SecretExport;
+    const data = decodeRecord(secret, "Hybrid secret");
     if (data.alg !== "hybrid") throw new Error("Not a secret for Hybrid Cryptography");
     const km = new HybridManager();
-    km.version = data.v ?? 0;
+    km.version = readVersion(data.v);
     km.capability = "private";
-    km.seed = Buffer.from(data.s);
+    km.seed = requireBytes(data.s, "Hybrid seed", 64);
     const signerSeed = sha512(km.seed.slice(0, 32));
     km.pqSigner = generateDilithiumKeyPair(signerSeed.slice(0, 32));
     km.edSigner = {
@@ -123,21 +125,22 @@ export default class HybridManager extends CypherManager {
   }
 
   static fromId(id: Buffer) {
-    const data = decode(id) as DataExport;
+    const data = decodeRecord(id, "Hybrid id");
+    const x = requireBytes(data.x, "Hybrid public key", 32 + DILITHIUM_PK_LENGTH);
     const km = new HybridManager();
-    km.version = data.v ?? 0;
+    km.version = readVersion(data.v);
     km.capability = "public";
     km.signer = {
-      publicKey: data.x,
+      publicKey: x,
     };
     km.edSigner = {
-      publicKey: data.x.slice(0, 32),
+      publicKey: x.slice(0, 32),
     };
     km.pqSigner = {
-      publicKey: data.x.slice(32),
+      publicKey: x.slice(32),
     };
     km.cypher = {
-      publicKey: data.e,
+      publicKey: requireBytes(data.e, "X25519 public key", 32),
     };
     // console.log(km)
     return km;
@@ -156,10 +159,15 @@ export default class HybridManager extends CypherManager {
   }
 
   verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean {
-    const sign1 = signature.slice(0, 64);
-    const sign2 = signature.slice(64);
-    const verify1 = ed25519.verify(sign1, data, this.edSigner!.publicKey);
-    if (!verify1) return false;
-    return verifyDilithium(Buffer.concat([data, sign1]), sign2, this.pqSigner!.publicKey);
+    try {
+      if (!signature || signature.length <= 64) return false;
+      const sign1 = signature.slice(0, 64);
+      const sign2 = signature.slice(64);
+      const verify1 = ed25519.verify(sign1, data, this.edSigner!.publicKey);
+      if (!verify1) return false;
+      return verifyDilithium(Buffer.concat([data, sign1]), sign2, this.pqSigner!.publicKey);
+    } catch {
+      return false;
+    }
   }
 }

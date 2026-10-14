@@ -1,5 +1,5 @@
 import { Readable, Writable } from "stream";
-import Challenger from "./Challenger";
+import Challenger, { CHALLENGE_STATE } from "./Challenger";
 import KeyManager, { Ed25519Manager, Fido2Manager, Fido2PRFManager, HybridManager, DilithiumManager } from "./KeyManager";
 import { Channel, StreamChannel } from "./MemoryChannel";
 import { storagify, Store } from "./MemoryStorage";
@@ -11,7 +11,7 @@ import { Buffer } from "buffer/";
 import nacl from "tweetnacl";
 import { VaultysBackup } from "./platform/abstract";
 import { platformCrypto } from "./platform";
-import { crypto } from "..";
+import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
@@ -29,7 +29,7 @@ const getSignatureType = (challenge: string) => {
 
 export type StoredContact = {
   type: number;
-  keyManager: KeyManager;
+  keyManager: KeyManager | DeprecatedKeyManager;
   certificate: Buffer;
 };
 
@@ -62,6 +62,10 @@ export const instanciateContact = (c: StoredContact) => {
       vaultysId = new VaultysId(DilithiumManager.instantiate(c.keyManager), c.certificate, c.type);
     } else if (c.keyManager.signer.publicKey.length === 2592 + 32) {
       vaultysId = new VaultysId(HybridManager.instantiate(c.keyManager), c.certificate, c.type);
+    } else if ((c.keyManager as DeprecatedKeyManager).proof) {
+      // Legacy contacts are recognised by the `proof` field, which only the
+      // bip32-ed25519 key manager ever produced.
+      vaultysId = new VaultysId(DeprecatedKeyManager.instantiate(c.keyManager), c.certificate, c.type);
     } else {
       vaultysId = new VaultysId(Ed25519Manager.instantiate(c.keyManager), c.certificate, c.type);
     }
@@ -73,10 +77,32 @@ export const instanciateApp = (a: StoredApp) => {
   return VaultysId.fromId(Buffer.from(a.serverId, "base64"), a.certificate);
 };
 
+// File-encryption PRFs are derived as hmac("prf|encryption/<nonce>/encryption|prf"):
+// this namespace is reserved and can't be requested by an arbitrary remote peer.
+const FILE_ENCRYPTION_PRF_PREFIX = "encryption/";
+
+const denyAll = async () => false;
+
+const sameIdentity = (a: VaultysId, b: VaultysId) => {
+  try {
+    return a.type === b.type && Buffer.from(a.keyManager.signer.publicKey).equals(Buffer.from(b.keyManager.signer.publicKey)) && Buffer.from(a.keyManager.cypher.publicKey).equals(Buffer.from(b.keyManager.cypher.publicKey));
+  } catch {
+    return false;
+  }
+};
+
+// a DID depends on the id serialization version: accept either serialization
+const matchesDid = (contact: VaultysId, did: string) => {
+  try {
+    return ([0, 1] as const).some((v) => VaultysId.fromId(contact.id).toVersion(v).did === did);
+  } catch {
+    return false;
+  }
+};
+
 export default class IdManager {
   vaultysId: VaultysId;
   store: Store;
-  protocol_version: 0 | 1 = 0;
 
   constructor(vaultysId: VaultysId, store: Store) {
     this.vaultysId = vaultysId;
@@ -84,23 +110,26 @@ export default class IdManager {
     if (!this.store.get("metadata")) {
       this.store.set("metadata", {});
     }
-    if (this.vaultysId.keyManager.entropy) this.store.set("entropy", this.vaultysId.keyManager.entropy);
-    else this.store.set("secret", this.vaultysId.getSecret());
+    // Always persist the full secret: it encodes the identity type (person,
+    // machine...), the algorithm (ed25519, dilithium, hybrid...) and the id
+    // version, so restoring it yields exactly the same identity and DID.
+    this.store.set("secret", this.vaultysId.getSecret());
+    if (this.store.get("entropy") !== undefined) this.store.delete("entropy");
     this.store.save();
-  }
-
-  setProtocolVersion(version: 0 | 1) {
-    this.protocol_version = version;
   }
 
   /**
    * Exports the current profile as a backup
-   * @param encrypted Whether to encrypt the backup
-   * @param passphrase Optional passphrase for encryption (generated if not provided)
-   * @returns Object containing backup data and optional passphrase
+   * @param passphrase passphrase used to encrypt the backup. When omitted the
+   * backup is exported in CLEAR (it contains the identity secret). An empty
+   * passphrase is rejected.
+   * @returns the backup
    */
   async exportBackup(passphrase?: string): Promise<Uint8Array> {
-    if (!passphrase) {
+    if (passphrase !== undefined && (typeof passphrase !== "string" || passphrase.length === 0)) {
+      throw new Error("Empty passphrase is not allowed");
+    }
+    if (passphrase === undefined) {
       // Plaintext export
       const exportedData: VaultysBackup = {
         version: 1,
@@ -131,7 +160,7 @@ export default class IdManager {
       if (backup.encryptInfo) {
         // This is an encrypted backup
         if (!passphrase) {
-          throw new Error("Passphrase required for encrypted backup");
+          throw new Error("Passphrase required for encrypted backup (empty passphrases are rejected)");
         }
 
         if (!backup.data) {
@@ -153,8 +182,8 @@ export default class IdManager {
       // console.log(importedData, decode(importedData));
       const store = storagify(
         decode(importedData) as object,
-        () => { },
-        () => { },
+        () => {},
+        () => {},
       );
       return await IdManager.fromStore(store);
     } catch (error) {
@@ -163,26 +192,24 @@ export default class IdManager {
     }
   }
 
+  /**
+   * Restore an IdManager from a store. The identity is restored exactly from
+   * the persisted secret (same type, algorithm and DID). A legacy store holding
+   * only `entropy` is rejected: its type/algorithm can't be recovered, rebuild
+   * it explicitly with `new IdManager(await VaultysId.fromEntropy(entropy, type, alg), store)`.
+   * An empty store creates a new machine identity.
+   */
   static async fromStore(store: Store) {
-    const entropy = store.get("entropy");
     const secret = store.get("secret");
     if (secret) {
-      if (entropy) {
-        const secretBuffer = Buffer.from(secret, "base64");
-        const type = secretBuffer[0];
-        const vaultysId = await VaultysId.fromEntropy(entropy, type);
-        return new IdManager(vaultysId, store);
-      } else {
-        const vaultysId = VaultysId.fromSecret(secret);
-        return new IdManager(vaultysId, store);
-      }
-    } else if (entropy) {
-      const vaultysId = await VaultysId.machineFromEntropy(entropy);
-      return new IdManager(vaultysId, store);
-    } else {
-      const vaultysId = await VaultysId.generateMachine();
+      const vaultysId = VaultysId.fromSecret(typeof secret === "string" ? secret : Buffer.from(secret).toString("hex"));
       return new IdManager(vaultysId, store);
     }
+    if (store.get("entropy")) {
+      throw new Error("Legacy store without secret: the identity type and algorithm can't be recovered from entropy alone. Restore it explicitly with VaultysId.fromEntropy(entropy, type, alg).");
+    }
+    const vaultysId = await VaultysId.generateMachine();
+    return new IdManager(vaultysId, store);
   }
 
   merge(otherStore: Store, master = true) {
@@ -558,29 +585,29 @@ export default class IdManager {
     } else channel.send(Buffer.from([0]));
   }
 
-  async requestConnect(channel: Channel, contactdid: string) {
-    let contact = this.getContact(contactdid);
-    if (!contact) contact = this.getApp(contactdid);
-    if (!contact) throw new Error(contactdid + " is not in the Web of Trust");
-    const rand = crypto.randomBytes(16);
-    const dh = await this.vaultysId.performDiffieHellman(contact);
-    if (!dh) throw new Error("Unable to perform DH");
-    channel.send(rand);
-    const result2 = await channel.receive();
-    const result1 = hash("sha256", nacl.scalarMult(rand, dh));
-    if (result1.toString("base64") === result2.toString("base64")) return result1;
-    else throw new Error("Opening session failed with contact " + contactdid);
+  /**
+   * Open an authenticated connection with a contact (initiator side): a plain
+   * p2p/auth handshake. When `contactdid` is given, the remote must be that DID.
+   * The authenticated remote is saved as contact and returned.
+   */
+  async requestConnect(channel: Channel, contactdid?: string, metadata: Record<string, string> = {}) {
+    const accept = contactdid ? async (contact: VaultysId) => matchesDid(contact, contactdid) : undefined;
+    const challenger = await this.startSRP(channel, "p2p", "auth", metadata, accept);
+    const contact = challenger.getContactId();
+    this.saveContact(contact);
+    return contact;
   }
 
-  async acceptConnect(channel: Channel, contactdid: string) {
-    let contact = this.getContact(contactdid);
-    if (!contact) contact = this.getApp(contactdid);
-    if (!contact) throw new Error(contactdid + " is not in the Web of Trust");
-    const dh = await this.vaultysId.performDiffieHellman(contact);
-    if (!dh) throw new Error("Unable to perform DH");
-    const rand = await channel.receive();
-    const rand2 = Buffer.concat([rand.slice(0, 16), crypto.randomBytes(16)]);
-    const result1 = hash("sha256", nacl.scalarMult(rand2, dh));
+  /**
+   * Accept an authenticated connection (responder side of requestConnect).
+   * When `contactdid` is given, the remote must be that DID.
+   */
+  async acceptConnect(channel: Channel, contactdid?: string, metadata: Record<string, string> = {}) {
+    const accept = contactdid ? async (contact: VaultysId) => matchesDid(contact, contactdid) : undefined;
+    const challenger = await this.acceptSRP(channel, "p2p", "auth", metadata, accept);
+    const contact = challenger.getContactId();
+    this.saveContact(contact);
+    return contact;
   }
 
   async requestDecrypt(channel: Channel, toDecrypt: Buffer) {
@@ -588,13 +615,18 @@ export default class IdManager {
     if (challenger.isComplete()) {
       channel.send(toDecrypt);
       const new_encrypted = await channel.receive();
-      const decrypted = await this.vaultysId.dhiesDecrypt(new_encrypted, challenger.getContactId().id);
+      // DHIES v2: only the authenticated remote of this handshake can have produced it
+      const decrypted = await this.vaultysId.dhiesDecrypt(Buffer.from(new_encrypted), challenger.getContactId().id);
       return decrypted;
     } else channel.send(Buffer.from([0]));
   }
 
+  /**
+   * Decrypt a message on behalf of a remote peer. Denied unless `accept`
+   * explicitly approves the remote contact.
+   */
   async acceptDecrypt(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) {
-    const challenger = await this.startSRP(channel, "p2p", "decrypt", {}, accept);
+    const challenger = await this.startSRP(channel, "p2p", "decrypt", {}, accept ?? denyAll);
     if (challenger.isComplete()) {
       const toDecrypt = await channel.receive();
       const decrypted = await this.vaultysId.decrypt(toDecrypt.toString("utf-8"));
@@ -613,15 +645,23 @@ export default class IdManager {
     return this.encryptFile(toEncrypt, channel);
   }
 
+  /**
+   * Provide the file-encryption PRF to a remote peer. Denied unless the remote
+   * is this same identity or `accept` explicitly approves it.
+   */
   async acceptDecryptFile(channel: Channel, accept?: (contact: VaultysId) => Promise<boolean>) {
     let result_contact = null;
-    await this.acceptPRF(channel, (contact: VaultysId, appid: string) => {
-      if (appid.length > 63 && appid.startsWith("encryption/") && appid.endsWith("/encryption")) {
-        result_contact = contact;
-        //TODO: maybe by default should be in web of trust?
-        return accept?.(contact) || Promise.resolve(true);
-      } else return Promise.resolve(false);
-    });
+    await this.acceptPRF(
+      channel,
+      async (contact: VaultysId, appid: string) => {
+        if (appid.length > 63 && appid.startsWith(FILE_ENCRYPTION_PRF_PREFIX) && appid.endsWith("/encryption")) {
+          const allowed = sameIdentity(contact, this.vaultysId) || (!!accept && (await accept(contact)));
+          if (allowed) result_contact = contact;
+          return allowed;
+        } else return false;
+      },
+      { allowFileEncryption: true },
+    );
     return result_contact;
   }
 
@@ -633,19 +673,30 @@ export default class IdManager {
     if (challenger.isComplete()) {
       channel.send(Buffer.from(encode(file)));
       const result = await channel.receive();
-      const fileSignature = decode(result) as FileSignature;
+      let fileSignature: FileSignature;
+      try {
+        fileSignature = decode(result) as FileSignature;
+      } catch {
+        return undefined;
+      }
+      if (!fileSignature || !(fileSignature.challenge instanceof Uint8Array) || !(fileSignature.signature instanceof Uint8Array)) return undefined;
+      fileSignature = { challenge: Buffer.from(fileSignature.challenge), signature: Buffer.from(fileSignature.signature) };
       if (this.verifyFile(file, fileSignature, challenger.getContactId().toVersion(1))) {
         return fileSignature;
       } else return undefined;
     } else channel.send(Buffer.from([0]));
   }
 
+  /**
+   * Sign a file on behalf of a remote peer. Denied unless `accept` explicitly
+   * approves the remote contact and the file.
+   */
   async acceptSignFile(channel: Channel, accept?: (contact: VaultysId, file: File) => Promise<boolean>) {
     const challenger = await this.startSRP(channel, "p2p", "signfile");
     if (challenger.isComplete()) {
       const result = await channel.receive();
       const file = decode(result) as File;
-      if (!accept || (await accept(challenger.getContactId(), file))) {
+      if (accept && (await accept(challenger.getContactId(), file))) {
         const result = await this.signFile(file);
         channel.send(Buffer.from(encode(result)));
       } else channel.send(Buffer.from([0]));
@@ -667,19 +718,38 @@ export default class IdManager {
     } else channel.send(Buffer.from([0]));
   }
 
-  async acceptPRF(channel: Channel, accept?: (contact: VaultysId, appid: string) => Promise<boolean>) {
+  /**
+   * Provide a PRF (hmac of the appid) to a remote peer.
+   * DEFAULT DENY: without an `accept` callback only this same identity is served.
+   * The file-encryption namespace ("encryption/...") is only served to this same
+   * identity, or when explicitly allowed (options.allowFileEncryption, used by
+   * acceptDecryptFile) AND accepted.
+   */
+  async acceptPRF(channel: Channel, accept?: (contact: VaultysId, appid: string) => Promise<boolean>, options: { allowFileEncryption?: boolean } = {}) {
     const challenger = await this.startSRP(channel, "p2p", "prf");
     if (challenger.isComplete()) {
       const result = await channel.receive();
-      const appid = result.toString("utf-8");
+      const appid = Buffer.from(result).toString("utf-8");
+      const contact = challenger.getContactId();
+      const isSelf = sameIdentity(contact, this.vaultysId);
+      let allowed = false;
       if (appid.length < 3 || appid.split("|").length > 1) {
         // error if appid is too short or contains illegal character
+        allowed = false;
+      } else if (isSelf) {
+        allowed = true;
+      } else if (appid.startsWith(FILE_ENCRYPTION_PRF_PREFIX) && !options.allowFileEncryption) {
+        allowed = false;
+      } else {
+        allowed = !!accept && (await accept(contact, appid));
+      }
+      if (!allowed) {
         channel.send(Buffer.from([0]));
-      } else if (!accept || (await accept(challenger.getContactId(), appid))) {
+      } else {
         const hmac = (await this.vaultysId.hmac("prf|" + appid + "|prf")) ?? Buffer.from([0]);
         channel.send(hmac);
         secureErase(hmac);
-      } else channel.send(Buffer.from([0]));
+      }
     } else channel.send(Buffer.from([0]));
   }
 
@@ -706,7 +776,7 @@ export default class IdManager {
 
   async startSRP(channel: Channel, protocol: string, service: string, metadata: Record<string, string> = {}, accept?: (contact: VaultysId) => Promise<boolean>) {
     const challenger = new Challenger(this.vaultysId);
-    challenger.createChallenge(protocol, service, this.protocol_version, metadata);
+    challenger.createChallenge(protocol, service, metadata);
     //console.log(challenger);
     const cert = challenger.getCertificate();
     if (!cert) {
@@ -720,12 +790,13 @@ export default class IdManager {
     try {
       const message = await channel.receive();
       // console.log("startSRP", message)
-      const contact = Challenger.deserializeCertificate(message).pk2;
-      if (!contact) {
+      const step1 = Challenger.deserializeCertificate(message);
+      if (step1.state !== CHALLENGE_STATE.STEP1 || !step1.pk2) {
         channel.send(Buffer.from([0]));
-        throw new Error("Contact pk2 is not sent");
+        throw new Error("Expected a valid STEP1 challenge" + (step1.error ? ": " + step1.error : ""));
       }
-      if (accept && !(await accept(VaultysId.fromId(contact)))) {
+      // the consent callback is given the REMOTE party (pk2), before we sign anything
+      if (accept && !(await accept(VaultysId.fromId(step1.pk2)))) {
         channel.send(Buffer.from([0]));
         throw new Error("Contact refused");
       }
@@ -757,9 +828,10 @@ export default class IdManager {
     try {
       const message = await channel.receive();
       const chal = Challenger.deserializeCertificate(message);
-      if (!chal.pk1) {
+      // the first message of an accept flow MUST be an INIT (never sign a STEP1/COMPLETE we did not start)
+      if (chal.state !== CHALLENGE_STATE.INIT || !chal.pk1) {
         channel.send(Buffer.from([0]));
-        throw new Error("Contact pk1 is not sent");
+        throw new Error("Expected a valid INIT challenge" + (chal.error ? ": " + chal.error : ""));
       }
       if (chal.protocol !== protocol) {
         channel.send(Buffer.from([0]));
@@ -769,6 +841,7 @@ export default class IdManager {
         channel.send(Buffer.from([0]));
         throw new Error("service is not the one expected: " + chal.service + " !=" + service);
       }
+      // the consent callback is given the REMOTE party (pk1 of an INIT), before we sign anything
       if (accept && !(await accept(VaultysId.fromId(chal.pk1)))) {
         channel.send(Buffer.from([0]));
         throw new Error("Contact refused");
