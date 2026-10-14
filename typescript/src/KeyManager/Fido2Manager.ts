@@ -43,7 +43,10 @@ const lookup: Record<LookupType, number> = {
   "smart-card": 32,
 };
 
-const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]) as AuthenticatorTransport[];
+// Bitwise `&`: `num && lookup[i]` was truthy for every transport as soon as num
+// was non-zero, so allowCredentials always listed all of them and browsers
+// offered a phone, a security key and the platform for any credential.
+const getTransports = (num: number) => Object.keys(lookup).filter((i) => num & lookup[i as LookupType]) as AuthenticatorTransport[];
 const fromTransports = (transports: string[]): number => transports.reduceRight((memo, i) => memo + (lookup[i as LookupType] ? lookup[i as LookupType] : 0), 0);
 
 const getAuthTypeFromCkey = (ckey: Buffer) => {

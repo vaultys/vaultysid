@@ -33,7 +33,7 @@ const lookup: Record<LookupType, number> = {
   "smart-card": 32,
 };
 
-const getTransports = (num: number) => Object.keys(lookup).filter((i) => num && lookup[i as LookupType]);
+const getTransports = (num: number) => Object.keys(lookup).filter((i) => num & lookup[i as LookupType]);
 const fromTransports = (transports: string[]): number => transports.reduceRight((memo, i) => memo + (lookup[i as LookupType] ? lookup[i as LookupType] : 0), 0);
 
 const getAuthTypeFromCkey = (ckey: Buffer) => {

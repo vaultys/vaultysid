@@ -4,9 +4,22 @@ import assert from "assert";
 import { VaultysId } from "../";
 import "./shims";
 import nacl from "tweetnacl";
+import { decode, encode } from "@msgpack/msgpack";
 import { Fido2Manager } from "../src/KeyManager";
 
 describe("Fido2Manager", () => {
+  it("restores only the transports the credential was registered with", async () => {
+    const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7));
+    // @ts-expect-error mockup
+    const f2m = await Fido2Manager.createFromAttestation(attestation);
+    const withTransports = (t: number) => {
+      const data = decode(f2m.getSecret()) as Record<string, unknown>;
+      return Fido2Manager.fromSecret(Buffer.from(encode({ ...data, t }))).transports;
+    };
+    assert.deepStrictEqual(withTransports(1 | 2), ["usb", "nfc"]);
+    assert.deepStrictEqual(withTransports(8 | 16), ["internal", "hybrid"]);
+  });
+
   it("serder a Fido2Manager (ECDSA)", async () => {
     const attestation = await navigator.credentials.create(SoftCredentials.createRequest(-7));
     // @ts-expect-error mockup
