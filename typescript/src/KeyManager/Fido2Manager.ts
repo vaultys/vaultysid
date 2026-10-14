@@ -199,17 +199,28 @@ export default class Fido2Manager extends CypherManager {
           await window?.CredentialUserInteractionRequest();
         } catch (error) {}
         const challenge = hash("sha256", data);
-        const publicKey: PublicKeyCredentialRequestOptions = {
+        const transports = getTransports(this._transports);
+        // A credential reachable over USB/NFC/BLE only lives on a security key:
+        // hint it so the browser opens the security key prompt instead of
+        // offering a phone or its password manager first.
+        const onSecurityKeyOnly = transports.length > 0 && !transports.some((t) => t === "hybrid" || t === "internal");
+        const publicKey: PublicKeyCredentialRequestOptions & { hints?: string[] } = {
           challenge,
-          userVerification: "preferred",
+          // "required", not "preferred": Challenger verifies every signature
+          // with userVerification = true, so an assertion without the UV flag
+          // is always rejected. With "preferred" an authenticator may skip UV —
+          // Google Password Manager on a desktop with no biometric sensor does —
+          // and the handshake then failed with nothing to tell why.
+          userVerification: "required",
           allowCredentials: [
             {
               type: "public-key",
               id: this.fid,
-              transports: getTransports(this._transports),
+              transports,
             },
           ],
         };
+        if (onSecurityKeyOnly) publicKey.hints = ["security-key"];
         const { response } = (await this.webAuthn.get(publicKey)) as PublicKeyCredential;
         const publicKeyResponse = response as AuthenticatorAssertionResponse;
         // Must be Buffers, not the raw ArrayBuffers WebAuthn returns: msgpack encodes
