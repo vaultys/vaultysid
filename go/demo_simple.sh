@@ -4,26 +4,26 @@ set -e
 echo "=== VaultysID CLI Demo ==="
 echo
 
-# Generate a person identity
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+# Generate a person identity: the secret goes to a 0600 file, never stdout
 echo "1. Generating person identity..."
-./vaultysid-cli generate person -o json > person.json
-SECRET=$(cat ./person.json | jq -r .secret)
-ID=$(cat ./person.json | jq -r .id)
+ID=$(./vaultysid-cli generate person --out "$WORK/person.secret" -o json | jq -r .id)
 echo "Generated identity with ID: ${ID}"
-echo "secret: ${SECRET}"
 echo
 
 # Sign some data
 echo "2. Signing data..."
-DATA=$(echo -n "Hello, VaultysID!" | base64)
-echo "data to sign: ${DATA}"
-SIG=$(./vaultysid-cli sign data "$SECRET" "$DATA" -o json | jq -r .signature)
+DATA=$(echo -n "Hello, VaultysID!" | xxd -p | tr -d '\n')
+echo "data to sign (hex): ${DATA}"
+SIG=$(./vaultysid-cli sign data "$DATA" --secret-file "$WORK/person.secret" -o json | jq -r .signature)
 echo "Signature: ${SIG}"
 echo
 
 # Verify signature
 echo "3. Verifying signature..."
-RESULT=$(./vaultysid-cli verify data $ID $DATA $SIG -o json)
+RESULT=$(./vaultysid-cli verify data "$ID" "$DATA" "$SIG" -o json)
 echo "Verification result: $RESULT"
 echo
 

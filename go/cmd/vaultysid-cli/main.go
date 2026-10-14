@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,1275 +15,996 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vaultys/vaultysid/go/pkg/idmanager"
 	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
+	"golang.org/x/term"
 )
 
-var (
-	// Global flags
+// Environment variables that may carry secret material. Secrets are never
+// accepted as positional arguments (argv is visible to other local users
+// via ps and ends up in shell history).
+const (
+	envSecret   = "VAULTYSID_SECRET"
+	envPassword = "VAULTYSID_PASSWORD"
+	envEntropy  = "VAULTYSID_ENTROPY"
+)
+
+// cli holds the flag values of one command tree, so tests can build fresh
+// trees without global state.
+type cli struct {
 	outputFormat string
 	encoding     string
 	verbose      bool
 
-	// generate/from-entropy flag
-	algorithm string
-)
+	secretFile   string
+	passwordFile string
 
-var rootCmd = &cobra.Command{
-	Use:   "vaultysid-cli",
-	Short: "VaultysID CLI - Decentralized Identity Management",
-	Long: `VaultysID CLI provides command-line access to VaultysID and IDManager functionality.
-It allows you to generate, manage, and use decentralized identities for machines, persons, and organizations.`,
+	algorithm   string
+	entropyFile string
+	outFile     string
+	force       bool
+	inPlace     bool
+	challenge   string
+
+	stdin    io.Reader
+	isTTY    func() bool
+	readPass func() ([]byte, error)
 }
 
-var generateCmd = &cobra.Command{
-	Use:   "generate [type]",
-	Short: "Generate a new VaultysID",
-	Long:  `Generate a new VaultysID of the specified type (machine, person, or organization)`,
-	Args:  cobra.ExactArgs(1),
-	RunE:  generateIdentity,
-}
-
-var fromEntropyCmd = &cobra.Command{
-	Use:   "from-entropy [type] [entropy]",
-	Short: "Create VaultysID from entropy",
-	Long:  `Create a VaultysID from the given entropy (32 bytes hex or base64 encoded)`,
-	Args:  cobra.ExactArgs(2),
-	RunE:  fromEntropy,
-}
-
-var fromSecretCmd = &cobra.Command{
-	Use:   "from-secret [secret]",
-	Short: "Create VaultysID from secret",
-	Long:  `Create a VaultysID from an existing secret key`,
-	Args:  cobra.ExactArgs(1),
-	RunE:  fromSecret,
-}
-
-var fromIDCmd = &cobra.Command{
-	Use:   "from-id [id]",
-	Short: "Create VaultysID from public ID",
-	Long:  `Create a VaultysID from a public identity (only public operations available)`,
-	Args:  cobra.ExactArgs(1),
-	RunE:  fromID,
-}
-
-var signCmd = &cobra.Command{
-	Use:   "sign",
-	Short: "Sign data or challenges",
-}
-
-var signDataCmd = &cobra.Command{
-	Use:   "data [secret] [data]",
-	Short: "Sign arbitrary data",
-	Args:  cobra.ExactArgs(2),
-	RunE:  signData,
-}
-
-var signChallengeCmd = &cobra.Command{
-	Use:   "challenge [secret] [challenge]",
-	Short: "Sign a challenge with protocol prefix",
-	Args:  cobra.ExactArgs(2),
-	RunE:  signChallenge,
-}
-
-var signFileCmd = &cobra.Command{
-	Use:   "file [secret] [file-path]",
-	Short: "Sign a file",
-	Args:  cobra.ExactArgs(2),
-	RunE:  signFile,
-}
-
-var verifyCmd = &cobra.Command{
-	Use:   "verify",
-	Short: "Verify signatures",
-}
-
-var verifyDataCmd = &cobra.Command{
-	Use:   "data [id] [data] [signature]",
-	Short: "Verify a data signature",
-	Args:  cobra.ExactArgs(3),
-	RunE:  verifyData,
-}
-
-var verifyChallengeCmd = &cobra.Command{
-	Use:   "challenge [id] [challenge] [signature]",
-	Short: "Verify a challenge signature",
-	Args:  cobra.ExactArgs(3),
-	RunE:  verifyChallenge,
-}
-
-var verifyFileCmd = &cobra.Command{
-	Use:   "file [id] [file-path] [signature]",
-	Short: "Verify a file signature",
-	Args:  cobra.ExactArgs(3),
-	RunE:  verifyFile,
-}
-
-var infoCmd = &cobra.Command{
-	Use:   "info [id-or-secret]",
-	Short: "Display information about a VaultysID",
-	Args:  cobra.ExactArgs(1),
-	RunE:  showInfo,
-}
-
-var didCmd = &cobra.Command{
-	Use:   "did [id]",
-	Short: "Get the DID for a VaultysID",
-	Args:  cobra.ExactArgs(1),
-	RunE:  getDID,
-}
-
-var hmacCmd = &cobra.Command{
-	Use:   "hmac [secret] [input]",
-	Short: "Compute HMAC of input",
-	Args:  cobra.ExactArgs(2),
-	RunE:  computeHMAC,
-}
-
-var encryptCmd = &cobra.Command{
-	Use:   "encrypt [secret] [peer-id] [file-path]",
-	Short: "Encrypt a file for a peer",
-	Args:  cobra.ExactArgs(3),
-	RunE:  encryptFile,
-}
-
-var decryptCmd = &cobra.Command{
-	Use:   "decrypt [secret] [peer-id] [file-path]",
-	Short: "Decrypt a file from a peer",
-	Args:  cobra.ExactArgs(3),
-	RunE:  decryptFile,
-}
-
-var managerCmd = &cobra.Command{
-	Use:   "manager",
-	Short: "ID Manager operations",
-}
-
-var managerInitCmd = &cobra.Command{
-	Use:   "init [secret] [store-file]",
-	Short: "Initialize a new IDManager",
-	Args:  cobra.ExactArgs(2),
-	RunE:  managerInit,
-}
-
-var managerExportCmd = &cobra.Command{
-	Use:   "export [secret] [store-path]",
-	Short: "Export manager backup",
-	Args:  cobra.ExactArgs(2),
-	RunE:  managerExport,
-}
-
-var managerImportCmd = &cobra.Command{
-	Use:   "import [secret] [store-path] [backup-data]",
-	Short: "Import manager from backup",
-	Args:  cobra.ExactArgs(3),
-	RunE:  managerImport,
-}
-
-var managerContactsCmd = &cobra.Command{
-	Use:   "contacts [secret] [store-file]",
-	Short: "List all contacts",
-	Args:  cobra.ExactArgs(2),
-	RunE:  managerContacts,
-}
-
-var managerAppsCmd = &cobra.Command{
-	Use:   "apps [secret] [store-file]",
-	Short: "List all apps",
-	Args:  cobra.ExactArgs(2),
-	RunE:  managerApps,
-}
-
-var managerSaveContactCmd = &cobra.Command{
-	Use:   "save-contact [secret] [store-file] [contact-id] [key=value...]",
-	Short: "Save a contact with optional metadata",
-	Long:  `Save a contact to the store. Optional metadata can be provided as key=value pairs.`,
-	Args:  cobra.MinimumNArgs(3),
-	RunE:  managerSaveContact,
-}
-
-var managerSaveAppCmd = &cobra.Command{
-	Use:   "save-app [secret] [store-file] [site] [server-id] [key=value...]",
-	Short: "Save an app with optional metadata",
-	Long:  `Save an app to the store. Optional metadata can be provided as key=value pairs.`,
-	Args:  cobra.MinimumNArgs(4),
-	RunE:  managerSaveApp,
-}
-
-var managerSetNameCmd = &cobra.Command{
-	Use:   "set-name [secret] [store-file] [name]",
-	Short: "Set the user's name in the manager",
-	Args:  cobra.ExactArgs(3),
-	RunE:  managerSetName,
-}
-
-var managerSetEmailCmd = &cobra.Command{
-	Use:   "set-email [secret] [store-file] [email]",
-	Short: "Set the user's email in the manager",
-	Args:  cobra.ExactArgs(3),
-	RunE:  managerSetEmail,
-}
-
-var managerSetPhoneCmd = &cobra.Command{
-	Use:   "set-phone [secret] [store-file] [phone]",
-	Short: "Set the user's phone number in the manager",
-	Args:  cobra.ExactArgs(3),
-	RunE:  managerSetPhone,
-}
-
-func init() {
-	// Global flags
-	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "json", "Output format (json, text)")
-	rootCmd.PersistentFlags().StringVarP(&encoding, "encoding", "e", "hex", "Encoding format (hex, base64)")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
-
-	// generate/from-entropy flag
-	generateCmd.Flags().StringVar(&algorithm, "alg", "ed25519", "Signature algorithm (ed25519, dilithium)")
-	fromEntropyCmd.Flags().StringVar(&algorithm, "alg", "ed25519", "Signature algorithm (ed25519, dilithium)")
-
-	// Build command tree
-	rootCmd.AddCommand(generateCmd)
-	rootCmd.AddCommand(fromEntropyCmd)
-	rootCmd.AddCommand(fromSecretCmd)
-	rootCmd.AddCommand(fromIDCmd)
-	rootCmd.AddCommand(signCmd)
-	rootCmd.AddCommand(verifyCmd)
-	rootCmd.AddCommand(infoCmd)
-	rootCmd.AddCommand(didCmd)
-	rootCmd.AddCommand(hmacCmd)
-	rootCmd.AddCommand(encryptCmd)
-	rootCmd.AddCommand(decryptCmd)
-	rootCmd.AddCommand(managerCmd)
-
-	// Sign subcommands
-	signCmd.AddCommand(signDataCmd)
-	signCmd.AddCommand(signChallengeCmd)
-	signCmd.AddCommand(signFileCmd)
-
-	// Verify subcommands
-	verifyCmd.AddCommand(verifyDataCmd)
-	verifyCmd.AddCommand(verifyChallengeCmd)
-	verifyCmd.AddCommand(verifyFileCmd)
-
-	// Manager subcommands
-	managerCmd.AddCommand(managerInitCmd)
-	managerCmd.AddCommand(managerExportCmd)
-	managerCmd.AddCommand(managerImportCmd)
-	managerCmd.AddCommand(managerContactsCmd)
-	managerCmd.AddCommand(managerAppsCmd)
-	managerCmd.AddCommand(managerSaveContactCmd)
-	managerCmd.AddCommand(managerSaveAppCmd)
-	managerCmd.AddCommand(managerSetNameCmd)
-	managerCmd.AddCommand(managerSetEmailCmd)
-	managerCmd.AddCommand(managerSetPhoneCmd)
+func newCLI() *cli {
+	return &cli{
+		stdin: os.Stdin,
+		isTTY: func() bool { return term.IsTerminal(int(os.Stdin.Fd())) },
+		readPass: func() ([]byte, error) {
+			return term.ReadPassword(int(os.Stdin.Fd()))
+		},
+	}
 }
 
 func main() {
-	if err := rootCmd.Execute(); err != nil {
+	if err := newRootCmd(newCLI()).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-// Helper functions
+func newRootCmd(c *cli) *cobra.Command {
+	root := &cobra.Command{
+		Use:   "vaultysid-cli",
+		Short: "VaultysID CLI - Decentralized Identity Management",
+		Long: `VaultysID CLI provides command-line access to VaultysID and IDManager functionality.
+
+Secrets are never taken from the command line. Provide them with
+  --secret-file PATH   (a file, ideally mode 0600)
+  --secret-file -      (read from stdin)
+  VAULTYSID_SECRET     (environment variable)
+Backup passwords come from --password-file, VAULTYSID_PASSWORD, or an
+interactive prompt.`,
+		SilenceUsage: true,
+	}
+	pf := root.PersistentFlags()
+	pf.StringVarP(&c.outputFormat, "output", "o", "json", "Output format (json, text)")
+	pf.StringVarP(&c.encoding, "encoding", "e", "hex", "Encoding format (hex, base64)")
+	pf.BoolVarP(&c.verbose, "verbose", "v", false, "Verbose output")
+	pf.StringVar(&c.secretFile, "secret-file", "", "File containing the identity secret ('-' for stdin); defaults to $"+envSecret)
+	pf.StringVar(&c.passwordFile, "password-file", "", "File containing the backup password; defaults to $"+envPassword+" or a prompt")
+
+	generateCmd := &cobra.Command{
+		Use:   "generate [type]",
+		Short: "Generate a new VaultysID and write its secret to --out (mode 0600)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  c.generateIdentity,
+	}
+	generateCmd.Flags().StringVar(&c.algorithm, "alg", "ed25519", "Signature algorithm (ed25519, dilithium)")
+	generateCmd.Flags().StringVar(&c.outFile, "out", "", "File to write the new secret to (required, created 0600)")
+	generateCmd.Flags().BoolVar(&c.force, "force", false, "Overwrite an existing --out file")
+
+	fromEntropyCmd := &cobra.Command{
+		Use:   "from-entropy [type]",
+		Short: "Create a VaultysID from 32 bytes of entropy (--entropy-file or $" + envEntropy + ")",
+		Args:  cobra.ExactArgs(1),
+		RunE:  c.fromEntropy,
+	}
+	fromEntropyCmd.Flags().StringVar(&c.algorithm, "alg", "ed25519", "Signature algorithm (ed25519, dilithium)")
+	fromEntropyCmd.Flags().StringVar(&c.entropyFile, "entropy-file", "", "File containing hex/base64 entropy ('-' for stdin)")
+	fromEntropyCmd.Flags().StringVar(&c.outFile, "out", "", "File to write the secret to (required, created 0600)")
+	fromEntropyCmd.Flags().BoolVar(&c.force, "force", false, "Overwrite an existing --out file")
+
+	fromSecretCmd := &cobra.Command{
+		Use:   "from-secret",
+		Short: "Show the public identity of a secret",
+		Args:  cobra.NoArgs,
+		RunE:  c.fromSecret,
+	}
+
+	fromIDCmd := &cobra.Command{
+		Use:   "from-id [id]",
+		Short: "Create VaultysID from public ID",
+		Args:  cobra.ExactArgs(1),
+		RunE:  c.fromID,
+	}
+
+	signCmd := &cobra.Command{Use: "sign", Short: "Sign data, challenges or files (secret via --secret-file/$" + envSecret + ")"}
+	signCmd.AddCommand(
+		&cobra.Command{
+			Use:   "data [data]",
+			Short: "Sign data (signature over SHA-256(\"VAULTYS_RAW\" || data))",
+			Args:  cobra.ExactArgs(1),
+			RunE:  c.signData,
+		},
+		&cobra.Command{
+			Use:   "challenge [challenge]",
+			Short: "Sign a challenge (signature over SHA-256(\"VAULTYS_SIGN\" || challenge))",
+			Args:  cobra.ExactArgs(1),
+			RunE:  c.signChallenge,
+		},
+		&cobra.Command{
+			Use:   "file [file-path]",
+			Short: "Sign a file",
+			Args:  cobra.ExactArgs(1),
+			RunE:  c.signFile,
+		},
+	)
+
+	verifyFileCmd := &cobra.Command{
+		Use:   "file [id] [file-path] [signature]",
+		Short: "Verify a `sign file` signature (pass the signed challenge with --challenge)",
+		Args:  cobra.ExactArgs(3),
+		RunE:  c.verifyFile,
+	}
+	verifyFileCmd.Flags().StringVar(&c.challenge, "challenge", "", "The signed challenge printed by `sign file` (hex/base64)")
+
+	verifyCmd := &cobra.Command{Use: "verify", Short: "Verify signatures"}
+	verifyCmd.AddCommand(
+		&cobra.Command{
+			Use:   "data [id] [data] [signature]",
+			Short: "Verify a `sign data` (VAULTYS_RAW) signature",
+			Args:  cobra.ExactArgs(3),
+			RunE:  c.verifyData,
+		},
+		&cobra.Command{
+			Use:   "challenge [id] [challenge] [signature]",
+			Short: "Verify a challenge signature",
+			Args:  cobra.ExactArgs(3),
+			RunE:  c.verifyChallenge,
+		},
+		verifyFileCmd,
+	)
+
+	infoCmd := &cobra.Command{
+		Use:   "info [id]",
+		Short: "Display information about a public ID, or about the identity of --secret-file/$" + envSecret,
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  c.showInfo,
+	}
+	didCmd := &cobra.Command{
+		Use:   "did [id]",
+		Short: "Get the DID of a public ID, or of the identity of --secret-file/$" + envSecret,
+		Args:  cobra.MaximumNArgs(1),
+		RunE:  c.getDID,
+	}
+	hmacCmd := &cobra.Command{
+		Use:   "hmac [input]",
+		Short: "Compute HMAC of input",
+		Args:  cobra.ExactArgs(1),
+		RunE:  c.computeHMAC,
+	}
+
+	encryptCmd := &cobra.Command{
+		Use:   "encrypt [file-path]",
+		Short: "Encrypt a file for yourself (output: --out, default <file>.encrypted)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  c.encryptFile,
+	}
+	encryptCmd.Flags().StringVar(&c.outFile, "out", "", "Output file (default <file>.encrypted)")
+	encryptCmd.Flags().BoolVar(&c.inPlace, "in-place", false, "Replace the input file with its encryption")
+	encryptCmd.Flags().BoolVar(&c.force, "force", false, "Overwrite an existing output file")
+
+	decryptCmd := &cobra.Command{
+		Use:   "decrypt [file-path]",
+		Short: "Decrypt a file encrypted with `encrypt` (output written with mode 0600)",
+		Args:  cobra.ExactArgs(1),
+		RunE:  c.decryptFile,
+	}
+	decryptCmd.Flags().StringVar(&c.outFile, "out", "", "Output file (default: strip .encrypted, else append .decrypted)")
+	decryptCmd.Flags().BoolVar(&c.force, "force", false, "Overwrite an existing output file")
+
+	managerCmd := &cobra.Command{Use: "manager", Short: "ID Manager operations (secret via --secret-file/$" + envSecret + ")"}
+	managerExportCmd := &cobra.Command{
+		Use:   "export [store-path]",
+		Short: "Export a password-encrypted manager backup",
+		Args:  cobra.ExactArgs(1),
+		RunE:  c.managerExport,
+	}
+	managerExportCmd.Flags().StringVar(&c.outFile, "out", "", "Write the backup to this file (0600) instead of stdout")
+	managerCmd.AddCommand(
+		&cobra.Command{Use: "init [store-file]", Short: "Initialize a new IDManager", Args: cobra.ExactArgs(1), RunE: c.managerInit},
+		managerExportCmd,
+		&cobra.Command{Use: "import [store-path] [backup-data|@file]", Short: "Import contacts and apps from a backup", Args: cobra.ExactArgs(2), RunE: c.managerImport},
+		&cobra.Command{Use: "contacts [store-file]", Short: "List all contacts", Args: cobra.ExactArgs(1), RunE: c.managerContacts},
+		&cobra.Command{Use: "apps [store-file]", Short: "List all apps", Args: cobra.ExactArgs(1), RunE: c.managerApps},
+		&cobra.Command{Use: "save-contact [store-file] [contact-id] [key=value...]", Short: "Save a contact with optional metadata", Args: cobra.MinimumNArgs(2), RunE: c.managerSaveContact},
+		&cobra.Command{Use: "save-app [store-file] [site] [server-id]", Short: "Save an app", Args: cobra.MinimumNArgs(3), RunE: c.managerSaveApp},
+		&cobra.Command{Use: "set-name [store-file] [name]", Short: "Set the user's name", Args: cobra.ExactArgs(2), RunE: c.managerSetName},
+		&cobra.Command{Use: "set-email [store-file] [email]", Short: "Set the user's email", Args: cobra.ExactArgs(2), RunE: c.managerSetEmail},
+		&cobra.Command{Use: "set-phone [store-file] [phone]", Short: "Set the user's phone number", Args: cobra.ExactArgs(2), RunE: c.managerSetPhone},
+	)
+
+	root.AddCommand(generateCmd, fromEntropyCmd, fromSecretCmd, fromIDCmd, signCmd, verifyCmd,
+		infoCmd, didCmd, hmacCmd, encryptCmd, decryptCmd, managerCmd)
+	return root
+}
+
+// ---------------------------------------------------------------------------
+// Input / output helpers
+
 func decodeInput(input string) ([]byte, error) {
-	// Try hex first
 	if data, err := hex.DecodeString(input); err == nil {
 		return data, nil
 	}
-	// Try base64
 	if data, err := base64.StdEncoding.DecodeString(input); err == nil {
 		return data, nil
 	}
-	// Return as raw bytes
 	return []byte(input), nil
 }
 
-func encodeOutput(data []byte) string {
-	if encoding == "base64" {
+// decodeStrict decodes hex or base64 only (no raw fallback), for key material.
+func decodeStrict(input string) ([]byte, error) {
+	input = strings.TrimSpace(input)
+	if data, err := hex.DecodeString(input); err == nil {
+		return data, nil
+	}
+	if data, err := base64.StdEncoding.DecodeString(input); err == nil {
+		return data, nil
+	}
+	return nil, fmt.Errorf("expected hex or base64")
+}
+
+func (c *cli) encodeOutput(data []byte) string {
+	if c.encoding == "base64" {
 		return base64.StdEncoding.EncodeToString(data)
 	}
 	return hex.EncodeToString(data)
 }
 
-func outputResult(cmd *cobra.Command, result interface{}) {
-	if outputFormat == "json" {
+func (c *cli) outputResult(cmd *cobra.Command, result interface{}) {
+	if c.outputFormat == "json" {
 		jsonData, _ := json.MarshalIndent(result, "", "  ")
-		cmd.Println(string(jsonData))
+		fmt.Fprintln(cmd.OutOrStdout(), string(jsonData))
 	} else {
-		cmd.Printf("%+v\n", result)
+		fmt.Fprintf(cmd.OutOrStdout(), "%+v\n", result)
 	}
 }
 
-// Command implementations
-func generateIdentity(cmd *cobra.Command, args []string) error {
-	idType := strings.ToLower(args[0])
+// readSecretSource reads secret material from a file ('-' = stdin), warning
+// when the file is accessible by group or others.
+func (c *cli) readSecretSource(cmd *cobra.Command, path string) ([]byte, error) {
+	if path == "-" {
+		return io.ReadAll(io.LimitReader(c.stdin, 1<<20))
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if st.Mode().Perm()&0o077 != 0 {
+		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s is accessible by other users (mode %04o); run: chmod 600 %s\n", path, st.Mode().Perm(), path)
+	}
+	return os.ReadFile(path)
+}
+
+// loadSecretBytes returns the identity secret from --secret-file or $VAULTYSID_SECRET.
+func (c *cli) loadSecretBytes(cmd *cobra.Command) ([]byte, error) {
+	var raw []byte
+	switch {
+	case c.secretFile != "":
+		data, err := c.readSecretSource(cmd, c.secretFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read secret: %w", err)
+		}
+		raw = data
+	case os.Getenv(envSecret) != "":
+		raw = []byte(os.Getenv(envSecret))
+	default:
+		return nil, fmt.Errorf("no secret provided: use --secret-file PATH, --secret-file - (stdin) or $%s", envSecret)
+	}
+	secret, err := decodeStrict(string(raw))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode secret: %w", err)
+	}
+	return secret, nil
+}
+
+func (c *cli) loadIdentity(cmd *cobra.Command) (*vaultysid.VaultysID, error) {
+	secret, err := c.loadSecretBytes(cmd)
+	if err != nil {
+		return nil, err
+	}
+	vid, err := vaultysid.FromSecret(secret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create identity: %w", err)
+	}
+	return vid, nil
+}
+
+// loadPassword returns a non-empty backup password from --password-file,
+// $VAULTYSID_PASSWORD, or an interactive no-echo prompt.
+func (c *cli) loadPassword(cmd *cobra.Command, confirm bool) (string, error) {
+	var pw string
+	switch {
+	case c.passwordFile != "":
+		data, err := c.readSecretSource(cmd, c.passwordFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read password: %w", err)
+		}
+		pw = strings.TrimRight(string(data), "\r\n")
+	case os.Getenv(envPassword) != "":
+		pw = os.Getenv(envPassword)
+	case c.secretFile != "-" && c.isTTY():
+		fmt.Fprint(cmd.ErrOrStderr(), "Backup password: ")
+		p1, err := c.readPass()
+		fmt.Fprintln(cmd.ErrOrStderr())
+		if err != nil {
+			return "", fmt.Errorf("failed to read password: %w", err)
+		}
+		if confirm {
+			fmt.Fprint(cmd.ErrOrStderr(), "Confirm password: ")
+			p2, err := c.readPass()
+			fmt.Fprintln(cmd.ErrOrStderr())
+			if err != nil {
+				return "", fmt.Errorf("failed to read password: %w", err)
+			}
+			if !bytes.Equal(p1, p2) {
+				return "", fmt.Errorf("passwords do not match")
+			}
+		}
+		pw = string(p1)
+	default:
+		return "", fmt.Errorf("a backup password is required: use --password-file, $%s or run interactively", envPassword)
+	}
+	if pw == "" {
+		return "", idmanager.ErrEmptyPassword
+	}
+	return pw, nil
+}
+
+// writeNewSecretFile writes secret material to path with mode 0600,
+// refusing to overwrite an existing file unless force is set.
+func writeNewSecretFile(path string, data []byte, force bool) error {
+	if path == "" {
+		return fmt.Errorf("--out is required")
+	}
+	if !force {
+		if _, err := os.Lstat(path); err == nil {
+			return fmt.Errorf("%s already exists (use --force to overwrite)", path)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return idmanager.WriteSecretFile(path, data)
+}
+
+// publicInfo is what commands print about an identity: never the secret.
+func (c *cli) publicInfo(vid *vaultysid.VaultysID) map[string]interface{} {
+	id, _ := vid.ToString(c.encoding)
+	return map[string]interface{}{
+		"type":       vid.GetType(),
+		"id":         id,
+		"did":        vid.DID(),
+		"capability": vid.GetCapability(),
+	}
+}
+
+func (c *cli) writeSecretAndReport(cmd *cobra.Command, vid *vaultysid.VaultysID) error {
+	secret, err := vid.GetSecretString(c.encoding)
+	if err != nil {
+		return err
+	}
+	if err := writeNewSecretFile(c.outFile, []byte(secret+"\n"), c.force); err != nil {
+		return fmt.Errorf("failed to write secret: %w", err)
+	}
+	result := c.publicInfo(vid)
+	result["secretFile"] = c.outFile
+	c.outputResult(cmd, result)
+	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Identity commands
+
+func (c *cli) generateIdentity(cmd *cobra.Command, args []string) error {
+	if c.outFile == "" {
+		return fmt.Errorf("--out is required: the new secret is written to a 0600 file, never printed")
+	}
 	var vid *vaultysid.VaultysID
 	var err error
-
-	switch idType {
+	switch strings.ToLower(args[0]) {
 	case "machine":
-		vid, err = vaultysid.GenerateMachineAlg(algorithm)
+		vid, err = vaultysid.GenerateMachineAlg(c.algorithm)
 	case "person":
-		vid, err = vaultysid.GeneratePersonAlg(algorithm)
+		vid, err = vaultysid.GeneratePersonAlg(c.algorithm)
 	case "organization":
-		vid, err = vaultysid.GenerateOrganizationAlg(algorithm)
+		vid, err = vaultysid.GenerateOrganizationAlg(c.algorithm)
 	default:
-		return fmt.Errorf("invalid identity type: %s (use machine, person, or organization)", idType)
+		return fmt.Errorf("invalid identity type: %s (use machine, person, or organization)", args[0])
 	}
-
 	if err != nil {
 		return fmt.Errorf("failed to generate identity: %w", err)
 	}
-
-	id, _ := vid.ToString(encoding)
-	secret, _ := vid.GetSecretString(encoding)
-
-	result := map[string]interface{}{
-		"type":       vid.GetType(),
-		"id":         id,
-		"secret":     secret,
-		"did":        vid.DID(),
-		"capability": vid.GetCapability(),
-	}
-
-	outputResult(cmd, result)
-	return nil
+	return c.writeSecretAndReport(cmd, vid)
 }
 
-func fromEntropy(cmd *cobra.Command, args []string) error {
-	idType := strings.ToLower(args[0])
-	entropy, err := decodeInput(args[1])
+func (c *cli) fromEntropy(cmd *cobra.Command, args []string) error {
+	if c.outFile == "" {
+		return fmt.Errorf("--out is required: the secret is written to a 0600 file, never printed")
+	}
+	parsedType, err := vaultysid.ParseIdentityType(strings.ToLower(args[0]))
+	if err != nil {
+		return fmt.Errorf("invalid identity type: %s", args[0])
+	}
+	var raw []byte
+	switch {
+	case c.entropyFile != "":
+		raw, err = c.readSecretSource(cmd, c.entropyFile)
+		if err != nil {
+			return fmt.Errorf("failed to read entropy: %w", err)
+		}
+	case os.Getenv(envEntropy) != "":
+		raw = []byte(os.Getenv(envEntropy))
+	default:
+		return fmt.Errorf("no entropy provided: use --entropy-file PATH, --entropy-file - (stdin) or $%s", envEntropy)
+	}
+	entropy, err := decodeStrict(string(raw))
 	if err != nil {
 		return fmt.Errorf("failed to decode entropy: %w", err)
 	}
-
-	parsedType, err := vaultysid.ParseIdentityType(idType)
-	if err != nil {
-		return fmt.Errorf("invalid identity type: %s", idType)
-	}
-
-	vid, err := vaultysid.FromEntropyAlg(entropy, parsedType, algorithm)
+	vid, err := vaultysid.FromEntropyAlg(entropy, parsedType, c.algorithm)
 	if err != nil {
 		return fmt.Errorf("failed to create identity from entropy: %w", err)
 	}
+	return c.writeSecretAndReport(cmd, vid)
+}
 
-	id, _ := vid.ToString(encoding)
-	secret, _ := vid.GetSecretString(encoding)
-
-	result := map[string]interface{}{
-		"type":       vid.GetType(),
-		"id":         id,
-		"secret":     secret,
-		"did":        vid.DID(),
-		"capability": vid.GetCapability(),
+func (c *cli) fromSecret(cmd *cobra.Command, args []string) error {
+	vid, err := c.loadIdentity(cmd)
+	if err != nil {
+		return err
 	}
-
-	outputResult(cmd, result)
+	c.outputResult(cmd, c.publicInfo(vid))
 	return nil
 }
 
-func fromSecret(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
-	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
-	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity from secret: %w", err)
-	}
-
-	id, _ := vid.ToString(encoding)
-	secretStr, _ := vid.GetSecretString(encoding)
-
-	result := map[string]interface{}{
-		"type":       vid.GetType(),
-		"id":         id,
-		"secret":     secretStr,
-		"did":        vid.DID(),
-		"capability": vid.GetCapability(),
-	}
-
-	outputResult(cmd, result)
-	return nil
-}
-
-func fromID(cmd *cobra.Command, args []string) error {
+func (c *cli) fromID(cmd *cobra.Command, args []string) error {
 	id, err := decodeInput(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to decode id: %w", err)
 	}
-
 	vid, err := vaultysid.FromID(id, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create identity from ID: %w", err)
 	}
-
-	idStr, _ := vid.ToString(encoding)
-
-	result := map[string]interface{}{
-		"type":       vid.GetType(),
-		"id":         idStr,
-		"did":        vid.DID(),
-		"capability": vid.GetCapability(),
-	}
-
-	outputResult(cmd, result)
+	c.outputResult(cmd, c.publicInfo(vid))
 	return nil
 }
 
-func signData(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
-	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
-	}
+// ---------------------------------------------------------------------------
+// Signing
 
-	vid, err := vaultysid.FromSecret(secret)
+func (c *cli) signData(cmd *cobra.Command, args []string) error {
+	vid, err := c.loadIdentity(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
+		return err
 	}
-
-	data, err := decodeInput(args[1])
+	data, err := decodeInput(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to decode data: %w", err)
 	}
-
 	signature, err := vid.Sign(data)
 	if err != nil {
 		return fmt.Errorf("failed to sign data: %w", err)
 	}
-
-	result := map[string]interface{}{
-		"signature": encodeOutput(signature),
+	c.outputResult(cmd, map[string]interface{}{
+		"signature": c.encodeOutput(signature),
 		"did":       vid.DID(),
-	}
-
-	outputResult(cmd, result)
+		"scheme":    "VAULTYS_RAW",
+	})
 	return nil
 }
 
-func signChallenge(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) signChallenge(cmd *cobra.Command, args []string) error {
+	vid, err := c.loadIdentity(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	challenge, err := decodeInput(args[1])
+	challenge, err := decodeInput(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to decode challenge: %w", err)
 	}
-
 	signature, err := vid.SignChallenge(challenge)
 	if err != nil {
 		return fmt.Errorf("failed to sign challenge: %w", err)
 	}
-
-	result := map[string]interface{}{
-		"signature": encodeOutput(signature),
+	c.outputResult(cmd, map[string]interface{}{
+		"signature": c.encodeOutput(signature),
 		"did":       vid.DID(),
-	}
-
-	outputResult(cmd, result)
+	})
 	return nil
 }
 
-func signFile(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) signFile(cmd *cobra.Command, args []string) error {
+	vid, err := c.loadIdentity(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	// Read file
-	fileData, err := os.ReadFile(args[1])
+	fileData, err := os.ReadFile(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
-
-	// Create manager for file signing
-	store := idmanager.NewMemoryStore()
-	manager := idmanager.NewManager(vid, store)
-
-	file := &idmanager.File{
-		Name:        filepath.Base(args[1]),
-		ArrayBuffer: fileData,
-	}
-
-	// Sign the file
-	signature, err := manager.SignFile(file)
+	manager := idmanager.NewManager(vid, idmanager.NewMemoryStore())
+	signature, err := manager.SignFile(&idmanager.File{Name: filepath.Base(args[0]), ArrayBuffer: fileData})
 	if err != nil {
 		return fmt.Errorf("failed to sign file: %w", err)
 	}
-
-	result := map[string]interface{}{
-		"challenge": encodeOutput(signature.Challenge),
-		"signature": encodeOutput(signature.Signature),
-		"file":      args[1],
+	c.outputResult(cmd, map[string]interface{}{
+		"challenge": c.encodeOutput(signature.Challenge),
+		"signature": c.encodeOutput(signature.Signature),
+		"file":      args[0],
 		"did":       vid.DID(),
-	}
-
-	outputResult(cmd, result)
+	})
 	return nil
 }
 
-func verifyData(cmd *cobra.Command, args []string) error {
-	id, err := decodeInput(args[0])
-	if err != nil {
-		return fmt.Errorf("failed to decode id: %w", err)
-	}
+// ---------------------------------------------------------------------------
+// Verification
 
+func parsePublicID(s string) (*vaultysid.VaultysID, error) {
+	id, err := decodeInput(s)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode id: %w", err)
+	}
 	vid, err := vaultysid.FromID(id, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
+		return nil, fmt.Errorf("failed to create identity: %w", err)
 	}
+	return vid, nil
+}
 
-	data, err := decodeInput(args[1])
+func (c *cli) reportVerification(cmd *cobra.Command, vid *vaultysid.VaultysID, err error) {
 	if err != nil {
-		return fmt.Errorf("failed to decode data: %w", err)
+		c.outputResult(cmd, map[string]interface{}{"valid": false, "error": err.Error()})
+		return
 	}
+	c.outputResult(cmd, map[string]interface{}{"valid": true, "did": vid.DID()})
+}
 
-	signature, err := decodeInput(args[2])
+func (c *cli) verifyData(cmd *cobra.Command, args []string) error {
+	vid, err := parsePublicID(args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode signature: %w", err)
+		return err
 	}
-
-	err = vid.Verify(data, signature)
-	if err != nil {
-		result := map[string]interface{}{
-			"valid": false,
-			"error": err.Error(),
-		}
-		outputResult(cmd, result)
-		return nil
-	}
-
-	result := map[string]interface{}{
-		"valid": true,
-		"did":   vid.DID(),
-	}
-
-	outputResult(cmd, result)
+	data, _ := decodeInput(args[1])
+	signature, _ := decodeInput(args[2])
+	c.reportVerification(cmd, vid, vid.Verify(data, signature))
 	return nil
 }
 
-func verifyChallenge(cmd *cobra.Command, args []string) error {
-	id, err := decodeInput(args[0])
+func (c *cli) verifyChallenge(cmd *cobra.Command, args []string) error {
+	vid, err := parsePublicID(args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode id: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromID(id, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	challenge, err := decodeInput(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to decode challenge: %w", err)
-	}
-
-	signature, err := decodeInput(args[2])
-	if err != nil {
-		return fmt.Errorf("failed to decode signature: %w", err)
-	}
-
-	err = vid.VerifyChallenge(challenge, signature)
-	if err != nil {
-		result := map[string]interface{}{
-			"valid": false,
-			"error": err.Error(),
-		}
-		outputResult(cmd, result)
-		return nil
-	}
-
-	result := map[string]interface{}{
-		"valid": true,
-		"did":   vid.DID(),
-	}
-
-	outputResult(cmd, result)
+	challenge, _ := decodeInput(args[1])
+	signature, _ := decodeInput(args[2])
+	c.reportVerification(cmd, vid, vid.VerifyChallenge(challenge, signature))
 	return nil
 }
 
-func verifyFile(cmd *cobra.Command, args []string) error {
-	id, err := decodeInput(args[0])
+func (c *cli) verifyFile(cmd *cobra.Command, args []string) error {
+	vid, err := parsePublicID(args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode id: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromID(id, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	// Read file
 	fileData, err := os.ReadFile(args[1])
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
+	signatureData, _ := decodeInput(args[2])
 
-	// Decode signature (expecting JSON with challenge and signature)
+	// Accept either JSON {"challenge","signature"} (base64 []byte fields)
+	// or the raw signature (the challenge then has to be found in the store).
 	var fileSignature idmanager.FileSignature
-	signatureData, err := decodeInput(args[2])
-	if err != nil {
-		return fmt.Errorf("failed to decode signature: %w", err)
-	}
-
 	if err := json.Unmarshal(signatureData, &fileSignature); err != nil {
-		// Try as simple signature
-		fileSignature.Signature = signatureData
+		fileSignature = idmanager.FileSignature{Signature: signatureData}
 	}
-
-	// Create manager for verification
-	store := idmanager.NewMemoryStore()
-	manager := idmanager.NewManager(vid, store)
-
-	file := &idmanager.File{
-		Name:        filepath.Base(args[1]),
-		ArrayBuffer: fileData,
-	}
-
-	// VerifyFile returns an error if verification fails
-	// The fourth parameter is userVerification (boolean)
-	err = manager.VerifyFile(file, &fileSignature, vid, false)
-	valid := err == nil
-
-	// Treat verification-related errors as validation failures, not command errors
-	if err != nil {
-		errStr := err.Error()
-		if errStr != "signature verification failed" &&
-			errStr != "file hash mismatch" &&
-			!strings.Contains(errStr, "verification failed") &&
-			!strings.Contains(errStr, "hash mismatch") {
-			// Only return error for actual system errors, not verification failures
-			return fmt.Errorf("failed to verify file: %w", err)
+	if c.challenge != "" {
+		ch, err := decodeStrict(c.challenge)
+		if err != nil {
+			return fmt.Errorf("failed to decode challenge: %w", err)
 		}
+		fileSignature.Challenge = ch
 	}
 
-	result := map[string]interface{}{
-		"valid": valid,
-		"did":   vid.DID(),
-	}
-
-	outputResult(cmd, result)
+	manager := idmanager.NewManager(vid, idmanager.NewMemoryStore())
+	err = manager.VerifyFile(&idmanager.File{Name: filepath.Base(args[1]), ArrayBuffer: fileData}, &fileSignature, vid, false)
+	c.reportVerification(cmd, vid, err)
 	return nil
 }
 
-func showInfo(cmd *cobra.Command, args []string) error {
-	input, err := decodeInput(args[0])
+// ---------------------------------------------------------------------------
+// Info
+
+func (c *cli) idFromArgsOrSecret(cmd *cobra.Command, args []string) (*vaultysid.VaultysID, error) {
+	if len(args) == 1 {
+		return parsePublicID(args[0])
+	}
+	return c.loadIdentity(cmd)
+}
+
+func (c *cli) showInfo(cmd *cobra.Command, args []string) error {
+	vid, err := c.idFromArgsOrSecret(cmd, args)
 	if err != nil {
-		return fmt.Errorf("failed to decode input: %w", err)
+		return err
 	}
-
-	// Try as secret first, then as ID
-	var vid *vaultysid.VaultysID
-	vid, err = vaultysid.FromSecret(input)
-	if err != nil {
-		vid, err = vaultysid.FromID(input, nil)
-		if err != nil {
-			return fmt.Errorf("failed to parse identity: %w", err)
-		}
-	}
-
-	pubKey := vid.GetPublicKey()
-	cypherPubKey := vid.GetCypherPublicKey()
-
-	result := map[string]interface{}{
-		"type":            vid.GetType(),
-		"did":             vid.DID(),
-		"capability":      vid.GetCapability(),
-		"version":         vid.GetVersion(),
-		"isPrivate":       vid.IsPrivate(),
-		"isPublic":        vid.IsPublic(),
-		"isHardware":      vid.IsHardware(),
-		"publicKey":       encodeOutput(pubKey),
-		"cypherPublicKey": encodeOutput(cypherPubKey),
-		"hasCertificate":  vid.HasCertificate(),
-	}
-
-	if vid.IsPrivate() {
-		id, _ := vid.ToString(encoding)
-		result["id"] = id
-	}
-
-	outputResult(cmd, result)
+	result := c.publicInfo(vid)
+	result["version"] = vid.GetVersion()
+	result["isPrivate"] = vid.IsPrivate()
+	result["isPublic"] = vid.IsPublic()
+	result["isHardware"] = vid.IsHardware()
+	result["publicKey"] = c.encodeOutput(vid.GetPublicKey())
+	result["cypherPublicKey"] = c.encodeOutput(vid.GetCypherPublicKey())
+	result["hasCertificate"] = vid.HasCertificate()
+	c.outputResult(cmd, result)
 	return nil
 }
 
-func getDID(cmd *cobra.Command, args []string) error {
-	input, err := decodeInput(args[0])
+func (c *cli) getDID(cmd *cobra.Command, args []string) error {
+	vid, err := c.idFromArgsOrSecret(cmd, args)
 	if err != nil {
-		return fmt.Errorf("failed to decode input: %w", err)
+		return err
 	}
-
-	// Try as secret first, then as ID
-	var vid *vaultysid.VaultysID
-	vid, err = vaultysid.FromSecret(input)
-	if err != nil {
-		vid, err = vaultysid.FromID(input, nil)
-		if err != nil {
-			return fmt.Errorf("failed to create identity: %w", err)
-		}
-	}
-
-	if outputFormat == "json" {
-		result := map[string]interface{}{
-			"did": vid.DID(),
-		}
-		outputResult(cmd, result)
+	if c.outputFormat == "json" {
+		c.outputResult(cmd, map[string]interface{}{"did": vid.DID()})
 	} else {
-		cmd.Println(vid.DID())
+		fmt.Fprintln(cmd.OutOrStdout(), vid.DID())
 	}
-
 	return nil
 }
 
-func computeHMAC(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) computeHMAC(cmd *cobra.Command, args []string) error {
+	vid, err := c.loadIdentity(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	hmacResult, err := vid.HMAC(args[1])
+	hmacResult, err := vid.HMAC(args[0])
 	if err != nil {
 		return fmt.Errorf("failed to compute HMAC: %w", err)
 	}
-
-	result := map[string]interface{}{
-		"hmac": encodeOutput(hmacResult),
+	c.outputResult(cmd, map[string]interface{}{
+		"hmac": c.encodeOutput(hmacResult),
 		"did":  vid.DID(),
-	}
-
-	outputResult(cmd, result)
+	})
 	return nil
 }
 
-func encryptFile(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+// ---------------------------------------------------------------------------
+// File encryption (rfc/ENCRYPTION.md, keyed by the identity itself)
+
+func (c *cli) encryptFile(cmd *cobra.Command, args []string) error {
+	vid, err := c.loadIdentity(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
+	}
+	in := args[0]
+	out := c.outFile
+	switch {
+	case c.inPlace && out != "":
+		return fmt.Errorf("--in-place and --out are mutually exclusive")
+	case c.inPlace:
+		out = in
+	case out == "":
+		out = in + ".encrypted"
+	}
+	if !c.inPlace && !c.force {
+		if _, err := os.Lstat(out); err == nil {
+			return fmt.Errorf("%s already exists (use --force to overwrite)", out)
+		}
 	}
 
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	peerID, err := decodeInput(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to decode peer ID: %w", err)
-	}
-
-	peerVID, err := vaultysid.FromID(peerID, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create peer identity: %w", err)
-	}
-
-	// Read file
-	fileData, err := os.ReadFile(args[2])
+	fileData, err := os.ReadFile(in)
 	if err != nil {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
-
-	// Create manager for encryption
-	// Create manager
-	store := idmanager.NewMemoryStore()
-	manager := idmanager.NewManager(vid, store)
-
-	file := &idmanager.File{
-		Name:        filepath.Base(args[2]),
+	manager := idmanager.NewManager(vid, idmanager.NewMemoryStore())
+	encrypted, err := manager.EncryptFile(&idmanager.File{
+		Name:        filepath.Base(in),
 		Type:        "application/octet-stream",
 		ArrayBuffer: fileData,
-	}
-
-	encrypted, err := manager.EncryptFile(file)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to encrypt file: %w", err)
 	}
-
-	// Write encrypted file
-	if err := os.WriteFile(args[2], encrypted.ArrayBuffer, 0644); err != nil {
+	if err := idmanager.WriteSecretFile(out, encrypted.ArrayBuffer); err != nil {
 		return fmt.Errorf("failed to write encrypted file: %w", err)
 	}
-
-	size := len(encrypted.ArrayBuffer)
-	result := map[string]interface{}{
-		"outputPath": args[2],
-		"size":       size,
+	c.outputResult(cmd, map[string]interface{}{
+		"outputPath": out,
+		"size":       len(encrypted.ArrayBuffer),
 		"did":        vid.DID(),
-		"peerDID":    peerVID.DID(),
-	}
-
-	outputResult(cmd, result)
+	})
 	return nil
 }
 
-func decryptFile(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) decryptFile(cmd *cobra.Command, args []string) error {
+	vid, err := c.loadIdentity(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
+	}
+	in := args[0]
+	out := c.outFile
+	if out == "" {
+		out = strings.TrimSuffix(in, ".encrypted")
+		if out == in {
+			out = in + ".decrypted"
+		}
+	}
+	if !c.force {
+		if _, err := os.Lstat(out); err == nil {
+			return fmt.Errorf("%s already exists (use --force to overwrite)", out)
+		}
 	}
 
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	peerID, err := decodeInput(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to decode peer ID: %w", err)
-	}
-
-	peerVID, err := vaultysid.FromID(peerID, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create peer identity: %w", err)
-	}
-
-	// Read encrypted file
-	encryptedData, err := os.ReadFile(args[2])
+	encryptedData, err := os.ReadFile(in)
 	if err != nil {
 		return fmt.Errorf("failed to read encrypted file: %w", err)
 	}
-
-	// Create manager for decryption
-	// Create manager
-	store := idmanager.NewMemoryStore()
-	manager := idmanager.NewManager(vid, store)
-
-	// Create File struct with encrypted data
-	encryptedFile := &idmanager.File{
-		Name:        filepath.Base(args[2]),
-		ArrayBuffer: encryptedData,
-	}
-
-	decrypted, err := manager.DecryptFile(encryptedFile)
+	manager := idmanager.NewManager(vid, idmanager.NewMemoryStore())
+	decrypted, err := manager.DecryptFile(&idmanager.File{Name: filepath.Base(in), ArrayBuffer: encryptedData})
 	if err != nil {
 		return fmt.Errorf("failed to decrypt file: %w", err)
 	}
-
-	// Save decrypted file
-	outputPath := strings.TrimSuffix(args[2], ".encrypted")
-	if outputPath == args[2] {
-		outputPath = args[2] + ".decrypted"
-	}
-
-	if err := os.WriteFile(outputPath, decrypted.ArrayBuffer, 0644); err != nil {
+	// Plaintext of an encrypted file is sensitive: 0600, atomic.
+	if err := idmanager.WriteSecretFile(out, decrypted.ArrayBuffer); err != nil {
 		return fmt.Errorf("failed to write decrypted file: %w", err)
 	}
-
-	result := map[string]interface{}{
-		"outputPath": outputPath,
+	c.outputResult(cmd, map[string]interface{}{
+		"outputPath": out,
 		"fileName":   decrypted.Name,
 		"fileType":   decrypted.Type,
 		"size":       len(decrypted.ArrayBuffer),
 		"did":        vid.DID(),
-		"peerDID":    peerVID.DID(),
-	}
-
-	outputResult(cmd, result)
+	})
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// Manager
+
 func loadStore(storePath string) (idmanager.Store, error) {
-	// Check if it's a file or memory store
 	if storePath == ":memory:" {
 		return idmanager.NewMemoryStore(), nil
 	}
-
-	// Try to load existing file store
-	store, _ := idmanager.NewFileStore(storePath)
-
-	// Check if store file exists
-	if _, err := os.Stat(storePath); os.IsNotExist(err) {
-		// Create new store file
+	store, err := idmanager.NewFileStore(storePath)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(storePath); errors.Is(err, os.ErrNotExist) {
 		if err := store.Save(); err != nil {
 			return nil, fmt.Errorf("failed to create store file: %w", err)
 		}
 	}
-
 	return store, nil
 }
 
-func managerInit(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) openManager(cmd *cobra.Command, storePath string) (*idmanager.Manager, *vaultysid.VaultysID, error) {
+	vid, err := c.loadIdentity(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return nil, nil, err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
+	store, err := loadStore(storePath)
 	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
+		return nil, nil, fmt.Errorf("failed to load store: %w", err)
 	}
+	return idmanager.NewManager(vid, store), vid, nil
+}
 
-	store, err := loadStore(args[1])
+func (c *cli) managerInit(cmd *cobra.Command, args []string) error {
+	_, vid, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
+		return err
 	}
-
-	_ = idmanager.NewManager(vid, store)
-
-	// Save store if it's file-based
-	if fileStore, ok := store.(*idmanager.FileStore); ok {
-		if err := fileStore.Save(); err != nil {
-			return fmt.Errorf("failed to save store: %w", err)
-		}
-	}
-
-	result := map[string]interface{}{
+	c.outputResult(cmd, map[string]interface{}{
 		"message": "Manager initialized successfully",
 		"did":     vid.DID(),
-		"store":   args[1],
-	}
-
-	outputResult(cmd, result)
+		"store":   args[0],
+	})
 	return nil
 }
 
-func managerExport(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerExport(cmd *cobra.Command, args []string) error {
+	manager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
+	password, err := c.loadPassword(cmd, true)
 	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
+		return err
 	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	manager := idmanager.NewManager(vid, store)
-
-	// Export with empty password (no encryption)
-	exportData, err := manager.ExportBackup("")
+	backup, err := manager.ExportBackup(password)
 	if err != nil {
 		return fmt.Errorf("failed to export data: %w", err)
 	}
-
-	// Output the base64 encoded backup
-	cmd.Println(exportData)
+	if c.outFile != "" {
+		if err := idmanager.WriteSecretFile(c.outFile, []byte(backup+"\n")); err != nil {
+			return fmt.Errorf("failed to write backup: %w", err)
+		}
+		c.outputResult(cmd, map[string]interface{}{"backupFile": c.outFile})
+		return nil
+	}
+	fmt.Fprintln(cmd.OutOrStdout(), backup)
 	return nil
 }
 
-func managerImport(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerImport(cmd *cobra.Command, args []string) error {
+	targetManager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
+	backup := args[1]
+	if strings.HasPrefix(backup, "@") {
+		data, err := os.ReadFile(backup[1:])
+		if err != nil {
+			return fmt.Errorf("failed to read backup: %w", err)
+		}
+		backup = string(data)
+	}
+	password, err := c.loadPassword(cmd, false)
 	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
+		return err
 	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	// Import data is already base64 encoded string
-	importData := args[2]
-
-	// Import with empty password (no encryption)
-	importedManager, err := idmanager.ImportBackup(importData, "")
+	importedManager, err := idmanager.ImportBackup(strings.TrimSpace(backup), password)
 	if err != nil {
 		return fmt.Errorf("failed to import data: %w", err)
 	}
 
-	// Copy contacts from imported manager to target store
-	targetManager := idmanager.NewManager(vid, store)
 	for _, contact := range importedManager.Contacts() {
-		contactVID, err := vaultysid.FromID(contact.ID, contact.Certificate)
-		if err == nil {
-			targetManager.SaveContact(contactVID, contact.Metadata)
+		if contactVID, err := vaultysid.FromID(contact.ID, contact.Certificate); err == nil {
+			_ = targetManager.SaveContact(contactVID, contact.Metadata)
 		}
 	}
-
-	// Copy apps from imported manager to target store
 	for _, app := range importedManager.Apps() {
-		// Decode the server ID from base64
 		serverIDBytes, err := base64.StdEncoding.DecodeString(app.ServerID)
-		if err == nil {
-			appVID, err := vaultysid.FromID(serverIDBytes, app.Certificate)
-			if err == nil {
-				targetManager.SaveApp(appVID, app.Site)
-			}
+		if err != nil {
+			continue
+		}
+		if appVID, err := vaultysid.FromID(serverIDBytes, app.Certificate); err == nil {
+			_ = targetManager.SaveApp(appVID, app.Site)
 		}
 	}
-
-	cmd.Println("Data imported successfully")
+	fmt.Fprintln(cmd.OutOrStdout(), "Data imported successfully")
 	return nil
 }
 
-func managerContacts(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerContacts(cmd *cobra.Command, args []string) error {
+	manager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	manager := idmanager.NewManager(vid, store)
-
 	contacts := manager.Contacts()
-
-	if outputFormat == "json" {
-		// Convert contacts to JSON-serializable format
-		contactsList := make([]map[string]interface{}, 0)
+	if c.outputFormat == "json" {
+		list := make([]map[string]interface{}, 0)
 		for _, contact := range contacts {
-			contactInfo := map[string]interface{}{
-				"id": base64.StdEncoding.EncodeToString(contact.ID),
-			}
+			info := map[string]interface{}{"id": base64.StdEncoding.EncodeToString(contact.ID)}
 			if contact.Metadata != nil {
-				contactInfo["metadata"] = contact.Metadata
+				info["metadata"] = contact.Metadata
 			}
-			contactsList = append(contactsList, contactInfo)
+			list = append(list, info)
 		}
-		data, _ := json.MarshalIndent(contactsList, "", "  ")
-		cmd.Println(string(data))
-	} else {
-		for _, contact := range contacts {
-			cmd.Printf("Contact ID: %s\n", base64.StdEncoding.EncodeToString(contact.ID))
-			if contact.Metadata != nil {
-				if name, ok := contact.Metadata["name"]; ok {
-					cmd.Printf("  Name: %v\n", name)
-				}
-				if email, ok := contact.Metadata["email"]; ok {
-					cmd.Printf("  Email: %v\n", email)
-				}
-				if phone, ok := contact.Metadata["phone"]; ok {
-					cmd.Printf("  Phone: %v\n", phone)
-				}
+		data, _ := json.MarshalIndent(list, "", "  ")
+		fmt.Fprintln(cmd.OutOrStdout(), string(data))
+		return nil
+	}
+	for _, contact := range contacts {
+		fmt.Fprintf(cmd.OutOrStdout(), "Contact ID: %s\n", base64.StdEncoding.EncodeToString(contact.ID))
+		for _, k := range []string{"name", "email", "phone"} {
+			if v, ok := contact.Metadata[k]; ok {
+				fmt.Fprintf(cmd.OutOrStdout(), "  %s: %v\n", strings.ToUpper(k[:1])+k[1:], v)
 			}
-			cmd.Println()
 		}
+		fmt.Fprintln(cmd.OutOrStdout())
 	}
 	return nil
 }
 
-func managerApps(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerApps(cmd *cobra.Command, args []string) error {
+	manager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	manager := idmanager.NewManager(vid, store)
-
 	apps := manager.Apps()
-
-	if outputFormat == "json" {
+	if c.outputFormat == "json" {
 		data, _ := json.MarshalIndent(apps, "", "  ")
-		cmd.Println(string(data))
-	} else {
-		for _, app := range apps {
-			cmd.Printf("App: %s\n", app.Site)
-			cmd.Printf("  Server ID: %s\n", app.ServerID)
-			if app.Metadata != nil {
-				for k, v := range app.Metadata {
-					cmd.Printf("  %s: %v\n", k, v)
-				}
-			}
-			cmd.Println()
+		fmt.Fprintln(cmd.OutOrStdout(), string(data))
+		return nil
+	}
+	for _, app := range apps {
+		fmt.Fprintf(cmd.OutOrStdout(), "App: %s\n", app.Site)
+		fmt.Fprintf(cmd.OutOrStdout(), "  Server ID: %s\n", app.ServerID)
+		for k, v := range app.Metadata {
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s: %v\n", k, v)
 		}
+		fmt.Fprintln(cmd.OutOrStdout())
 	}
 	return nil
 }
 
-func managerSaveContact(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerSaveContact(cmd *cobra.Command, args []string) error {
+	manager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	manager := idmanager.NewManager(vid, store)
-
-	contactID := args[2]
-
-	// Create a VaultysID from the contact ID string
-	contactVID, err := vaultysid.FromIDString(contactID, encoding, nil)
+	contactVID, err := vaultysid.FromIDString(args[1], c.encoding, nil)
 	if err != nil {
 		return fmt.Errorf("failed to parse contact ID: %w", err)
 	}
-
-	// Parse optional metadata (key=value pairs)
 	metadata := make(map[string]interface{})
-	for i := 3; i < len(args); i++ {
-		parts := strings.SplitN(args[i], "=", 2)
-		if len(parts) == 2 {
+	for _, kv := range args[2:] {
+		if parts := strings.SplitN(kv, "=", 2); len(parts) == 2 {
 			metadata[parts[0]] = parts[1]
 		}
 	}
-
-	err = manager.SaveContact(contactVID, metadata)
-	if err != nil {
+	if err := manager.SaveContact(contactVID, metadata); err != nil {
 		return fmt.Errorf("failed to save contact: %w", err)
 	}
-
-	cmd.Printf("Contact %s saved successfully\n", contactID)
+	fmt.Fprintf(cmd.OutOrStdout(), "Contact %s saved successfully\n", contactVID.DID())
 	return nil
 }
 
-func managerSaveApp(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerSaveApp(cmd *cobra.Command, args []string) error {
+	manager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	manager := idmanager.NewManager(vid, store)
-
-	site := args[2]
-	serverIDStr := args[3]
-
-	// Create a VaultysID from the server ID string
-	serverVID, err := vaultysid.FromIDString(serverIDStr, encoding, nil)
+	site := args[1]
+	serverVID, err := vaultysid.FromIDString(args[2], c.encoding, nil)
 	if err != nil {
 		return fmt.Errorf("failed to parse server ID: %w", err)
 	}
-
-	// The SaveApp function takes either a VaultysID or StoredApp
-	// When passing VaultysID, it uses the site as the first argument
-	err = manager.SaveApp(serverVID, site)
-	if err != nil {
+	if err := manager.SaveApp(serverVID, site); err != nil {
 		return fmt.Errorf("failed to save app: %w", err)
 	}
-
-	cmd.Printf("App %s saved successfully\n", site)
+	fmt.Fprintf(cmd.OutOrStdout(), "App %s saved successfully\n", site)
 	return nil
 }
 
-func managerSetName(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerSetName(cmd *cobra.Command, args []string) error {
+	manager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	manager := idmanager.NewManager(vid, store)
-
-	err = manager.SetName(args[2])
-	if err != nil {
+	if err := manager.SetName(args[1]); err != nil {
 		return fmt.Errorf("failed to set name: %w", err)
 	}
-
-	cmd.Printf("Name set to: %s\n", args[2])
+	fmt.Fprintf(cmd.OutOrStdout(), "Name set to: %s\n", args[1])
 	return nil
 }
 
-func managerSetEmail(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerSetEmail(cmd *cobra.Command, args []string) error {
+	manager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	manager := idmanager.NewManager(vid, store)
-
-	err = manager.SetEmail(args[2])
-	if err != nil {
+	if err := manager.SetEmail(args[1]); err != nil {
 		return fmt.Errorf("failed to set email: %w", err)
 	}
-
-	cmd.Printf("Email set to: %s\n", args[2])
+	fmt.Fprintf(cmd.OutOrStdout(), "Email set to: %s\n", args[1])
 	return nil
 }
 
-func managerSetPhone(cmd *cobra.Command, args []string) error {
-	secret, err := decodeInput(args[0])
+func (c *cli) managerSetPhone(cmd *cobra.Command, args []string) error {
+	manager, _, err := c.openManager(cmd, args[0])
 	if err != nil {
-		return fmt.Errorf("failed to decode secret: %w", err)
+		return err
 	}
-
-	vid, err := vaultysid.FromSecret(secret)
-	if err != nil {
-		return fmt.Errorf("failed to create identity: %w", err)
-	}
-
-	store, err := loadStore(args[1])
-	if err != nil {
-		return fmt.Errorf("failed to load store: %w", err)
-	}
-
-	manager := idmanager.NewManager(vid, store)
-
-	err = manager.SetPhone(args[2])
-	if err != nil {
+	if err := manager.SetPhone(args[1]); err != nil {
 		return fmt.Errorf("failed to set phone: %w", err)
 	}
-
-	cmd.Printf("Phone set to: %s\n", args[2])
+	fmt.Fprintf(cmd.OutOrStdout(), "Phone set to: %s\n", args[1])
 	return nil
 }

@@ -60,7 +60,7 @@ func main() {
 ### Sign and Verify Data
 
 ```go
-// Sign some data
+// Sign some data (the signature covers SHA-256("VAULTYS_RAW" || data))
 data := []byte("Hello, VaultysID!")
 signature, err := id.Sign(data)
 if err != nil {

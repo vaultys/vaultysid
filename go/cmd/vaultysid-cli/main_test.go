@@ -2,1113 +2,468 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vaultys/vaultysid/go/pkg/idmanager"
 	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
-// Test helpers
-func captureOutput(f func() error) (string, error) {
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	err := f()
-
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	return buf.String(), err
+type runResult struct {
+	stdout string
+	stderr string
+	err    error
 }
 
-func executeCommand(root *cobra.Command, args ...string) (string, error) {
-	buf := new(bytes.Buffer)
-	root.SetOut(buf)
-	root.SetErr(buf)
+// run executes a fresh command tree. stdin feeds --secret-file -.
+func run(t *testing.T, stdin string, args ...string) runResult {
+	t.Helper()
+	c := newCLI()
+	c.stdin = strings.NewReader(stdin)
+	c.isTTY = func() bool { return false }
+	return runWith(t, c, args...)
+}
+
+func runWith(t *testing.T, c *cli, args ...string) runResult {
+	t.Helper()
+	root := newRootCmd(c)
+	var out, errb bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(&errb)
 	root.SetArgs(args)
-
 	err := root.Execute()
-	return buf.String(), err
+	return runResult{stdout: out.String(), stderr: errb.String(), err: err}
 }
 
-func setupTestCommand() *cobra.Command {
-	// Reset global flags
-	outputFormat = "text"
-	encoding = "base64"
-	verbose = false
-
-	// Create a fresh root command
-	cmd := &cobra.Command{
-		Use:   "vaultysid-cli",
-		Short: "VaultysID CLI - Decentralized Identity Management",
-	}
-
-	// Add global flags
-	cmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", "text", "Output format (text/json)")
-	cmd.PersistentFlags().StringVarP(&encoding, "encoding", "e", "base64", "Encoding for input/output (base64/hex)")
-	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose output")
-
-	return cmd
+func decodeJSON(t *testing.T, s string) map[string]interface{} {
+	t.Helper()
+	var m map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(s), &m), s)
+	return m
 }
 
-// Helper functions to create fresh command instances for each test
-// This avoids the "flag redefined" panic when tests reuse global commands
-
-func newGenerateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "generate [type]",
-		Short: "Generate a new identity",
-		Args:  cobra.ExactArgs(1),
-		RunE:  generateIdentity,
-	}
+func clearEnv(t *testing.T) {
+	t.Setenv(envSecret, "")
+	t.Setenv(envPassword, "")
+	t.Setenv(envEntropy, "")
 }
 
-func newFromEntropyCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "from-entropy [type] [entropy]",
-		Short: "Create identity from entropy",
-		Args:  cobra.ExactArgs(2),
-		RunE:  fromEntropy,
-	}
+// newIdentity generates an identity through the CLI and returns its secret
+// file path, public id (hex) and secret (hex).
+func newIdentity(t *testing.T, dir, kind string) (secretFile, id, secret string) {
+	t.Helper()
+	secretFile = filepath.Join(dir, kind+".secret")
+	r := run(t, "", "generate", kind, "--out", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	res := decodeJSON(t, r.stdout)
+	raw, err := os.ReadFile(secretFile)
+	require.NoError(t, err)
+	return secretFile, res["id"].(string), strings.TrimSpace(string(raw))
 }
 
-func newFromSecretCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "from-secret [secret]",
-		Short: "Restore identity from secret",
-		Args:  cobra.ExactArgs(1),
-		RunE:  fromSecret,
+func TestGenerate_WritesSecretFileOnly(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+
+	r := run(t, "", "generate", "person")
+	require.Error(t, r.err, "generate without --out must fail")
+
+	for _, kind := range []string{"machine", "person", "organization"} {
+		secretFile, id, secret := newIdentity(t, dir, kind)
+
+		st, err := os.Stat(secretFile)
+		require.NoError(t, err)
+		assert.Equal(t, os.FileMode(0o600), st.Mode().Perm())
+
+		r := run(t, "", "generate", kind, "--out", secretFile)
+		require.Error(t, r.err, "must refuse to overwrite an existing secret")
+
+		sec, err := hex.DecodeString(secret)
+		require.NoError(t, err)
+		vid, err := vaultysid.FromSecret(sec)
+		require.NoError(t, err)
+		gotID, _ := vid.ToString("hex")
+		assert.Equal(t, gotID, id)
 	}
+
+	// The secret never appears on stdout.
+	f := filepath.Join(dir, "x.secret")
+	r = run(t, "", "generate", "person", "--out", f)
+	require.NoError(t, r.err)
+	raw, _ := os.ReadFile(f)
+	assert.NotContains(t, r.stdout, strings.TrimSpace(string(raw)))
+	assert.NotContains(t, decodeJSON(t, r.stdout), "secret")
+
+	r = run(t, "", "generate", "alien", "--out", filepath.Join(dir, "y"))
+	assert.Error(t, r.err)
 }
 
-func newFromIDCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "from-id [id]",
-		Short: "Create public identity from ID",
-		Args:  cobra.ExactArgs(1),
-		RunE:  fromID,
-	}
+func TestGenerate_Dilithium(t *testing.T) {
+	clearEnv(t)
+	f := filepath.Join(t.TempDir(), "d.secret")
+	r := run(t, "", "generate", "person", "--alg", "dilithium", "--out", f)
+	require.NoError(t, r.err, r.stderr)
+	r = run(t, "", "from-secret", "--secret-file", f)
+	require.NoError(t, r.err, r.stderr)
 }
 
-func newSignCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "sign",
-		Short: "Sign data or files",
+func TestSecretsNeverFromArgv(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	_, _, secret := newIdentity(t, dir, "person")
+
+	for _, args := range [][]string{
+		{"from-secret", secret},
+		{"sign", "data", secret, "aabb"},
+		{"sign", "challenge", secret, "aabb"},
+		{"hmac", secret, "input"},
+		{"manager", "init", secret, filepath.Join(dir, "s.json")},
+		{"from-entropy", "person", strings.Repeat("ab", 32)},
+	} {
+		r := run(t, "", args...)
+		assert.Error(t, r.err, "argv secret accepted: %v", args[:2])
 	}
+
+	// No secret source at all is an explicit error.
+	r := run(t, "", "sign", "data", "aabb")
+	require.Error(t, r.err)
+	assert.Contains(t, r.err.Error(), "--secret-file")
 }
 
-func newSignDataCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "data [secret] [data]",
-		Short: "Sign data",
-		Args:  cobra.ExactArgs(2),
-		RunE:  signData,
+func TestSecretSources(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	secretFile, id, secret := newIdentity(t, dir, "person")
+
+	check := func(r runResult) {
+		t.Helper()
+		require.NoError(t, r.err, r.stderr)
+		assert.Equal(t, id, decodeJSON(t, r.stdout)["id"])
+		assert.NotContains(t, r.stdout, secret)
 	}
+	check(run(t, "", "from-secret", "--secret-file", secretFile))
+	check(run(t, secret+"\n", "from-secret", "--secret-file", "-"))
+	t.Setenv(envSecret, secret)
+	check(run(t, "", "from-secret"))
+	t.Setenv(envSecret, "")
+
+	// World-readable secret file: works, but warns.
+	loose := filepath.Join(dir, "loose.secret")
+	require.NoError(t, os.WriteFile(loose, []byte(secret), 0o644))
+	r := run(t, "", "from-secret", "--secret-file", loose)
+	check(r)
+	assert.Contains(t, r.stderr, "warning")
+	r = run(t, "", "from-secret", "--secret-file", secretFile)
+	assert.NotContains(t, r.stderr, "warning")
+
+	r = run(t, "not hex at all!", "from-secret", "--secret-file", "-")
+	assert.Error(t, r.err)
 }
 
-func newSignChallengeCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "challenge [secret] [challenge]",
-		Short: "Sign a challenge",
-		Args:  cobra.ExactArgs(2),
-		RunE:  signChallenge,
-	}
+func TestFromEntropy(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	entropy := strings.Repeat("01", 32)
+	ef := filepath.Join(dir, "entropy")
+	require.NoError(t, os.WriteFile(ef, []byte(entropy), 0o600))
+
+	out1 := filepath.Join(dir, "a.secret")
+	r := run(t, "", "from-entropy", "person", "--entropy-file", ef, "--out", out1)
+	require.NoError(t, r.err, r.stderr)
+	id1 := decodeJSON(t, r.stdout)["id"]
+
+	out2 := filepath.Join(dir, "b.secret")
+	r = run(t, entropy, "from-entropy", "person", "--entropy-file", "-", "--out", out2)
+	require.NoError(t, r.err, r.stderr)
+	assert.Equal(t, id1, decodeJSON(t, r.stdout)["id"], "deterministic")
+
+	r = run(t, "", "from-entropy", "person", "--entropy-file", ef)
+	assert.Error(t, r.err, "--out required")
 }
 
-func newSignFileCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "file [secret] [file]",
-		Short: "Sign a file",
-		Args:  cobra.ExactArgs(2),
-		RunE:  signFile,
-	}
+func TestSignVerifyData_RawDomain(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	secretFile, id, secret := newIdentity(t, dir, "person")
+
+	r := run(t, "", "sign", "data", "48656c6c6f", "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	res := decodeJSON(t, r.stdout)
+	sig := res["signature"].(string)
+	assert.Equal(t, "VAULTYS_RAW", res["scheme"])
+
+	r = run(t, "", "verify", "data", id, "48656c6c6f", sig)
+	require.NoError(t, r.err)
+	assert.Equal(t, true, decodeJSON(t, r.stdout)["valid"])
+
+	r = run(t, "", "verify", "data", id, "48656c6c6e", sig)
+	require.NoError(t, r.err)
+	assert.Equal(t, false, decodeJSON(t, r.stdout)["valid"])
+
+	// The CLI signature is domain separated: not a raw key signature and
+	// not a handshake signature.
+	sec, _ := hex.DecodeString(secret)
+	vid, _ := vaultysid.FromSecret(sec)
+	sigBytes, _ := hex.DecodeString(sig)
+	data, _ := hex.DecodeString("48656c6c6f")
+	assert.Error(t, vid.KeyManager.Verify(data, sigBytes))
+	assert.Error(t, vid.VerifyHandshake(data, sigBytes))
+	assert.NoError(t, vid.Verify(data, sigBytes))
 }
 
-func newVerifyCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "verify",
-		Short: "Verify signatures",
-	}
+func TestSignVerifyChallenge(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	secretFile, id, _ := newIdentity(t, dir, "person")
+
+	r := run(t, "", "sign", "challenge", "636861", "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	sig := decodeJSON(t, r.stdout)["signature"].(string)
+
+	r = run(t, "", "verify", "challenge", id, "636861", sig)
+	require.NoError(t, r.err)
+	assert.Equal(t, true, decodeJSON(t, r.stdout)["valid"])
+
+	// A challenge signature is not a data signature.
+	r = run(t, "", "verify", "data", id, "636861", sig)
+	require.NoError(t, r.err)
+	assert.Equal(t, false, decodeJSON(t, r.stdout)["valid"])
 }
 
-func newVerifyDataCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "data [id] [data] [signature]",
-		Short: "Verify data signature",
-		Args:  cobra.ExactArgs(3),
-		RunE:  verifyData,
-	}
-}
-
-func newVerifyChallengeCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "challenge [id] [challenge] [signature]",
-		Short: "Verify challenge signature",
-		Args:  cobra.ExactArgs(3),
-		RunE:  verifyChallenge,
-	}
-}
-
-func newVerifyFileCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "file [id] [file] [signature]",
-		Short: "Verify file signature",
-		Args:  cobra.ExactArgs(3),
-		RunE:  verifyFile,
-	}
-}
-
-func newInfoCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "info [secret-or-id]",
-		Short: "Show identity information",
-		Args:  cobra.ExactArgs(1),
-		RunE:  showInfo,
-	}
-}
-
-func newDIDCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "did [secret-or-id]",
-		Short: "Get DID for identity",
-		Args:  cobra.ExactArgs(1),
-		RunE:  getDID,
-	}
-}
-
-func newHMACCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "hmac [secret] [message]",
-		Short: "Compute HMAC",
-		Args:  cobra.ExactArgs(2),
-		RunE:  computeHMAC,
-	}
-}
-
-func newEncryptCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "encrypt [secret] [peer-id] [file-path]",
-		Short: "Encrypt a file for a peer",
-		Args:  cobra.ExactArgs(3),
-		RunE:  encryptFile,
-	}
-}
-
-func newDecryptCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "decrypt [secret] [peer-id] [file-path]",
-		Short: "Decrypt a file from a peer",
-		Args:  cobra.ExactArgs(3),
-		RunE:  decryptFile,
-	}
-}
-
-func newManagerCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "manager",
-		Short: "Identity manager operations",
-	}
-}
-
-func newManagerInitCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "init [secret] [store-path]",
-		Short: "Initialize a new identity store",
-		Args:  cobra.ExactArgs(2),
-		RunE:  managerInit,
-	}
-}
-
-func newManagerExportCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "export [secret] [store-path]",
-		Short: "Export identity store",
-		Args:  cobra.ExactArgs(2),
-		RunE:  managerExport,
-	}
-}
-
-func newManagerImportCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "import [secret] [store-path] [data]",
-		Short: "Import identity store",
-		Args:  cobra.ExactArgs(3),
-		RunE:  managerImport,
-	}
-}
-
-func newManagerContactsCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "contacts [secret] [store-path]",
-		Short: "List contacts",
-		Args:  cobra.ExactArgs(2),
-		RunE:  managerContacts,
-	}
-}
-
-func newManagerAppsCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "apps [secret] [store-path]",
-		Short: "List apps",
-		Args:  cobra.ExactArgs(2),
-		RunE:  managerApps,
-	}
-}
-
-func newManagerSaveContactCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "save-contact [secret] [store-path] [contact-id] [metadata...]",
-		Short: "Save a contact",
-		Args:  cobra.MinimumNArgs(3),
-		RunE:  managerSaveContact,
-	}
-}
-
-func newManagerSaveAppCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "save-app [secret] [store-path] [site] [server-id] [metadata...]",
-		Short: "Save an app",
-		Args:  cobra.MinimumNArgs(4),
-		RunE:  managerSaveApp,
-	}
-}
-
-func newManagerSetNameCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "set-name [secret] [store-path] [name]",
-		Short: "Set identity name",
-		Args:  cobra.ExactArgs(3),
-		RunE:  managerSetName,
-	}
-}
-
-func newManagerSetEmailCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "set-email [secret] [store-path] [email]",
-		Short: "Set identity email",
-		Args:  cobra.ExactArgs(3),
-		RunE:  managerSetEmail,
-	}
-}
-
-func newManagerSetPhoneCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "set-phone [secret] [store-path] [phone]",
-		Short: "Set identity phone",
-		Args:  cobra.ExactArgs(3),
-		RunE:  managerSetPhone,
-	}
-}
-
-// Test data
-var (
-	testEntropy = make([]byte, 32)
-	testSecret  string
-	testID      string
-)
-
-func init() {
-	// Initialize test data
-	for i := range testEntropy {
-		testEntropy[i] = byte(i)
-	}
-
-	// Create a test identity
-	vid, _ := vaultysid.FromEntropy(testEntropy, vaultysid.TypeMachine)
-	secret, _ := vid.GetSecret()
-	testSecret = base64.StdEncoding.EncodeToString(secret)
-	testID = base64.StdEncoding.EncodeToString(vid.ID())
-}
-
-func TestMain(m *testing.M) {
-	// Setup
-	code := m.Run()
-	// Cleanup
-	os.Exit(code)
-}
-
-// Test Generate Command
-func TestGenerateCommand(t *testing.T) {
-	tests := []struct {
-		name      string
-		args      []string
-		wantErr   bool
-		checkFunc func(t *testing.T, output string)
-	}{
-		{
-			name:    "generate machine identity",
-			args:    []string{"generate", "machine"},
-			wantErr: false,
-			checkFunc: func(t *testing.T, output string) {
-				var result map[string]interface{}
-				err := json.Unmarshal([]byte(output), &result)
-				require.NoError(t, err)
-				assert.Contains(t, result, "id")
-				assert.Contains(t, result, "secret")
-				assert.Contains(t, result, "type")
-				assert.Equal(t, "machine", result["type"])
-			},
-		},
-		{
-			name:    "generate person identity",
-			args:    []string{"generate", "person"},
-			wantErr: false,
-			checkFunc: func(t *testing.T, output string) {
-				var result map[string]interface{}
-				err := json.Unmarshal([]byte(output), &result)
-				require.NoError(t, err)
-				assert.Equal(t, "person", result["type"])
-			},
-		},
-		{
-			name:    "generate organization identity",
-			args:    []string{"generate", "organization"},
-			wantErr: false,
-			checkFunc: func(t *testing.T, output string) {
-				var result map[string]interface{}
-				err := json.Unmarshal([]byte(output), &result)
-				require.NoError(t, err)
-				assert.Equal(t, "organization", result["type"])
-			},
-		},
-		{
-			name:    "invalid type",
-			args:    []string{"generate", "invalid"},
-			wantErr: true,
-		},
-		{
-			name:    "missing type",
-			args:    []string{"generate"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			cmd.AddCommand(newGenerateCmd())
-
-			output, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				if tt.checkFunc != nil {
-					tt.checkFunc(t, output)
-				}
-			}
-		})
-	}
-}
-
-// Test FromEntropy Command
-func TestFromEntropyCommand(t *testing.T) {
-	entropyHex := hex.EncodeToString(testEntropy)
-	entropyBase64 := base64.StdEncoding.EncodeToString(testEntropy)
-
-	tests := []struct {
-		name      string
-		args      []string
-		encoding  string
-		wantErr   bool
-		checkFunc func(t *testing.T, output string)
-	}{
-		{
-			name:     "from entropy hex encoded",
-			args:     []string{"from-entropy", "machine", entropyHex},
-			encoding: "hex",
-			wantErr:  false,
-			checkFunc: func(t *testing.T, output string) {
-				var result map[string]interface{}
-				err := json.Unmarshal([]byte(output), &result)
-				require.NoError(t, err)
-				assert.Contains(t, result, "id")
-				assert.Contains(t, result, "secret")
-			},
-		},
-		{
-			name:     "from entropy base64 encoded",
-			args:     []string{"from-entropy", "person", entropyBase64},
-			encoding: "base64",
-			wantErr:  false,
-		},
-		{
-			name:     "invalid entropy length",
-			args:     []string{"from-entropy", "machine", "shortentropy"},
-			encoding: "hex",
-			wantErr:  true,
-		},
-		{
-			name:    "missing arguments",
-			args:    []string{"from-entropy", "machine"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			cmd.AddCommand(newFromEntropyCmd())
-
-			args := append(tt.args, "-o", "json", "-e", tt.encoding)
-			output, err := executeCommand(cmd, args...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				if tt.checkFunc != nil {
-					tt.checkFunc(t, output)
-				}
-			}
-		})
-	}
-}
-
-// Test FromSecret Command
-func TestFromSecretCommand(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "from valid secret",
-			args:    []string{"from-secret", testSecret},
-			wantErr: false,
-		},
-		{
-			name:    "from invalid secret",
-			args:    []string{"from-secret", "invalid"},
-			wantErr: true,
-		},
-		{
-			name:    "missing secret",
-			args:    []string{"from-secret"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			cmd.AddCommand(newFromSecretCmd())
-
-			_, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-// Test FromID Command
-func TestFromIDCommand(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "from valid ID",
-			args:    []string{"from-id", testID},
-			wantErr: false,
-		},
-		{
-			name:    "from invalid ID",
-			args:    []string{"from-id", "invalid-id"},
-			wantErr: true,
-		},
-		{
-			name:    "missing ID",
-			args:    []string{"from-id"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			cmd.AddCommand(newFromIDCmd())
-
-			_, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-// Test Sign Commands
-func TestSignDataCommand(t *testing.T) {
-	testData := base64.StdEncoding.EncodeToString([]byte("test data"))
-
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "sign data",
-			args:    []string{"sign", "data", testSecret, testData},
-			wantErr: false,
-		},
-		{
-			name:    "invalid secret",
-			args:    []string{"sign", "data", "invalid", testData},
-			wantErr: true,
-		},
-		{
-			name:    "missing arguments",
-			args:    []string{"sign", "data", testSecret},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			sign := newSignCmd()
-			sign.AddCommand(newSignDataCmd())
-			cmd.AddCommand(sign)
-
-			_, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestSignChallengeCommand(t *testing.T) {
-	challenge := base64.StdEncoding.EncodeToString([]byte("test challenge"))
-
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "sign challenge",
-			args:    []string{"sign", "challenge", testSecret, challenge},
-			wantErr: false,
-		},
-		{
-			name:    "invalid secret",
-			args:    []string{"sign", "challenge", "invalid", challenge},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			sign := newSignCmd()
-			sign.AddCommand(newSignChallengeCmd())
-			cmd.AddCommand(sign)
-
-			_, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-// Test Verify Commands
-func TestVerifyDataCommand(t *testing.T) {
-	// Create test data and signature
-	testData := []byte("test data")
-	vid, _ := vaultysid.FromSecret(func() []byte { b, _ := base64.StdEncoding.DecodeString(testSecret); return b }())
-	sig, _ := vid.Sign(testData)
-
-	dataB64 := base64.StdEncoding.EncodeToString(testData)
-	sigB64 := base64.StdEncoding.EncodeToString(sig)
-
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "verify valid signature",
-			args:    []string{"verify", "data", testID, dataB64, sigB64},
-			wantErr: false,
-		},
-		{
-			name:    "verify invalid signature",
-			args:    []string{"verify", "data", testID, dataB64, base64.StdEncoding.EncodeToString([]byte("invalid"))},
-			wantErr: false, // Returns false but doesn't error
-		},
-		{
-			name:    "invalid ID",
-			args:    []string{"verify", "data", "invalid-id", dataB64, sigB64},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Now verify
-			cmd := setupTestCommand()
-			verify := newVerifyCmd()
-			verify.AddCommand(newVerifyDataCmd())
-			cmd.AddCommand(verify)
-
-			_, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-// Test Info Command
-func TestInfoCommand(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "show info from secret",
-			args:    []string{"info", testSecret},
-			wantErr: false,
-		},
-		{
-			name:    "show info from ID",
-			args:    []string{"info", testID},
-			wantErr: false,
-		},
-		{
-			name:    "invalid input",
-			args:    []string{"info", "invalid"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			cmd.AddCommand(newInfoCmd())
-
-			_, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-// Test DID Command
-func TestDIDCommand(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "get DID from secret",
-			args:    []string{"did", testSecret},
-			wantErr: false,
-		},
-		{
-			name:    "get DID from ID",
-			args:    []string{"did", testID},
-			wantErr: false,
-		},
-		{
-			name:    "invalid input",
-			args:    []string{"did", "invalid"},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			cmd.AddCommand(newDIDCmd())
-
-			_, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-// Test HMAC Command
-func TestHMACCommand(t *testing.T) {
-	testData := base64.StdEncoding.EncodeToString([]byte("test data"))
-
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "compute HMAC",
-			args:    []string{"hmac", testSecret, testData},
-			wantErr: false,
-		},
-		{
-			name:    "invalid secret",
-			args:    []string{"hmac", "invalid", testData},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			cmd.AddCommand(newHMACCmd())
-
-			_, err := executeCommand(cmd, append(tt.args, "-o", "json")...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-// Test Manager Commands
-func TestManagerInit(t *testing.T) {
-	tempDir := t.TempDir()
-	storePath := filepath.Join(tempDir, "test.store")
-
-	tests := []struct {
-		name    string
-		args    []string
-		wantErr bool
-	}{
-		{
-			name:    "initialize manager",
-			args:    []string{"manager", "init", testSecret, storePath},
-			wantErr: false,
-		},
-		{
-			name:    "invalid secret",
-			args:    []string{"manager", "init", "invalid", storePath},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			mgr := newManagerCmd()
-			mgr.AddCommand(newManagerInitCmd())
-			cmd.AddCommand(mgr)
-
-			_, err := executeCommand(cmd, tt.args...)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-				// Verify store file was created
-				_, err := os.Stat(storePath)
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestManagerExportImport(t *testing.T) {
-	tempDir := t.TempDir()
-	storePath := filepath.Join(tempDir, "test.store")
-
-	// Initialize store using FileStore
-	vid, _ := vaultysid.FromSecret(func() []byte { b, _ := base64.StdEncoding.DecodeString(testSecret); return b }())
-	store, _ := idmanager.NewFileStore(storePath)
-	manager := idmanager.NewManager(vid, store)
-
-	// Add some test data
-	manager.SetName("Test User")
-	manager.SetEmail("test@example.com")
-
-	t.Run("export manager", func(t *testing.T) {
-		cmd := setupTestCommand()
-		mgr := newManagerCmd()
-		mgr.AddCommand(newManagerExportCmd())
-		cmd.AddCommand(mgr)
-
-		output, err := executeCommand(cmd, "manager", "export", testSecret, storePath)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, output)
-	})
-
-	t.Run("import manager", func(t *testing.T) {
-		// Create a new store
-		newStorePath := filepath.Join(tempDir, "new.store")
-
-		// Export data from original (use empty password to match CLI import)
-		exportData, _ := manager.ExportBackup("")
-		exportB64 := exportData
-
-		// Initialize new store using FileStore
-		newStore, _ := idmanager.NewFileStore(newStorePath)
-		_ = idmanager.NewManager(vid, newStore)
-
-		cmd := setupTestCommand()
-		mgr := newManagerCmd()
-		mgr.AddCommand(newManagerImportCmd())
-		cmd.AddCommand(mgr)
-
-		_, err := executeCommand(cmd, "manager", "import", testSecret, newStorePath, exportB64)
-		assert.NoError(t, err)
-	})
-}
-
-func TestManagerContacts(t *testing.T) {
-	tempDir := t.TempDir()
-	storePath := filepath.Join(tempDir, "test.store")
-
-	// Setup a manager with contacts using FileStore
-	vid, _ := vaultysid.FromSecret(func() []byte { b, _ := base64.StdEncoding.DecodeString(testSecret); return b }())
-	store, _ := idmanager.NewFileStore(storePath)
-	manager := idmanager.NewManager(vid, store)
-
-	// Add a test contact
-	contactVID, _ := vaultysid.GeneratePerson()
-	contactMetadata := map[string]interface{}{
-		"name":  "John Doe",
-		"email": "john@example.com",
-	}
-	manager.SaveContact(contactVID, contactMetadata)
-
-	t.Run("list contacts", func(t *testing.T) {
-		cmd := setupTestCommand()
-		mgr := newManagerCmd()
-		mgr.AddCommand(newManagerContactsCmd())
-		cmd.AddCommand(mgr)
-
-		output, err := executeCommand(cmd, "manager", "contacts", testSecret, storePath)
-		assert.NoError(t, err)
-		assert.Contains(t, output, "John Doe")
-	})
-}
-
-func TestManagerApps(t *testing.T) {
-	tempDir := t.TempDir()
-	storePath := filepath.Join(tempDir, "test.store")
-
-	// Setup a manager with apps using FileStore
-	vid, _ := vaultysid.FromSecret(func() []byte { b, _ := base64.StdEncoding.DecodeString(testSecret); return b }())
-	store, _ := idmanager.NewFileStore(storePath)
-	manager := idmanager.NewManager(vid, store)
-
-	// Add a test app
-	serverID := base64.StdEncoding.EncodeToString([]byte("server123"))
-	manager.SaveApp("example.com", serverID)
-
-	t.Run("list apps", func(t *testing.T) {
-		cmd := setupTestCommand()
-		mgr := newManagerCmd()
-		mgr.AddCommand(newManagerAppsCmd())
-		cmd.AddCommand(mgr)
-
-		output, err := executeCommand(cmd, "manager", "apps", testSecret, storePath)
-		assert.NoError(t, err)
-		assert.Contains(t, output, "example.com")
-	})
-}
-
-func TestManagerSaveContact(t *testing.T) {
-	tempDir := t.TempDir()
-	storePath := filepath.Join(tempDir, "test.store")
-
-	// Initialize store using FileStore
-	vid, _ := vaultysid.FromSecret(func() []byte { b, _ := base64.StdEncoding.DecodeString(testSecret); return b }())
-	store, _ := idmanager.NewFileStore(storePath)
-	_ = idmanager.NewManager(vid, store)
-
-	// Create a contact ID
-	contactVID, _ := vaultysid.GeneratePerson()
-	contactID := base64.StdEncoding.EncodeToString(contactVID.ID())
-
-	t.Run("save contact", func(t *testing.T) {
-		cmd := setupTestCommand()
-		mgr := newManagerCmd()
-		mgr.AddCommand(newManagerSaveContactCmd())
-		cmd.AddCommand(mgr)
-
-		_, err := executeCommand(cmd, "manager", "save-contact", testSecret, storePath, contactID,
-			"name=Jane Doe", "email=jane@example.com")
-		assert.NoError(t, err)
-	})
-}
-
-func TestManagerSaveApp(t *testing.T) {
-	tempDir := t.TempDir()
-	storePath := filepath.Join(tempDir, "test.store")
-
-	// Initialize store using FileStore
-	vid, _ := vaultysid.FromSecret(func() []byte { b, _ := base64.StdEncoding.DecodeString(testSecret); return b }())
-	store, _ := idmanager.NewFileStore(storePath)
-	_ = idmanager.NewManager(vid, store)
-
-	// Generate a real VaultysID for the server (must be a machine type)
-	serverVID, _ := vaultysid.GenerateMachine()
-	serverIDBase64 := base64.StdEncoding.EncodeToString(serverVID.ID())
-
-	t.Run("save app", func(t *testing.T) {
-		cmd := setupTestCommand()
-		mgr := newManagerCmd()
-		mgr.AddCommand(newManagerSaveAppCmd())
-		cmd.AddCommand(mgr)
-
-		_, err := executeCommand(cmd, "manager", "save-app", testSecret, storePath,
-			"myapp.com", serverIDBase64,
-			"description=My App", "version=1.0")
-		assert.NoError(t, err)
-	})
-}
-
-func TestManagerSetters(t *testing.T) {
-	tempDir := t.TempDir()
-	storePath := filepath.Join(tempDir, "test.store")
-
-	// Initialize store using FileStore
-	vid, _ := vaultysid.FromSecret(func() []byte { b, _ := base64.StdEncoding.DecodeString(testSecret); return b }())
-	store, _ := idmanager.NewFileStore(storePath)
-	_ = idmanager.NewManager(vid, store)
-
-	tests := []struct {
-		name    string
-		cmdName string
-		args    []string
-	}{
-		{
-			name:    "set name",
-			cmdName: "set-name",
-			args:    []string{"manager", "set-name", testSecret, storePath, "Alice Smith"},
-		},
-		{
-			name:    "set email",
-			cmdName: "set-email",
-			args:    []string{"manager", "set-email", testSecret, storePath, "alice@example.com"},
-		},
-		{
-			name:    "set phone",
-			cmdName: "set-phone",
-			args:    []string{"manager", "set-phone", testSecret, storePath, "+1-555-1234"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := setupTestCommand()
-			mgr := newManagerCmd()
-			switch tt.cmdName {
-			case "set-name":
-				mgr.AddCommand(newManagerSetNameCmd())
-			case "set-email":
-				mgr.AddCommand(newManagerSetEmailCmd())
-			case "set-phone":
-				mgr.AddCommand(newManagerSetPhoneCmd())
-			}
-			cmd.AddCommand(mgr)
-
-			_, err := executeCommand(cmd, tt.args...)
-			assert.NoError(t, err)
-		})
-	}
-}
-
-// Test File Operations
-func TestEncryptDecrypt(t *testing.T) {
-	// Skip this test as the encrypt/decrypt CLI commands require peer-based encryption
-	// which needs proper key exchange setup. The underlying crypto is tested in pkg/keymanager.
-	t.Skip("Encrypt/decrypt CLI requires peer-based key exchange - tested in pkg/keymanager")
-}
-
-// Test Sign and Verify File
 func TestSignVerifyFile(t *testing.T) {
-	tempDir := t.TempDir()
-	testFile := filepath.Join(tempDir, "test.txt")
-	testContent := []byte("This is a test file for signing")
-	os.WriteFile(testFile, testContent, 0644)
+	clearEnv(t)
+	dir := t.TempDir()
+	secretFile, id, _ := newIdentity(t, dir, "person")
+	doc := filepath.Join(dir, "doc.txt")
+	require.NoError(t, os.WriteFile(doc, []byte("important"), 0o644))
 
-	var signatureJSON string
+	r := run(t, "", "sign", "file", doc, "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	res := decodeJSON(t, r.stdout)
 
-	t.Run("sign file", func(t *testing.T) {
-		cmd := setupTestCommand()
-		sign := newSignCmd()
-		sign.AddCommand(newSignFileCmd())
-		cmd.AddCommand(sign)
+	r = run(t, "", "verify", "file", id, doc, res["signature"].(string), "--challenge", res["challenge"].(string))
+	require.NoError(t, r.err)
+	assert.Equal(t, true, decodeJSON(t, r.stdout)["valid"], r.stdout)
 
-		output, err := executeCommand(cmd, "sign", "file", testSecret, testFile, "-o", "json")
-		assert.NoError(t, err)
+	require.NoError(t, os.WriteFile(doc, []byte("tampered"), 0o644))
+	r = run(t, "", "verify", "file", id, doc, res["signature"].(string), "--challenge", res["challenge"].(string))
+	require.NoError(t, r.err)
+	assert.Equal(t, false, decodeJSON(t, r.stdout)["valid"])
 
-		var result map[string]interface{}
-		err = json.Unmarshal([]byte(output), &result)
-		assert.NoError(t, err)
+	// Without the challenge, verification fails closed.
+	r = run(t, "", "verify", "file", id, doc, res["signature"].(string))
+	require.NoError(t, r.err)
+	assert.Equal(t, false, decodeJSON(t, r.stdout)["valid"])
+}
 
-		// Extract both challenge and signature for file verification
-		challenge := result["challenge"].(string)
-		signature := result["signature"].(string)
-		assert.NotEmpty(t, challenge)
-		assert.NotEmpty(t, signature)
+func TestInfoDIDHMAC(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	secretFile, id, secret := newIdentity(t, dir, "person")
 
-		// Create JSON signature object for verify command
-		sigObj := map[string]string{
-			"Challenge": challenge,
-			"Signature": signature,
+	r := run(t, "", "info", id)
+	require.NoError(t, r.err)
+	info := decodeJSON(t, r.stdout)
+	assert.Equal(t, "public", info["capability"])
+
+	r = run(t, "", "info", "--secret-file", secretFile)
+	require.NoError(t, r.err)
+	info = decodeJSON(t, r.stdout)
+	assert.Equal(t, "private", info["capability"])
+	assert.Equal(t, id, info["id"])
+	assert.NotContains(t, r.stdout, secret)
+
+	r1 := run(t, "", "did", id)
+	r2 := run(t, "", "did", "--secret-file", secretFile)
+	require.NoError(t, r1.err)
+	require.NoError(t, r2.err)
+	assert.Equal(t, r1.stdout, r2.stdout)
+	assert.Contains(t, r1.stdout, "did:vaultys:")
+
+	h1 := run(t, "", "hmac", "input", "--secret-file", secretFile)
+	h2 := run(t, "", "hmac", "input", "--secret-file", secretFile)
+	require.NoError(t, h1.err)
+	assert.Equal(t, h1.stdout, h2.stdout)
+}
+
+func TestEncryptDecrypt(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	secretFile, _, _ := newIdentity(t, dir, "person")
+	plain := filepath.Join(dir, "secret.txt")
+	require.NoError(t, os.WriteFile(plain, []byte("top secret"), 0o644))
+
+	// Encrypt no longer takes a peer id and does not overwrite the input.
+	r := run(t, "", "encrypt", "peer-id-not-accepted", plain, "--secret-file", secretFile)
+	require.Error(t, r.err)
+
+	r = run(t, "", "encrypt", plain, "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	enc := plain + ".encrypted"
+	orig, _ := os.ReadFile(plain)
+	assert.Equal(t, "top secret", string(orig), "input must be left intact")
+	_, err := os.Stat(enc)
+	require.NoError(t, err)
+
+	r = run(t, "", "encrypt", plain, "--secret-file", secretFile)
+	require.Error(t, r.err, "must not clobber an existing output")
+
+	require.NoError(t, os.Remove(plain))
+	r = run(t, "", "decrypt", enc, "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	got, _ := os.ReadFile(plain)
+	assert.Equal(t, "top secret", string(got))
+	st, _ := os.Stat(plain)
+	assert.Equal(t, os.FileMode(0o600), st.Mode().Perm(), "decrypted output must be 0600")
+
+	// Another identity cannot decrypt.
+	other, _, _ := newIdentity(t, dir, "machine")
+	r = run(t, "", "decrypt", enc, "--secret-file", other, "--out", filepath.Join(dir, "nope"))
+	assert.Error(t, r.err)
+
+	// --in-place
+	inplace := filepath.Join(dir, "inplace.txt")
+	require.NoError(t, os.WriteFile(inplace, []byte("data"), 0o600))
+	r = run(t, "", "encrypt", inplace, "--in-place", "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	b, _ := os.ReadFile(inplace)
+	assert.NotEqual(t, "data", string(b))
+	r = run(t, "", "decrypt", inplace, "--out", filepath.Join(dir, "inplace.dec"), "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	b, _ = os.ReadFile(filepath.Join(dir, "inplace.dec"))
+	assert.Equal(t, "data", string(b))
+}
+
+func TestManagerWorkflow(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	secretFile, _, secret := newIdentity(t, dir, "person")
+	_, contactID, _ := newIdentity(t, dir, "organization")
+	_, appID, _ := newIdentity(t, dir, "machine")
+	store := filepath.Join(dir, "store.json")
+
+	r := run(t, "", "manager", "init", store, "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	st, err := os.Stat(store)
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), st.Mode().Perm(), "store holds secrets")
+
+	for _, args := range [][]string{
+		{"manager", "set-name", store, "Alice"},
+		{"manager", "set-email", store, "alice@example.com"},
+		{"manager", "set-phone", store, "+1-555"},
+		{"manager", "save-contact", store, contactID, "name=ACME Corp"},
+		{"manager", "save-app", store, "app.example.com", appID},
+	} {
+		r := run(t, "", append(args, "--secret-file", secretFile)...)
+		require.NoError(t, r.err, "%v: %s", args, r.stderr)
+	}
+
+	r = run(t, "", "manager", "contacts", store, "--secret-file", secretFile)
+	require.NoError(t, r.err)
+	assert.Contains(t, r.stdout, "ACME Corp")
+	r = run(t, "", "manager", "apps", store, "--secret-file", secretFile)
+	require.NoError(t, r.err)
+	assert.Contains(t, r.stdout, "app.example.com")
+
+	// Export requires a non-empty password.
+	r = run(t, "", "manager", "export", store, "--secret-file", secretFile)
+	require.Error(t, r.err, "no password source and no TTY")
+	empty := filepath.Join(dir, "empty.pw")
+	require.NoError(t, os.WriteFile(empty, []byte("\n"), 0o600))
+	r = run(t, "", "manager", "export", store, "--secret-file", secretFile, "--password-file", empty)
+	require.Error(t, r.err, "empty password")
+
+	pwFile := filepath.Join(dir, "pw")
+	require.NoError(t, os.WriteFile(pwFile, []byte("correct horse\n"), 0o600))
+	backupFile := filepath.Join(dir, "backup.b64")
+	r = run(t, "", "manager", "export", store, "--secret-file", secretFile, "--password-file", pwFile, "--out", backupFile)
+	require.NoError(t, r.err, r.stderr)
+	st, _ = os.Stat(backupFile)
+	assert.Equal(t, os.FileMode(0o600), st.Mode().Perm())
+	backup, _ := os.ReadFile(backupFile)
+	assert.NotContains(t, string(backup), secret)
+
+	// Wrong password fails, right password restores.
+	restored := filepath.Join(dir, "restored.json")
+	t.Setenv(envPassword, "wrong")
+	r = run(t, "", "manager", "import", restored, "@"+backupFile, "--secret-file", secretFile)
+	require.Error(t, r.err)
+	t.Setenv(envPassword, "correct horse")
+	r = run(t, "", "manager", "import", restored, "@"+backupFile, "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	t.Setenv(envPassword, "")
+
+	r = run(t, "", "manager", "contacts", restored, "--secret-file", secretFile)
+	require.NoError(t, r.err)
+	assert.Contains(t, r.stdout, "ACME Corp")
+	r = run(t, "", "manager", "apps", restored, "--secret-file", secretFile)
+	require.NoError(t, r.err)
+	assert.Contains(t, r.stdout, "app.example.com")
+
+	// A corrupt store is reported, not silently replaced.
+	require.NoError(t, os.WriteFile(store, []byte("{corrupt"), 0o600))
+	r = run(t, "", "manager", "contacts", store, "--secret-file", secretFile)
+	require.Error(t, r.err)
+	b, _ := os.ReadFile(store)
+	assert.Equal(t, "{corrupt", string(b))
+}
+
+func TestPasswordPrompt(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	secretFile, _, _ := newIdentity(t, dir, "person")
+	store := filepath.Join(dir, "store.json")
+	require.NoError(t, run(t, "", "manager", "init", store, "--secret-file", secretFile).err)
+
+	prompt := func(answers ...string) *cli {
+		c := newCLI()
+		c.isTTY = func() bool { return true }
+		c.readPass = func() ([]byte, error) {
+			a := answers[0]
+			answers = answers[1:]
+			return []byte(a), nil
 		}
-		sigJSON, _ := json.Marshal(sigObj)
-		signatureJSON = base64.StdEncoding.EncodeToString(sigJSON)
-	})
+		return c
+	}
 
-	t.Run("verify file", func(t *testing.T) {
-		cmd := setupTestCommand()
-		verify := newVerifyCmd()
-		verify.AddCommand(newVerifyFileCmd())
-		cmd.AddCommand(verify)
+	r := runWith(t, prompt("pw", "pw"), "manager", "export", store, "--secret-file", secretFile)
+	require.NoError(t, r.err, r.stderr)
+	assert.NotEmpty(t, strings.TrimSpace(r.stdout))
+	assert.Contains(t, r.stderr, "password")
 
-		output, err := executeCommand(cmd, "verify", "file", testID, testFile, signatureJSON, "-o", "json")
-		assert.NoError(t, err)
+	r = runWith(t, prompt("pw", "other"), "manager", "export", store, "--secret-file", secretFile)
+	assert.Error(t, r.err, "mismatched confirmation")
 
-		var result map[string]interface{}
-		err = json.Unmarshal([]byte(output), &result)
-		assert.NoError(t, err)
-		assert.True(t, result["valid"].(bool))
-	})
+	r = runWith(t, prompt("", ""), "manager", "export", store, "--secret-file", secretFile)
+	assert.Error(t, r.err, "empty password")
+}
+
+func TestFromIDAndErrors(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	_, id, _ := newIdentity(t, dir, "person")
+
+	r := run(t, "", "from-id", id)
+	require.NoError(t, r.err)
+	assert.Equal(t, "public", decodeJSON(t, r.stdout)["capability"])
+
+	for _, args := range [][]string{
+		{"from-id", "zz"},
+		{"from-id", "01c403010203"}, // truncated / short key
+		{"verify", "data", "01", "00", "00"},
+		{"info", "deadbeef"},
+	} {
+		r := run(t, "", args...)
+		assert.Error(t, r.err, "%v", args)
+	}
+
+	r = run(t, "", "-o", "text", "did", id)
+	require.NoError(t, r.err)
+	assert.True(t, strings.HasPrefix(strings.TrimSpace(r.stdout), "did:vaultys:"))
 }

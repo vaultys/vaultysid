@@ -201,14 +201,12 @@ signature, err := manager.SignChallenge(challenge)
 // Verify a challenge
 err = manager.VerifyChallenge(challenge, signature)
 
-// Set protocol version (0 or 1)
-manager.SetProtocolVersion(1)
 ```
 
 ### Backup and Restore
 
 ```go
-// Export encrypted backup
+// Export encrypted backup (an empty password is rejected with ErrEmptyPassword)
 password := "backup-password"
 backup, err := manager.ExportBackup(password)
 
@@ -272,18 +270,31 @@ type Store interface {
 
 The IdManager supports two protocol versions:
 
-- **Protocol v0**: Legacy protocol for backward compatibility
-- **Protocol v1**: Current protocol with improved security
+Only handshake protocol version 1 exists (security-v2 release). Version 0
+and its signature scheme were removed; `SetProtocolVersion` accepts only 1.
 
-Set the protocol version based on your compatibility requirements:
+### Connecting to a contact
+
+`RequestConnect` / `AcceptConnect` run a plain mutual-authentication
+handshake (protocol `p2p`, service `auth`) and save the authenticated remote
+identity, with its certificate, as a contact:
 
 ```go
-// Use v0 for backward compatibility
-manager.SetProtocolVersion(0)
+// initiator
+sess, initMsg, err := alice.RequestConnect(bobID) // bobID may be nil
+// ... send initMsg, receive step1 ...
+completeMsg, bob, err := sess.Complete(step1)
+// ... send completeMsg ...
 
-// Use v1 for new implementations (default)
-manager.SetProtocolVersion(1)
+// responder
+sess, step1, err := bob.AcceptConnect(initMsg, func(remote *vaultysid.VaultysID) error {
+    return nil // consent: remote is the initiator
+})
+alice, err := sess.Finalize(completeMsg)
 ```
+
+File stores (`NewFileStore`) are written atomically with mode 0600, and a
+store that exists but cannot be read or parsed is reported as an error.
 
 ## Security Considerations
 
