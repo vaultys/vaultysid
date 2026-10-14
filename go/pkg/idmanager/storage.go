@@ -2,9 +2,11 @@ package idmanager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -280,24 +282,34 @@ func (m *MemoryStore) fromSerializable(data map[string]interface{}) map[string]i
 // FileStore implements file-based persistent storage
 type FileStore struct {
 	*MemoryStore
-	filepath string
-	mu       sync.Mutex
+	path string
+	mu   sync.Mutex
 }
 
-// NewFileStore creates a new file-based store
-func NewFileStore(filepath string) (*FileStore, error) {
+// NewFileStore creates a file-based store. The file holds identity
+// secrets, so it is always kept at mode 0600. A missing file is fine (it is
+// created on first Save); any other load error (unreadable, corrupt JSON)
+// is returned rather than silently starting from an empty store, which
+// would overwrite the existing secrets on the next Save.
+func NewFileStore(path string) (*FileStore, error) {
 	fs := &FileStore{
 		MemoryStore: NewMemoryStore(),
-		filepath:    filepath,
+		path:        path,
 	}
 
 	// Set the save function
 	fs.MemoryStore.saveFunc = fs.saveToFile
 
-	// Try to load existing data
 	if err := fs.loadFromFile(); err != nil {
-		// File doesn't exist yet, that's okay
-		return fs, nil
+		if errors.Is(err, os.ErrNotExist) {
+			return fs, nil
+		}
+		return nil, fmt.Errorf("failed to load store %s: %w", path, err)
+	}
+
+	// Tighten permissions of a pre-existing store written by older versions.
+	if err := os.Chmod(path, secretFileMode); err != nil {
+		return nil, fmt.Errorf("failed to restrict permissions of %s: %w", path, err)
 	}
 
 	return fs, nil
@@ -318,9 +330,8 @@ func (fs *FileStore) saveToFile() error {
 		return fmt.Errorf("failed to marshal JSON: %w", err)
 	}
 
-	// Write to file
-	// Using ioutil.WriteFile for simplicity, in production use atomic writes
-	if err := writeFile(fs.filepath, jsonBytes); err != nil {
+	// Atomic, fsynced, 0600 write
+	if err := writeFile(fs.path, jsonBytes); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -332,7 +343,7 @@ func (fs *FileStore) loadFromFile() error {
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 
-	data, err := readFile(fs.filepath)
+	data, err := readFile(fs.path)
 	if err != nil {
 		return err
 	}
@@ -345,39 +356,60 @@ func (fs *FileStore) loadFromFile() error {
 	return fs.FromJSON(jsonData)
 }
 
-// Helper functions for file operations
-func writeFile(filepath string, data []byte) error {
-	// Write to a temporary file first for atomicity
-	tmpFile := filepath + ".tmp"
+// secretFileMode is the permission for any file that may contain secrets.
+const secretFileMode os.FileMode = 0o600
 
-	file, err := os.Create(tmpFile)
+// WriteSecretFile atomically writes data to path with mode 0600: it creates
+// a uniquely named temporary file (O_EXCL) in the same directory, writes and
+// fsyncs it, renames it over path, then fsyncs the directory. A crash at any
+// point leaves either the old or the new content, never a partial file, and
+// the secret is never readable by other users, even transiently.
+func WriteSecretFile(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
+	tmpName := tmp.Name()
+	cleanup := func() {
+		tmp.Close()
+		os.Remove(tmpName)
+	}
 
-	_, err = file.Write(data)
-	if err != nil {
-		file.Close()
-		os.Remove(tmpFile)
+	// CreateTemp already uses 0600; make it explicit regardless of umask/platform.
+	if err := tmp.Chmod(secretFileMode); err != nil {
+		cleanup()
+		return fmt.Errorf("failed to set temp file permissions: %w", err)
+	}
+	if _, err := tmp.Write(data); err != nil {
+		cleanup()
 		return fmt.Errorf("failed to write data: %w", err)
 	}
-
-	if err := file.Close(); err != nil {
-		os.Remove(tmpFile)
+	if err := tmp.Sync(); err != nil {
+		cleanup()
+		return fmt.Errorf("failed to sync data: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
 		return fmt.Errorf("failed to close file: %w", err)
 	}
-
-	// Atomically rename temp file to target file
-	if err := os.Rename(tmpFile, filepath); err != nil {
-		os.Remove(tmpFile)
+	if err := os.Rename(tmpName, path); err != nil {
+		os.Remove(tmpName)
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
-
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync() // best effort: not supported on every platform
+		d.Close()
+	}
 	return nil
 }
 
-func readFile(filepath string) ([]byte, error) {
-	file, err := os.Open(filepath)
+func writeFile(path string, data []byte) error {
+	return WriteSecretFile(path, data)
+}
+
+func readFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, err

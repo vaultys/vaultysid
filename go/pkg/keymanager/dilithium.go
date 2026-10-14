@@ -153,6 +153,9 @@ func FromSecretDilithiumInternal(secret []byte) (*DilithiumManager, error) {
 	if err := msgpack.Unmarshal(secret, &data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal dilithium secret: %w", err)
 	}
+	if !validVersion(data.V) {
+		return nil, fmt.Errorf("invalid dilithium secret: unsupported version %d", data.V)
+	}
 
 	km := &DilithiumManager{
 		Version:    data.V,
@@ -176,6 +179,15 @@ func FromIDDilithiumInternal(id []byte) (*DilithiumManager, error) {
 	var data dataExport
 	if err := msgpack.Unmarshal(id, &data); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal dilithium id: %w", err)
+	}
+	if !validVersion(data.V) {
+		return nil, fmt.Errorf("invalid dilithium id: unsupported version %d", data.V)
+	}
+	if len(data.X) != mldsa87.PublicKeySize {
+		return nil, fmt.Errorf("invalid dilithium id: signing key must be %d bytes, got %d", mldsa87.PublicKeySize, len(data.X))
+	}
+	if len(data.E) != x25519KeySize {
+		return nil, fmt.Errorf("invalid dilithium id: encryption key must be 32 bytes, got %d", len(data.E))
 	}
 
 	km := &DilithiumManager{
@@ -211,6 +223,12 @@ func (m *DilithiumManager) Sign(data []byte) ([]byte, error) {
 
 // Verify matches TS DilithiumManager.verify/pqCrypto.verifyDilithium.
 func (m *DilithiumManager) Verify(data, signature []byte) error {
+	if len(m.Signer.PublicKey) != mldsa87.PublicKeySize {
+		return fmt.Errorf("invalid public key")
+	}
+	if len(signature) != mldsa87.SignatureSize {
+		return fmt.Errorf("invalid signature")
+	}
 	var pub mldsa87.PublicKey
 	if err := pub.UnmarshalBinary(m.Signer.PublicKey); err != nil {
 		return fmt.Errorf("failed to unpack ML-DSA public key: %w", err)

@@ -82,7 +82,7 @@ func main() {
 	combinedNonce := append(append([]byte{}, nonce1...), nonce2...)
 
 	out := vectorOut{
-		Description: "Deterministic reference vectors for the Vaultys handcheck (Challenger) protocol, generated from the Go implementation and cross-checked against the same VaultysID keys/signatures used to verify them. Fixed entropy/nonces/timestamp are used so every implementation can reproduce byte-identical output.",
+		Description: "Deterministic reference vectors for the Vaultys handcheck (Challenger) protocol, generated from the Go implementation and cross-checked against the same VaultysID keys/signatures used to verify them. Fixed entropy/nonces/timestamp are used so every implementation can reproduce byte-identical output. Security-v2: only version 1 exists and sign1/sign2 = Sign(SHA-256(\"VAULTYS_HANDSHAKE_V1\" || unsignedBytes)).",
 		Generated:   "vaultys/vaultysid go/pkg/challenger, generated for RFC/PROTOCOL.md",
 	}
 	out.Inputs.AliceEntropyHex = hex.EncodeToString(aliceEntropy)
@@ -124,33 +124,33 @@ func main() {
 
 	// --- STEP1 (Bob signs) ---
 	unsignedForStep1AndComplete := &challenger.Challenge{
-		Version:  1,
-		Protocol: protocol,
-		Service:  service,
+		Version:   1,
+		Protocol:  protocol,
+		Service:   service,
 		Timestamp: timestamp,
-		PK1:      alice.ToBytes(),
-		PK2:      bob.ToBytes(),
-		Nonce:    combinedNonce,
+		PK1:       alice.ToBytes(),
+		PK2:       bob.ToBytes(),
+		Nonce:     combinedNonce,
 	}
 	unsignedBytes, err := challenger.SerializeUnsigned(unsignedForStep1AndComplete)
 	must(err)
 
-	sign2, err := bob.SignChallenge(unsignedBytes)
+	sign2, err := bob.SignHandshake(unsignedBytes)
 	must(err)
 	bobPub, err := vaultysid.FromID(bob.ToBytes(), nil)
 	must(err)
-	must(bobPub.VerifyChallenge(unsignedBytes, sign2)) // sanity: a peer holding only bob's public ID can verify bob's sign2
+	must(bobPub.VerifyHandshake(unsignedBytes, sign2)) // sanity: a peer holding only bob's public ID can verify bob's sign2
 
 	step1Challenge := &challenger.Challenge{
-		Version:  1,
-		Protocol: protocol,
-		Service:  service,
+		Version:   1,
+		Protocol:  protocol,
+		Service:   service,
 		Timestamp: timestamp,
-		PK1:      alice.ToBytes(),
-		PK2:      bob.ToBytes(),
-		Nonce:    combinedNonce,
-		Sign2:    sign2,
-		State:    1, // StateStep1
+		PK1:       alice.ToBytes(),
+		PK2:       bob.ToBytes(),
+		Nonce:     combinedNonce,
+		Sign2:     sign2,
+		State:     1, // StateStep1
 	}
 	step1Bytes, err := challenger.Serialize(step1Challenge)
 	must(err)
@@ -158,23 +158,23 @@ func main() {
 	must(err)
 
 	// --- COMPLETE (Alice signs sign1 over the same unsigned bytes) ---
-	sign1, err := alice.SignChallenge(unsignedBytes)
+	sign1, err := alice.SignHandshake(unsignedBytes)
 	must(err)
 	alicePub, err := vaultysid.FromID(alice.ToBytes(), nil)
 	must(err)
-	must(alicePub.VerifyChallenge(unsignedBytes, sign1)) // sanity: a peer holding only alice's public ID can verify alice's sign1
+	must(alicePub.VerifyHandshake(unsignedBytes, sign1)) // sanity: a peer holding only alice's public ID can verify alice's sign1
 
 	completeChallenge := &challenger.Challenge{
-		Version:  1,
-		Protocol: protocol,
-		Service:  service,
+		Version:   1,
+		Protocol:  protocol,
+		Service:   service,
 		Timestamp: timestamp,
-		PK1:      alice.ToBytes(),
-		PK2:      bob.ToBytes(),
-		Nonce:    combinedNonce,
-		Sign1:    sign1,
-		Sign2:    sign2,
-		State:    2, // StateComplete
+		PK1:       alice.ToBytes(),
+		PK2:       bob.ToBytes(),
+		Nonce:     combinedNonce,
+		Sign1:     sign1,
+		Sign2:     sign2,
+		State:     2, // StateComplete
 	}
 	completeBytes, err := challenger.Serialize(completeChallenge)
 	must(err)
@@ -212,7 +212,7 @@ func main() {
 	addStep("complete", desComplete.State, unsignedBytes, sign1, sign2, completeBytes, true)
 
 	out.EncodingNotes = []string{
-		"All integer fields (version, timestamp) MUST use msgpack's minimal-width representation (e.g. Go's UseCompactInts / equivalent), not a fixed-width encoding: version=0 as a bare 0x00 fixint, never 0xcc 0x00.",
+		"All integer fields (version, timestamp) MUST use msgpack's minimal-width representation (e.g. Go's UseCompactInts / equivalent), not a fixed-width encoding: version=1 as a bare 0x01 fixint, never 0xcc 0x01.",
 		"timestamp MUST be encoded as an unsigned integer type; encoding it as signed produces different wire bytes for the same non-negative value (0xd3 vs 0xcf at 64-bit width) and breaks byte-exact signature verification.",
 		"Field order and field presence per state MUST match exactly: INIT = {version, protocol, service, timestamp, pk1, nonce, metadata}; STEP1 adds pk2 (after pk1) and sign2 (after nonce), no sign1; COMPLETE adds sign1 before sign2. metadata is always present, even if empty ({}).",
 		"The 'unsigned bytes' used for both sign1 and sign2 are identical once pk1/pk2/nonce are both final (STEP1 and COMPLETE sign over the same payload) -- only the *wire* envelope differs (STEP1 omits sign1, COMPLETE includes it).",

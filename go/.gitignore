@@ -71,3 +71,12 @@ docker-compose.override.yml
 
 test-vectors/
 interop-results/
+
+# Built binaries (never commit)
+/vaultysid-cli
+/fido2_vaultysid_example
+
+# Demo / generated identity material (may contain secrets)
+/person.json
+/demo_output/
+*.secret

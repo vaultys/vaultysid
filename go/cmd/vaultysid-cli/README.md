@@ -7,305 +7,139 @@ A command-line interface for VaultysID - decentralized identity management for m
 ### From Source
 
 ```bash
-# Clone the repository
 git clone https://github.com/vaultys/vaultysid.git
 cd vaultysid/go
 
-# Build the CLI
-make build-cli
-
-# Or install directly to your GOPATH/bin
-make install-cli
+make build-cli     # build ./vaultysid-cli
+make install-cli   # or install into GOPATH/bin
 ```
 
 ### Pre-built Binaries
 
 Download pre-built binaries from the [releases page](https://github.com/vaultys/vaultysid/releases).
 
+## Handling secrets
+
+Secrets are **never** accepted as command-line arguments (argv is visible to
+other local users through `ps` and is saved in shell history). Every command
+that needs your identity secret reads it from, in order:
+
+1. `--secret-file PATH` - a file containing the hex or base64 secret. The CLI
+   warns if the file is readable by group or others; keep it at mode `0600`.
+2. `--secret-file -` - the secret is read from stdin.
+3. `VAULTYSID_SECRET` - environment variable.
+
+Newly created secrets (`generate`, `from-entropy`) are written to the file
+given with `--out` (created with mode `0600`, never overwritten without
+`--force`); only public information is printed.
+
+Backups are always encrypted with a non-empty password, read from
+`--password-file PATH`, `VAULTYSID_PASSWORD`, or an interactive prompt
+(no echo) when stdin is a terminal.
+
 ## Usage
 
-### Basic Commands
-
-#### Generate a New Identity
+### Identities
 
 ```bash
-# Generate a machine identity
-vaultysid-cli generate machine
+# Generate an identity (machine, person or organization)
+vaultysid-cli generate person --out me.secret
+vaultysid-cli generate machine --alg dilithium --out machine.secret
 
-# Generate a person identity
-vaultysid-cli generate person
+# Derive an identity from 32 bytes of entropy (hex/base64)
+vaultysid-cli from-entropy person --entropy-file entropy.hex --out me.secret
+cat entropy.hex | vaultysid-cli from-entropy person --entropy-file - --out me.secret
 
-# Generate an organization identity
-vaultysid-cli generate organization
-```
+# Show the public identity of a secret
+vaultysid-cli from-secret --secret-file me.secret
 
-#### Create Identity from Entropy
-
-```bash
-# From hex-encoded entropy (32 bytes)
-vaultysid-cli from-entropy machine <hex-entropy> -e hex
-
-# From base64-encoded entropy
-vaultysid-cli from-entropy person <base64-entropy> -e base64
-```
-
-#### Create Identity from Existing Secret
-
-```bash
-vaultysid-cli from-secret <base64-secret>
-```
-
-#### Create Identity from Public ID (Read-only)
-
-```bash
+# Public (read-only) identity from an id
 vaultysid-cli from-id <public-id>
-```
 
-### Signing Operations
-
-#### Sign Data
-
-```bash
-# Sign arbitrary data
-vaultysid-cli sign data <secret> <base64-data>
-
-# Sign a challenge with protocol prefix
-vaultysid-cli sign challenge <secret> <base64-challenge>
-
-# Sign a file
-vaultysid-cli sign file <secret> <file-path>
-```
-
-### Verification Operations
-
-#### Verify Signatures
-
-```bash
-# Verify data signature
-vaultysid-cli verify data <public-id> <base64-data> <base64-signature>
-
-# Verify challenge signature
-vaultysid-cli verify challenge <public-id> <base64-challenge> <base64-signature>
-
-# Verify file signature
-vaultysid-cli verify file <public-id> <file-path> <base64-signature>
-```
-
-### Encryption/Decryption
-
-#### Encrypt Files
-
-```bash
-vaultysid-cli encrypt <secret> <input-file> <output-file>
-```
-
-#### Decrypt Files
-
-```bash
-vaultysid-cli decrypt <secret> <input-file> <output-file>
-```
-
-### Identity Information
-
-#### Show Identity Info
-
-```bash
-# From secret
-vaultysid-cli info <secret>
-
-# From public ID
+# Information / DID about a public id, or about your own identity
 vaultysid-cli info <public-id>
+vaultysid-cli info --secret-file me.secret
+vaultysid-cli did <public-id>
+vaultysid-cli did --secret-file me.secret
 ```
 
-#### Get DID (Decentralized Identifier)
+### Signing and verification
 
 ```bash
-vaultysid-cli did <secret-or-id>
+# Sign data: the signature covers SHA-256("VAULTYS_RAW" || data)
+vaultysid-cli sign data <hex-data> --secret-file me.secret
+vaultysid-cli verify data <public-id> <hex-data> <signature>
+
+# Sign an application challenge: SHA-256("VAULTYS_SIGN" || challenge)
+vaultysid-cli sign challenge <hex-challenge> --secret-file me.secret
+vaultysid-cli verify challenge <public-id> <hex-challenge> <signature>
+
+# Sign a file; verification needs the signed challenge printed by `sign file`
+vaultysid-cli sign file document.txt --secret-file me.secret
+vaultysid-cli verify file <public-id> document.txt <signature> --challenge <challenge>
 ```
 
-#### Compute HMAC
+Signatures produced by these commands are domain separated and can never be
+used as handshake signatures (which use `VAULTYS_HANDSHAKE_V1`).
+
+### Encryption
+
+Files are encrypted for yourself, keyed by your identity (rfc/ENCRYPTION.md).
 
 ```bash
-vaultysid-cli hmac <secret> <base64-data>
+# Writes document.txt.encrypted; the input is left untouched
+vaultysid-cli encrypt document.txt --secret-file me.secret
+vaultysid-cli encrypt document.txt --out doc.enc --secret-file me.secret
+vaultysid-cli encrypt document.txt --in-place --secret-file me.secret
+
+# Writes document.txt (mode 0600); refuses to overwrite unless --force
+vaultysid-cli decrypt document.txt.encrypted --secret-file me.secret
+vaultysid-cli decrypt doc.enc --out document.txt --secret-file me.secret
 ```
 
-### IDManager Operations
-
-The IDManager provides persistent storage and management of identities, contacts, and applications.
-
-#### Initialize Manager
+### HMAC
 
 ```bash
-vaultysid-cli manager init <secret> <store-file>
+vaultysid-cli hmac <input> --secret-file me.secret
 ```
 
-#### Set User Information
+### IDManager
+
+The store file contains your secret and is always written with mode `0600`.
 
 ```bash
-# Set name
-vaultysid-cli manager set-name <secret> <store-file> "John Doe"
+export VAULTYSID_SECRET="$(cat me.secret)"   # or pass --secret-file to each command
 
-# Set email
-vaultysid-cli manager set-email <secret> <store-file> "john@example.com"
+vaultysid-cli manager init me.store
+vaultysid-cli manager set-name me.store "John Doe"
+vaultysid-cli manager set-email me.store "john@example.com"
+vaultysid-cli manager set-phone me.store "+1-555-0123"
 
-# Set phone
-vaultysid-cli manager set-phone <secret> <store-file> "+1-555-0123"
-```
+vaultysid-cli manager save-contact me.store <contact-id> name="Alice Smith" email="alice@example.com"
+vaultysid-cli manager contacts me.store
 
-#### Manage Contacts
+vaultysid-cli manager save-app me.store app.example.com <server-id>
+vaultysid-cli manager apps me.store
 
-```bash
-# Save a contact
-vaultysid-cli manager save-contact <secret> <store-file> <contact-id> \
-    name="Alice Smith" email="alice@example.com" phone="+1-555-0456"
-
-# List all contacts
-vaultysid-cli manager contacts <secret> <store-file>
-```
-
-#### Manage Applications
-
-```bash
-# Save an application
-vaultysid-cli manager save-app <secret> <store-file> <site> <server-id> \
-    description="My App" version="1.0.0"
-
-# List all applications
-vaultysid-cli manager apps <secret> <store-file>
-```
-
-#### Export/Import Data
-
-```bash
-# Export manager data
-vaultysid-cli manager export <secret> <store-file> > backup.data
-
-# Import manager data
-vaultysid-cli manager import <secret> <store-file> <base64-data>
+# Password-encrypted backup (prompted, or --password-file / VAULTYSID_PASSWORD)
+vaultysid-cli manager export me.store --out backup.b64
+vaultysid-cli manager import restored.store @backup.b64
 ```
 
 ## Global Flags
 
-- `-o, --output`: Output format (`text` or `json`, default: `text`)
-- `-e, --encoding`: Input/output encoding (`base64` or `hex`, default: `base64`)
-- `-v, --verbose`: Enable verbose output
-
-## Examples
-
-### Complete Workflow Example
-
-```bash
-# 1. Generate a new identity
-vaultysid-cli generate person -o json > identity.json
-
-# 2. Extract secret and ID
-SECRET=$(cat identity.json | jq -r .secret)
-ID=$(cat identity.json | jq -r .id)
-
-# 3. Initialize IDManager
-vaultysid-cli manager init $SECRET myidentity.store
-
-# 4. Set personal information
-vaultysid-cli manager set-name $SECRET myidentity.store "John Doe"
-vaultysid-cli manager set-email $SECRET myidentity.store "john@example.com"
-
-# 5. Sign a document
-echo "Important document" > document.txt
-SIGNATURE=$(vaultysid-cli sign file $SECRET document.txt -o json | jq -r .signature)
-
-# 6. Verify the signature (anyone can do this with your public ID)
-vaultysid-cli verify file $ID document.txt $SIGNATURE
-
-# 7. Encrypt a sensitive file
-vaultysid-cli encrypt $SECRET sensitive.txt sensitive.enc
-
-# 8. Decrypt the file
-vaultysid-cli decrypt $SECRET sensitive.enc decrypted.txt
-```
-
-### Contact Management Example
-
-```bash
-# Generate identities for contacts
-CONTACT1_ID=$(vaultysid-cli generate person -o json | jq -r .id)
-CONTACT2_ID=$(vaultysid-cli generate organization -o json | jq -r .id)
-
-# Save contacts
-vaultysid-cli manager save-contact $SECRET myidentity.store $CONTACT1_ID \
-    name="Alice Smith" email="alice@example.com"
-
-vaultysid-cli manager save-contact $SECRET myidentity.store $CONTACT2_ID \
-    name="ACME Corp" type="organization" website="https://acme.com"
-
-# List all contacts
-vaultysid-cli manager contacts $SECRET myidentity.store -o json
-```
-
-### Backup and Restore Example
-
-```bash
-# Export all data
-vaultysid-cli manager export $SECRET myidentity.store > backup.b64
-
-# Create new store and import
-vaultysid-cli manager init $SECRET restored.store
-vaultysid-cli manager import $SECRET restored.store $(cat backup.b64)
-
-# Verify restoration
-vaultysid-cli manager contacts $SECRET restored.store
-```
-
-## Security Considerations
-
-1. **Secret Storage**: Never store secrets in plain text. Use secure key management systems or encrypted storage.
-
-2. **File Permissions**: Ensure store files have appropriate permissions (e.g., `chmod 600 myidentity.store`).
-
-3. **Backup**: Regularly backup your store files and keep backups secure.
-
-4. **Transport**: When transmitting secrets or sensitive data, use secure channels (HTTPS, SSH, etc.).
+- `-o, --output`: Output format (`json` or `text`, default: `json`)
+- `-e, --encoding`: Output encoding (`hex` or `base64`, default: `hex`)
+- `-v, --verbose`: Verbose output
+- `--secret-file`: Identity secret file (`-` for stdin)
+- `--password-file`: Backup password file
 
 ## Testing
 
-Run the test suite:
-
 ```bash
-# Run all CLI tests
 make test-cli
-
-# Run with verbose output
 go test -v ./cmd/vaultysid-cli/...
-
-# Run integration tests
-go test -tags integration ./cmd/vaultysid-cli/...
-
-# Run benchmarks
-go test -bench=. ./cmd/vaultysid-cli/...
 ```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **"Invalid secret" error**: Ensure the secret is properly base64-encoded and is exactly 32 bytes when decoded.
-
-2. **"Store file not found" error**: Make sure the store file path is correct and the file exists.
-
-3. **"Invalid ID format" error**: VaultysID public IDs should be in the format `vid:type:base58string`.
-
-4. **Encoding issues**: Use the `-e` flag to specify the correct encoding (base64 or hex).
-
-### Debug Mode
-
-Enable verbose output for debugging:
-
-```bash
-vaultysid-cli -v <command> <args>
-```
-
-## Contributing
-
-Please see the main [CONTRIBUTING.md](../../CONTRIBUTING.md) file for guidelines.
 
 ## License
 

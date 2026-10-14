@@ -594,38 +594,6 @@ func TestString(t *testing.T) {
 	}
 }
 
-func TestChallengeV0Compatibility(t *testing.T) {
-	vid, err := GenerateMachine()
-	if err != nil {
-		t.Fatalf("Failed to generate identity: %v", err)
-	}
-
-	challenge := []byte("test-challenge")
-	oldID := vid.ToBytes()
-
-	// Sign with v0 protocol
-	sig, err := vid.SignChallengeV0(challenge, oldID)
-	if err != nil {
-		t.Fatalf("Failed to sign v0 challenge: %v", err)
-	}
-
-	// Verify with v0 protocol
-	err = vid.VerifyChallengeV0(challenge, sig, oldID)
-	if err != nil {
-		t.Errorf("Failed to verify valid v0 challenge: %v", err)
-	}
-
-	// Should fail with wrong oldID
-	wrongID := make([]byte, len(oldID))
-	copy(wrongID, oldID)
-	wrongID[0] ^= 0xFF
-
-	err = vid.VerifyChallengeV0(challenge, sig, wrongID)
-	if err == nil {
-		t.Error("Should fail to verify v0 challenge with wrong oldID")
-	}
-}
-
 func TestDiffieHellman(t *testing.T) {
 	// Generate two identities
 	alice, err := GeneratePerson()

@@ -41,39 +41,19 @@ func TestNewManager(t *testing.T) {
 		t.Fatal("Metadata should be initialized")
 	}
 
-	// Verify protocol version defaults to 0
-	if manager.protocolVersion != 0 {
-		t.Errorf("Protocol version should default to 0, got %d", manager.protocolVersion)
-	}
 }
 
 func TestSetProtocolVersion(t *testing.T) {
 	id, _ := vaultysid.GeneratePerson()
-	store := NewMemoryStore()
-	manager := NewManager(id, store)
+	manager := NewManager(id, NewMemoryStore())
 
-	// Test setting valid protocol version 1
-	err := manager.SetProtocolVersion(1)
-	if err != nil {
-		t.Errorf("Failed to set protocol version 1: %v", err)
+	if err := manager.SetProtocolVersion(1); err != nil {
+		t.Errorf("protocol version 1 must be accepted: %v", err)
 	}
-	if manager.protocolVersion != 1 {
-		t.Errorf("Protocol version should be 1, got %d", manager.protocolVersion)
-	}
-
-	// Test setting valid protocol version 0
-	err = manager.SetProtocolVersion(0)
-	if err != nil {
-		t.Errorf("Failed to set protocol version 0: %v", err)
-	}
-	if manager.protocolVersion != 0 {
-		t.Errorf("Protocol version should be 0, got %d", manager.protocolVersion)
-	}
-
-	// Test setting invalid protocol version
-	err = manager.SetProtocolVersion(2)
-	if err == nil {
-		t.Error("Setting invalid protocol version should fail")
+	for _, v := range []int{0, 2, -1} {
+		if err := manager.SetProtocolVersion(v); err == nil {
+			t.Errorf("protocol version %d must be rejected", v)
+		}
 	}
 }
 

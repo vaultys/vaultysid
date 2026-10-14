@@ -275,7 +275,11 @@ func TestTypeScriptVectors_CrossCompatibility(t *testing.T) {
 	message, _ := hex.DecodeString(vectors.Signing.Message)
 	signature, _ := hex.DecodeString(vectors.Signing.Signature)
 
-	if err := tsVID.Verify(message, signature); err != nil {
+	// These vectors are raw key-manager signatures. Since security-v2,
+	// VaultysID.Sign/Verify are domain-separated (SHA-256("VAULTYS_RAW" ||
+	// data)), so the raw vectors are checked at the KeyManager level, which
+	// stays raw. VAULTYS_RAW vectors are regenerated in security-v2 vectors.
+	if err := tsVID.KeyManager.Verify(message, signature); err != nil {
 		t.Error("Failed to verify TypeScript signature with TypeScript-generated identity loaded in Go")
 	}
 
@@ -284,7 +288,7 @@ func TestTypeScriptVectors_CrossCompatibility(t *testing.T) {
 	goVID, _ := vaultysid.FromEntropy(entropy, vaultysid.IdentityType(vectors.Identity.Type))
 
 	// Sign with Go
-	goSig, err := goVID.Sign(message)
+	goSig, err := goVID.KeyManager.Sign(message)
 	if err != nil {
 		t.Fatal(err)
 	}

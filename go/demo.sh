@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # VaultysID CLI Demonstration Script
-# This script demonstrates the key features of the VaultysID CLI
+# This script demonstrates the key features of the VaultysID CLI.
+# Secrets are kept in 0600 files and passed with --secret-file, never on argv.
 
 set -e
 
@@ -18,168 +19,113 @@ if [ ! -f "./vaultysid-cli" ]; then
     go build -o vaultysid-cli ./cmd/vaultysid-cli
 fi
 
+json_field() { grep -o "\"$1\": *\"[^\"]*" | sed 's/.*"\([^"]*\)$/\1/'; }
+
 echo -e "${BLUE}=====================================${NC}"
 echo -e "${BLUE}  VaultysID CLI Demonstration${NC}"
 echo -e "${BLUE}=====================================${NC}"
 echo
 
-# Create temp directory for demo files
+# Demo directory (git-ignored)
 DEMO_DIR="demo_output"
-mkdir -p $DEMO_DIR
+rm -rf "$DEMO_DIR"
+mkdir -p "$DEMO_DIR"
+chmod 700 "$DEMO_DIR"
+
+PERSON_SECRET_FILE="$DEMO_DIR/person.secret"
+MACHINE_SECRET_FILE="$DEMO_DIR/machine.secret"
+PW_FILE="$DEMO_DIR/backup.password"
+(umask 077; echo "demo backup password" > "$PW_FILE")
 
 # Step 1: Generate identities
 echo -e "${GREEN}Step 1: Generating Identities${NC}"
-echo "Generating a person identity..."
-./vaultysid-cli generate person -o json > $DEMO_DIR/person.json
-PERSON_SECRET=$(cat $DEMO_DIR/person.json | grep -o '"secret":"[^"]*' | cut -d'"' -f4)
-PERSON_ID=$(cat $DEMO_DIR/person.json | grep -o '"id":"[^"]*' | cut -d'"' -f4)
-PERSON_DID=$(cat $DEMO_DIR/person.json | grep -o '"did":"[^"]*' | cut -d'"' -f4)
+./vaultysid-cli generate person --out "$PERSON_SECRET_FILE" > "$DEMO_DIR/person.json"
+PERSON_ID=$(json_field id < "$DEMO_DIR/person.json")
+PERSON_DID=$(json_field did < "$DEMO_DIR/person.json")
 echo "Person DID: $PERSON_DID"
-echo
 
-echo "Generating a machine identity..."
-./vaultysid-cli generate machine -o json > $DEMO_DIR/machine.json
-MACHINE_SECRET=$(cat $DEMO_DIR/machine.json | grep -o '"secret":"[^"]*' | cut -d'"' -f4)
-MACHINE_ID=$(cat $DEMO_DIR/machine.json | grep -o '"id":"[^"]*' | cut -d'"' -f4)
-MACHINE_DID=$(cat $DEMO_DIR/machine.json | grep -o '"did":"[^"]*' | cut -d'"' -f4)
+./vaultysid-cli generate machine --out "$MACHINE_SECRET_FILE" > "$DEMO_DIR/machine.json"
+MACHINE_ID=$(json_field id < "$DEMO_DIR/machine.json")
+MACHINE_DID=$(json_field did < "$DEMO_DIR/machine.json")
 echo "Machine DID: $MACHINE_DID"
 echo
 
-# Step 2: Initialize IDManager
+S="--secret-file $PERSON_SECRET_FILE"
+
+# Step 2-5: IDManager
 echo -e "${GREEN}Step 2: Initializing IDManager${NC}"
-echo "Creating identity store for person..."
-./vaultysid-cli manager init "$PERSON_SECRET" $DEMO_DIR/person.store
+./vaultysid-cli manager init "$DEMO_DIR/person.store" $S
 echo
 
-# Step 3: Set personal information
 echo -e "${GREEN}Step 3: Setting Personal Information${NC}"
-./vaultysid-cli manager set-name "$PERSON_SECRET" $DEMO_DIR/person.store "Alice Demo"
-./vaultysid-cli manager set-email "$PERSON_SECRET" $DEMO_DIR/person.store "alice@demo.example"
-./vaultysid-cli manager set-phone "$PERSON_SECRET" $DEMO_DIR/person.store "+1-555-0100"
-echo "Personal information set successfully"
+./vaultysid-cli manager set-name "$DEMO_DIR/person.store" "Alice Demo" $S
+./vaultysid-cli manager set-email "$DEMO_DIR/person.store" "alice@demo.example" $S
+./vaultysid-cli manager set-phone "$DEMO_DIR/person.store" "+1-555-0100" $S
 echo
 
-# Step 4: Save contacts
 echo -e "${GREEN}Step 4: Saving Contacts${NC}"
-./vaultysid-cli manager save-contact "$PERSON_SECRET" $DEMO_DIR/person.store "$MACHINE_ID" \
-    name="Demo Machine" type="machine" purpose="testing"
-echo "Contact saved successfully"
+./vaultysid-cli -e hex manager save-app "$DEMO_DIR/person.store" "demo-machine" "$MACHINE_ID" $S
 echo
 
-# Step 5: List contacts
-echo -e "${GREEN}Step 5: Listing Contacts${NC}"
-./vaultysid-cli manager contacts "$PERSON_SECRET" $DEMO_DIR/person.store
+echo -e "${GREEN}Step 5: Listing Apps${NC}"
+./vaultysid-cli manager apps "$DEMO_DIR/person.store" $S
 echo
 
-# Step 6: Create and sign a document
+# Step 6-7: Document signing
 echo -e "${GREEN}Step 6: Document Signing${NC}"
-echo "Creating a test document..."
-echo "This is an important document that needs to be signed." > $DEMO_DIR/document.txt
-echo "Content: $(cat $DEMO_DIR/document.txt)"
-echo
-
-echo "Signing the document..."
-SIGNATURE=$(./vaultysid-cli sign file "$PERSON_SECRET" $DEMO_DIR/document.txt -o json | grep -o '"signature":"[^"]*' | cut -d'"' -f4)
+echo "This is an important document that needs to be signed." > "$DEMO_DIR/document.txt"
+./vaultysid-cli sign file "$DEMO_DIR/document.txt" $S > "$DEMO_DIR/signature.json"
+SIGNATURE=$(json_field signature < "$DEMO_DIR/signature.json")
+CHALLENGE=$(json_field challenge < "$DEMO_DIR/signature.json")
 echo "Signature: ${SIGNATURE:0:32}..."
 echo
 
-# Step 7: Verify signature
 echo -e "${GREEN}Step 7: Verifying Signature${NC}"
-./vaultysid-cli verify file "$PERSON_ID" $DEMO_DIR/document.txt "$SIGNATURE" -o json > $DEMO_DIR/verify_result.json
-VALID=$(cat $DEMO_DIR/verify_result.json | grep -o '"valid":[^,}]*' | cut -d':' -f2)
-if [ "$VALID" = "true" ]; then
+if ./vaultysid-cli verify file "$PERSON_ID" "$DEMO_DIR/document.txt" "$SIGNATURE" --challenge "$CHALLENGE" | grep -q '"valid": true'; then
     echo -e "${GREEN}✓ Signature verified successfully${NC}"
 else
     echo -e "${RED}✗ Signature verification failed${NC}"
 fi
 echo
 
-# Step 8: Encrypt and decrypt data
+# Step 8: Encryption
 echo -e "${GREEN}Step 8: File Encryption/Decryption${NC}"
-echo "Creating sensitive data..."
-echo "This is sensitive information that should be encrypted." > $DEMO_DIR/sensitive.txt
-echo
-
-echo "Encrypting file..."
-./vaultysid-cli encrypt "$PERSON_SECRET" $DEMO_DIR/sensitive.txt $DEMO_DIR/sensitive.enc
-echo "File encrypted successfully"
-echo
-
-echo "Decrypting file..."
-./vaultysid-cli decrypt "$PERSON_SECRET" $DEMO_DIR/sensitive.enc $DEMO_DIR/sensitive.dec
-echo "File decrypted successfully"
-echo
-
-echo "Comparing original and decrypted files..."
-if cmp -s $DEMO_DIR/sensitive.txt $DEMO_DIR/sensitive.dec; then
+echo "This is sensitive information that should be encrypted." > "$DEMO_DIR/sensitive.txt"
+./vaultysid-cli encrypt "$DEMO_DIR/sensitive.txt" --out "$DEMO_DIR/sensitive.enc" $S
+./vaultysid-cli decrypt "$DEMO_DIR/sensitive.enc" --out "$DEMO_DIR/sensitive.dec" $S
+if cmp -s "$DEMO_DIR/sensitive.txt" "$DEMO_DIR/sensitive.dec"; then
     echo -e "${GREEN}✓ Decrypted file matches original${NC}"
 else
     echo -e "${RED}✗ Files do not match${NC}"
 fi
 echo
 
-# Step 9: HMAC computation
+# Step 9: HMAC
 echo -e "${GREEN}Step 9: HMAC Computation${NC}"
-TEST_DATA=$(echo -n "test data" | base64)
-HMAC=$(./vaultysid-cli hmac "$PERSON_SECRET" "$TEST_DATA" -o json | grep -o '"hmac":"[^"]*' | cut -d'"' -f4)
+HMAC=$(./vaultysid-cli hmac "test data" $S | json_field hmac)
 echo "HMAC of 'test data': ${HMAC:0:32}..."
 echo
 
-# Step 10: Export and import backup
+# Step 10: Backup
 echo -e "${GREEN}Step 10: Backup Export/Import${NC}"
-echo "Exporting identity manager data..."
-./vaultysid-cli manager export "$PERSON_SECRET" $DEMO_DIR/person.store > $DEMO_DIR/backup.b64
-echo "Backup exported successfully"
+./vaultysid-cli manager export "$DEMO_DIR/person.store" --out "$DEMO_DIR/backup.b64" --password-file "$PW_FILE" $S
+./vaultysid-cli manager import "$DEMO_DIR/person_restored.store" "@$DEMO_DIR/backup.b64" --password-file "$PW_FILE" $S
+./vaultysid-cli manager apps "$DEMO_DIR/person_restored.store" $S
 echo
 
-echo "Creating new store and importing backup..."
-./vaultysid-cli manager init "$PERSON_SECRET" $DEMO_DIR/person_restored.store
-BACKUP_DATA=$(cat $DEMO_DIR/backup.b64)
-./vaultysid-cli manager import "$PERSON_SECRET" $DEMO_DIR/person_restored.store "$BACKUP_DATA"
-echo "Backup imported successfully"
-echo
-
-echo "Verifying restored contacts..."
-./vaultysid-cli manager contacts "$PERSON_SECRET" $DEMO_DIR/person_restored.store
-echo
-
-# Step 11: Challenge signing (authentication)
+# Step 11: Challenge signing
 echo -e "${GREEN}Step 11: Challenge-Response Authentication${NC}"
-echo "Creating authentication challenge..."
-CHALLENGE=$(echo -n "challenge-$(date +%s)" | base64)
-echo "Challenge: $CHALLENGE"
-echo
-
-echo "Signing challenge..."
-CHALLENGE_SIG=$(./vaultysid-cli sign challenge "$PERSON_SECRET" "$CHALLENGE" -o json | grep -o '"signature":"[^"]*' | cut -d'"' -f4)
-echo "Challenge signature: ${CHALLENGE_SIG:0:32}..."
-echo
-
-echo "Verifying challenge signature..."
-./vaultysid-cli verify challenge "$PERSON_ID" "$CHALLENGE" "$CHALLENGE_SIG" -o json > $DEMO_DIR/challenge_verify.json
-CHALLENGE_VALID=$(cat $DEMO_DIR/challenge_verify.json | grep -o '"valid":[^,}]*' | cut -d':' -f2)
-if [ "$CHALLENGE_VALID" = "true" ]; then
+CHAL=$(echo -n "challenge-$(date +%s)" | xxd -p | tr -d '\n')
+CHALLENGE_SIG=$(./vaultysid-cli sign challenge "$CHAL" $S | json_field signature)
+if ./vaultysid-cli verify challenge "$PERSON_ID" "$CHAL" "$CHALLENGE_SIG" | grep -q '"valid": true'; then
     echo -e "${GREEN}✓ Challenge verified successfully - Authentication OK${NC}"
 else
     echo -e "${RED}✗ Challenge verification failed${NC}"
 fi
 echo
 
-# Summary
 echo -e "${BLUE}=====================================${NC}"
 echo -e "${BLUE}  Demo Complete!${NC}"
 echo -e "${BLUE}=====================================${NC}"
-echo
-echo "Generated files in $DEMO_DIR/:"
-ls -la $DEMO_DIR/
-echo
-echo -e "${GREEN}Key Takeaways:${NC}"
-echo "1. Generated decentralized identities for person and machine"
-echo "2. Managed identity data with IDManager"
-echo "3. Signed and verified documents"
-echo "4. Encrypted and decrypted sensitive files"
-echo "5. Performed challenge-response authentication"
-echo "6. Exported and imported identity backups"
-echo
 echo "Person DID: $PERSON_DID"
 echo "Machine DID: $MACHINE_DID"

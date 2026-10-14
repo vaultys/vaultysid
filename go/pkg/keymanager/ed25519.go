@@ -115,32 +115,53 @@ func (m *Ed25519Manager) GetSecret() ([]byte, error) {
 	return encoded, err
 }
 
+// Ed25519 / X25519 key sizes used to validate untrusted encodings before
+// slicing or handing them to crypto primitives (crypto/ed25519 panics on a
+// public key of the wrong length).
+const (
+	ed25519PublicKeySize = ed25519.PublicKeySize // 32
+	x25519KeySize        = 32
+)
+
+func validVersion(v int) bool { return v == 0 || v == 1 }
+
 func FromSecretInternal(secret []byte) (*Ed25519Manager, error) {
 	var data dataExport
 	if err := msgpack.Unmarshal(secret, &data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid ed25519 secret: %w", err)
+	}
+	if !validVersion(data.V) {
+		return nil, fmt.Errorf("invalid ed25519 secret: unsupported version %d", data.V)
+	}
+	// TS may store either the 32-byte seed or the 64-byte NaCl secret key
+	// (seed || public key); only the seed is needed.
+	if len(data.X) != ed25519.SeedSize && len(data.X) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("invalid ed25519 secret: signing key must be 32 or 64 bytes, got %d", len(data.X))
+	}
+	if len(data.E) != x25519KeySize {
+		return nil, fmt.Errorf("invalid ed25519 secret: encryption key must be 32 bytes, got %d", len(data.E))
 	}
 
 	km := &Ed25519Manager{
-		Version:    int(data.V),
+		Version:    data.V,
 		Capability: "private",
 	}
 
-	// Reconstruct Ed25519 keys
-	privateKey := ed25519.NewKeyFromSeed(data.X[:32])
+	seed := append([]byte(nil), data.X[:ed25519.SeedSize]...)
+	privateKey := ed25519.NewKeyFromSeed(seed)
 	km.Signer = KeyPair{
-		SecretKey: data.X[:32],
+		SecretKey: seed,
 		PublicKey: privateKey.Public().(ed25519.PublicKey),
 	}
 
-	// Reconstruct X25519 keys
-	cypherPublic, err := curve25519.X25519(data.E, curve25519.Basepoint)
+	cypherSecret := append([]byte(nil), data.E...)
+	cypherPublic, err := curve25519.X25519(cypherSecret, curve25519.Basepoint)
 	if err != nil {
 		return nil, err
 	}
 	km.Cypher = KeyPair{
 		PublicKey: cypherPublic,
-		SecretKey: data.E,
+		SecretKey: cypherSecret,
 	}
 
 	return km, nil
@@ -149,18 +170,27 @@ func FromSecretInternal(secret []byte) (*Ed25519Manager, error) {
 func FromIDInternal(id []byte) (*Ed25519Manager, error) {
 	var data dataExport
 	if err := msgpack.Unmarshal(id, &data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid ed25519 id: %w", err)
+	}
+	if !validVersion(data.V) {
+		return nil, fmt.Errorf("invalid ed25519 id: unsupported version %d", data.V)
+	}
+	if len(data.X) != ed25519PublicKeySize {
+		return nil, fmt.Errorf("invalid ed25519 id: signing key must be 32 bytes, got %d", len(data.X))
+	}
+	if len(data.E) != x25519KeySize {
+		return nil, fmt.Errorf("invalid ed25519 id: encryption key must be 32 bytes, got %d", len(data.E))
 	}
 
 	km := &Ed25519Manager{
-		Version:    int(data.V),
+		Version:    data.V,
 		Capability: "public",
 	}
 	km.Signer = KeyPair{
-		PublicKey: data.X,
+		PublicKey: append([]byte(nil), data.X...),
 	}
 	km.Cypher = KeyPair{
-		PublicKey: data.E,
+		PublicKey: append([]byte(nil), data.E...),
 	}
 
 	return km, nil
@@ -170,11 +200,21 @@ func (m *Ed25519Manager) Sign(data []byte) ([]byte, error) {
 	if m.Capability != "private" {
 		return nil, fmt.Errorf("no private key")
 	}
+	if len(m.Signer.SecretKey) != ed25519.SeedSize {
+		return nil, fmt.Errorf("invalid signing key")
+	}
 	privateKey := ed25519.NewKeyFromSeed(m.Signer.SecretKey)
 	return ed25519.Sign(privateKey, data), nil
 }
 
 func (m *Ed25519Manager) Verify(data, signature []byte) error {
+	// crypto/ed25519.Verify panics on a public key of the wrong length.
+	if len(m.Signer.PublicKey) != ed25519PublicKeySize {
+		return fmt.Errorf("invalid public key")
+	}
+	if len(signature) != ed25519.SignatureSize {
+		return fmt.Errorf("invalid signature")
+	}
 	if !ed25519.Verify(m.Signer.PublicKey, data, signature) {
 		return fmt.Errorf("invalid signature")
 	}

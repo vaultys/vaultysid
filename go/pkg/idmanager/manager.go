@@ -3,9 +3,12 @@ package idmanager
 import (
 	"bytes"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -60,18 +63,20 @@ type ExportData struct {
 
 // Manager manages identities, contacts, and applications
 type Manager struct {
-	vaultysID       *vaultysid.VaultysID
-	store           Store
-	protocolVersion int
-	mu              sync.RWMutex
+	vaultysID *vaultysid.VaultysID
+	store     Store
+	mu        sync.RWMutex
 }
+
+// ErrEmptyPassword is returned when a backup is exported or imported with
+// an empty password.
+var ErrEmptyPassword = errors.New("backup password must not be empty")
 
 // NewManager creates a new IdManager
 func NewManager(id *vaultysid.VaultysID, store Store) *Manager {
 	m := &Manager{
-		vaultysID:       id,
-		store:           store,
-		protocolVersion: 0,
+		vaultysID: id,
+		store:     store,
 	}
 
 	// Initialize metadata store if not present
@@ -91,19 +96,20 @@ func NewManager(id *vaultysid.VaultysID, store Store) *Manager {
 	return m
 }
 
-// SetProtocolVersion sets the protocol version (0 or 1)
+// SetProtocolVersion is kept for API compatibility: only handshake
+// protocol version 1 exists, any other value is rejected.
 func (m *Manager) SetProtocolVersion(version int) error {
-	if version != 0 && version != 1 {
-		return fmt.Errorf("invalid protocol version: %d", version)
+	if version != 1 {
+		return fmt.Errorf("unsupported protocol version: %d (only 1 is supported)", version)
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.protocolVersion = version
 	return nil
 }
 
 // ExportBackup exports the IdManager state as an encrypted backup
 func (m *Manager) ExportBackup(password string) (string, error) {
+	if password == "" {
+		return "", ErrEmptyPassword
+	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -136,6 +142,9 @@ func (m *Manager) ExportBackup(password string) (string, error) {
 
 // ImportBackup imports an encrypted backup and creates a new Manager
 func ImportBackup(backup string, password string) (*Manager, error) {
+	if password == "" {
+		return nil, ErrEmptyPassword
+	}
 	// Decode from base64
 	encrypted, err := base64.StdEncoding.DecodeString(backup)
 	if err != nil {
@@ -432,26 +441,13 @@ func (m *Manager) Email() string {
 	return ""
 }
 
-// SignChallenge signs a challenge using the identity
+// SignChallenge signs an application challenge (SHA-256("VAULTYS_SIGN" || challenge)).
 func (m *Manager) SignChallenge(challenge []byte) ([]byte, error) {
-	if m.protocolVersion == 0 {
-		// v0 protocol needs oldID
-		oldID := m.getOldID()
-		if oldID != nil {
-			return m.vaultysID.SignChallengeV0(challenge, oldID)
-		}
-	}
 	return m.vaultysID.SignChallenge(challenge)
 }
 
-// VerifyChallenge verifies a challenge signature
+// VerifyChallenge verifies a signature produced by SignChallenge.
 func (m *Manager) VerifyChallenge(challenge []byte, signature []byte) error {
-	if m.protocolVersion == 0 {
-		oldID := m.getOldID()
-		if oldID != nil {
-			return m.vaultysID.VerifyChallengeV0(challenge, signature, oldID)
-		}
-	}
 	return m.vaultysID.VerifyChallenge(challenge, signature)
 }
 
@@ -514,29 +510,10 @@ func (m *Manager) VerifyFile(file *File, signature *FileSignature, contactID *va
 		return fmt.Errorf("no challenge found in signature")
 	}
 
-	// Verify the challenge starts with the expected prefix
-	challengeStr := string(challenge)
-	if !bytes.HasPrefix(challenge, []byte("vaultys://signfile?")) {
-		return fmt.Errorf("invalid challenge format")
-	}
-
-	// Parse URL to verify hash matches
-	if strings.Contains(challengeStr, "?") {
-		parts := strings.Split(challengeStr, "?")
-		if len(parts) == 2 {
-			params := strings.Split(parts[1], "&")
-			for _, param := range params {
-				if strings.HasPrefix(param, "hash=") {
-					fileHash := param[5:]
-					h := sha256.Sum256(file.ArrayBuffer)
-					actualHash := hex.EncodeToString(h[:])
-					if fileHash != actualHash {
-						return fmt.Errorf("file hash mismatch")
-					}
-					break
-				}
-			}
-		}
+	// The signed challenge must be a signfile URL committing to exactly
+	// this file: exactly one `hash` parameter equal to its SHA-256.
+	if err := checkSignFileChallenge(challenge, file.ArrayBuffer); err != nil {
+		return err
 	}
 
 	// Use the provided contact VaultysID for verification
@@ -546,6 +523,32 @@ func (m *Manager) VerifyFile(file *File, signature *FileSignature, contactID *va
 
 	// No fallback without contact ID
 	return fmt.Errorf("contact ID required for verification")
+}
+
+// checkSignFileChallenge parses a "vaultys://signfile?hash=...&timestamp=..."
+// challenge and fails closed unless it carries exactly one hash parameter
+// equal to the hex SHA-256 of data.
+func checkSignFileChallenge(challenge []byte, data []byte) error {
+	u, err := url.Parse(string(challenge))
+	if err != nil {
+		return fmt.Errorf("invalid challenge format: %w", err)
+	}
+	if u.Scheme != "vaultys" || u.Host != "signfile" || (u.Path != "" && u.Path != "/") || u.Opaque != "" || u.Fragment != "" {
+		return fmt.Errorf("invalid challenge format")
+	}
+	params, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return fmt.Errorf("invalid challenge query: %w", err)
+	}
+	hashes := params["hash"]
+	if len(hashes) != 1 {
+		return fmt.Errorf("file hash mismatch: challenge must contain exactly one hash")
+	}
+	h := sha256.Sum256(data)
+	if subtle.ConstantTimeCompare([]byte(strings.ToLower(hashes[0])), []byte(hex.EncodeToString(h[:]))) != 1 {
+		return fmt.Errorf("file hash mismatch")
+	}
+	return nil
 }
 
 // EncryptFile encrypts a file for storage
@@ -771,46 +774,134 @@ func (m *Manager) saveAppLocked(app interface{}, name ...string) error {
 	}
 }
 
-// RequestConnect initiates a connection request with a contact
-func (m *Manager) RequestConnect(contact *vaultysid.VaultysID) (*challenger.Challenge, error) {
-	// Generate random bytes for handshake
-	rand, err := crypto.RandomBytes(32)
-	if err != nil {
-		return nil, err
-	}
+// Connect protocol/service used by RequestConnect / AcceptConnect.
+const (
+	ConnectProtocol = "p2p"
+	ConnectService  = "auth"
+)
 
-	// Perform Diffie-Hellman
-	dh, err := m.vaultysID.DiffieHellman(contact.GetCypherPublicKey())
-	if err != nil {
-		return nil, err
-	}
-
-	// Create challenger
-	ch := challenger.New(m.vaultysID)
-
-	// Initialize connection protocol
-	challenge, err := ch.Init("connect", hex.EncodeToString(dh))
-	if err != nil {
-		return nil, err
-	}
-
-	// Store the random for later verification
-	m.store.Set("connect_rand", rand)
-
-	return challenge, nil
+// ConnectSession is one side of a RequestConnect / AcceptConnect handshake.
+//
+// The connection is a plain mutual-authentication handshake (protocol
+// "p2p", service "auth"); no Diffie-Hellman output or other secret is ever
+// placed in a challenge field. Once the handshake is COMPLETE the
+// authenticated remote identity is saved as a contact (or app), together
+// with the handshake certificate.
+type ConnectSession struct {
+	manager  *Manager
+	ch       *challenger.Challenger
+	expected []byte // optional expected remote id (initiator side)
 }
 
-// AcceptConnect accepts a connection request
-func (m *Manager) AcceptConnect(challenge []byte) (*challenger.Challenge, error) {
-	ch := challenger.New(m.vaultysID)
+// RequestConnect starts a connection as initiator and returns the session
+// plus the INIT message to send. If contact is non-nil, the handshake only
+// completes with that exact identity.
+func (m *Manager) RequestConnect(contact *vaultysid.VaultysID) (*ConnectSession, []byte, error) {
+	s := &ConnectSession{manager: m}
+	if contact != nil {
+		s.expected = contact.ID()
+	}
+	s.ch = challenger.NewChallenger(m.vaultysID, &challenger.ChallengerOptions{
+		Accept: func(remote *vaultysid.VaultysID, protocol, service string) error {
+			if s.expected != nil && !bytes.Equal(remote.ID(), s.expected) {
+				return fmt.Errorf("remote is not the requested contact")
+			}
+			return nil
+		},
+	})
+	init, err := s.ch.Init(ConnectProtocol, ConnectService)
+	if err != nil {
+		return nil, nil, err
+	}
+	msg, err := challenger.Serialize(init)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s, msg, nil
+}
 
-	// Accept the challenge
-	response, err := ch.Accept(challenge)
+// Complete (initiator) processes the responder's STEP1 message, saves the
+// authenticated contact and returns the COMPLETE message to send back.
+func (s *ConnectSession) Complete(step1 []byte) ([]byte, *vaultysid.VaultysID, error) {
+	resp, err := s.ch.Accept(step1)
+	if err != nil {
+		return nil, nil, err
+	}
+	if resp == nil || !s.ch.IsComplete() {
+		return nil, nil, fmt.Errorf("unexpected message: expected STEP1")
+	}
+	contact, err := s.saveRemote()
+	if err != nil {
+		return nil, nil, err
+	}
+	msg, err := challenger.Serialize(resp)
+	if err != nil {
+		return nil, nil, err
+	}
+	return msg, contact, nil
+}
+
+// AcceptConnect processes an INIT message as responder and returns the
+// session plus the STEP1 message to send back. The first message must be an
+// INIT for protocol "p2p" / service "auth". accept, if non-nil, is given
+// the REMOTE (initiator's) identity and may refuse it.
+func (m *Manager) AcceptConnect(initMsg []byte, accept func(remote *vaultysid.VaultysID) error) (*ConnectSession, []byte, error) {
+	init, err := challenger.Deserialize(initMsg)
+	if err != nil {
+		return nil, nil, err
+	}
+	if init.State != challenger.StateInit {
+		return nil, nil, fmt.Errorf("first connect message must be INIT")
+	}
+	if init.Protocol != ConnectProtocol || init.Service != ConnectService {
+		return nil, nil, fmt.Errorf("unexpected protocol/service %q/%q", init.Protocol, init.Service)
+	}
+	s := &ConnectSession{manager: m}
+	s.ch = challenger.NewChallenger(m.vaultysID, &challenger.ChallengerOptions{
+		Accept: func(remote *vaultysid.VaultysID, protocol, service string) error {
+			if accept != nil {
+				return accept(remote)
+			}
+			return nil
+		},
+	})
+	step1, err := s.ch.Step1(init)
+	if err != nil {
+		return nil, nil, err
+	}
+	msg, err := challenger.Serialize(step1)
+	if err != nil {
+		return nil, nil, err
+	}
+	return s, msg, nil
+}
+
+// Finalize (responder) processes the initiator's COMPLETE message and saves
+// the authenticated contact.
+func (s *ConnectSession) Finalize(complete []byte) (*vaultysid.VaultysID, error) {
+	if _, err := s.ch.Accept(complete); err != nil {
+		return nil, err
+	}
+	if !s.ch.IsComplete() {
+		return nil, fmt.Errorf("unexpected message: expected COMPLETE")
+	}
+	return s.saveRemote()
+}
+
+// Challenger exposes the underlying handshake state (read-only use).
+func (s *ConnectSession) Challenger() *challenger.Challenger {
+	return s.ch
+}
+
+func (s *ConnectSession) saveRemote() (*vaultysid.VaultysID, error) {
+	remote, err := s.ch.GetRemoteVaultysID()
 	if err != nil {
 		return nil, err
 	}
-
-	return response, nil
+	if err := s.manager.SaveContact(remote, nil); err != nil {
+		return nil, fmt.Errorf("failed to save contact: %w", err)
+	}
+	return remote, nil
 }
 
 // IsHardware returns true if the identity is hardware-backed
@@ -823,19 +914,6 @@ func (m *Manager) IsHardware() bool {
 func (m *Manager) getEntropy() []byte {
 	// This would need to be implemented based on the key manager type
 	// For now, return nil to use secret instead
-	return nil
-}
-
-func (m *Manager) getOldID() []byte {
-	// Get oldID from metadata if using v0 protocol
-	if metadata := m.getMetadata(); metadata != nil {
-		if oldID, ok := metadata["oldId"]; ok {
-			if oldIDStr, ok := oldID.(string); ok {
-				decoded, _ := hex.DecodeString(oldIDStr)
-				return decoded
-			}
-		}
-	}
 	return nil
 }
 
@@ -854,13 +932,6 @@ func (m *Manager) getOrCreateMetadata() map[string]interface{} {
 		metadata = make(map[string]interface{})
 	}
 	return metadata
-}
-
-func (m *Manager) getSignatureType() string {
-	if m.protocolVersion == 0 {
-		return "v0"
-	}
-	return "v1"
 }
 
 func (m *Manager) instantiateContact(stored StoredContact) (*vaultysid.VaultysID, error) {

@@ -95,6 +95,14 @@ func stepByName(v *dilithiumVector, name string) *struct {
 // via typescript/test/interops/verify-rfc-vectors.ts (which validates
 // from the TypeScript side); this test validates the same vector from
 // the Go side, so both directions are covered.
+//
+// NOTE (security-v2): handshake signatures are now
+// SHA-256("VAULTYS_HANDSHAKE_V1" || unsigned) via SignHandshake /
+// VerifyHandshake. This pre-v2 vector signed the handshake with
+// VAULTYS_SIGN, so it is kept only as a cross-language check of the
+// challenge wire/unsigned serialization and of Dilithium VAULTYS_SIGN
+// signatures; it is NOT an acceptable v2 handshake (asserted below).
+// Handshake vectors are regenerated in security-v2 vectors.
 func TestDilithiumChallengerVector_MatchesTypeScript(t *testing.T) {
 	v := loadDilithiumVector(t)
 
@@ -201,6 +209,10 @@ func TestDilithiumChallengerVector_MatchesTypeScript(t *testing.T) {
 	}
 	if err := alice.VerifyChallenge(unsignedBytes, sign1); err != nil {
 		t.Errorf("failed to verify TypeScript-produced sign1 via VaultysID.VerifyChallenge: %v", err)
+	}
+
+	if bob.VerifyHandshake(unsignedBytes, sign2) == nil || alice.VerifyHandshake(unsignedBytes, sign1) == nil {
+		t.Error("pre-v2 VAULTYS_SIGN handshake signatures must not verify as VAULTYS_HANDSHAKE_V1")
 	}
 
 	completeChallenge := &challenger.Challenge{

@@ -4,11 +4,11 @@ import (
 	"github.com/vaultys/vaultysid/go/pkg/vaultysid"
 )
 
-// ProtocolVersion represents the protocol version (0 or 1)
+// ProtocolVersion represents the handshake protocol version. Only version
+// 1 exists; version 0 was removed in the security-v2 release.
 type ProtocolVersion int
 
 const (
-	ProtocolV0 ProtocolVersion = 0
 	ProtocolV1 ProtocolVersion = 1
 )
 
