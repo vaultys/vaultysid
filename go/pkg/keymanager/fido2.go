@@ -1,11 +1,12 @@
 package keymanager
 
 import (
-	"bytes"
+	"crypto/ecdh"
 	"crypto/ecdsa"
 	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -28,7 +29,21 @@ type FIDO2Manager struct {
 	AuthType   string  // Verification key type
 	Signer     KeyPair // Public key for verification
 	Cypher     KeyPair // X25519 key for encryption
+
+	// Optional relying-party policy enforced by Verify. When set, every
+	// assertion must match: ExpectedRPIDHash is compared to authData[0:32]
+	// (SHA-256 of the RP ID) and ExpectedOrigin to clientData.origin.
+	// RequireUserVerification makes Verify demand the UV flag, not just UP.
+	ExpectedRPIDHash        []byte
+	ExpectedOrigin          string
+	RequireUserVerification bool
 }
+
+// WebAuthn authenticator-data flag bits.
+const (
+	fido2FlagUP = 0x01 // user present
+	fido2FlagUV = 0x04 // user verified
+)
 
 // FIDO2Signature represents a FIDO2 signature with authenticator data
 type FIDO2Signature struct {
@@ -195,6 +210,9 @@ func getSignerFromCKey(ckey []byte) (KeyPair, error) {
 		publicKey[0] = 0x04
 		copy(publicKey[1:33], xBytes)
 		copy(publicKey[33:65], yBytes)
+		if _, err := ecdh.P256().NewPublicKey(publicKey); err != nil {
+			return KeyPair{}, fmt.Errorf("invalid P-256 public key: %w", err)
+		}
 	case COSEAlgEdDSA: // Ed25519
 		// Get X coordinate (public key for EdDSA)
 		xVal, ok := key[-2]
@@ -208,7 +226,7 @@ func getSignerFromCKey(ckey []byte) (KeyPair, error) {
 		if len(xBytes) != 32 {
 			return KeyPair{}, fmt.Errorf("invalid Ed25519 key length: got %d, want 32", len(xBytes))
 		}
-		publicKey = xBytes
+		publicKey = append([]byte(nil), xBytes...)
 	default:
 		return KeyPair{}, fmt.Errorf("unsupported algorithm: %d", alg)
 	}
@@ -243,6 +261,10 @@ func FIDO2ManagerFromSecret(secret []byte) (*FIDO2Manager, error) {
 	signer, err := getSignerFromCKey(data.C)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(data.E) != x25519KeySize {
+		return nil, fmt.Errorf("invalid FIDO2 secret: encryption key must be 32 bytes, got %d", len(data.E))
 	}
 
 	// Reconstruct X25519 keys from secret key
@@ -294,6 +316,10 @@ func FIDO2ManagerFromID(id []byte) (*FIDO2Manager, error) {
 	signer, err := getSignerFromCKey(data.C)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(data.E) != x25519KeySize {
+		return nil, fmt.Errorf("invalid FIDO2 id: encryption key must be 32 bytes, got %d", len(data.E))
 	}
 
 	m := &FIDO2Manager{
@@ -348,56 +374,61 @@ func (m *FIDO2Manager) Verify(data, signature []byte) error {
 	return m.VerifyWithUserVerification(data, signature, false)
 }
 
-// VerifyWithUserVerification verifies a FIDO2 signature with optional user verification check
+// fido2ClientData is the subset of CollectedClientData that Verify checks.
+type fido2ClientData struct {
+	Type      string `json:"type"`
+	Challenge string `json:"challenge"`
+	Origin    string `json:"origin"`
+}
+
+// VerifyWithUserVerification verifies a FIDO2 assertion over data.
+//
+// It requires: clientData.type == "webauthn.get"; clientData.challenge ==
+// base64url(SHA-256(data)); the UP flag; the UV flag when userVerification
+// (or m.RequireUserVerification) is set; authData rpIdHash ==
+// m.ExpectedRPIDHash and clientData.origin == m.ExpectedOrigin when those
+// are configured; and a valid signature over authData || SHA-256(clientDataJSON).
 func (m *FIDO2Manager) VerifyWithUserVerification(data, signature []byte, userVerification bool) error {
 	var sig FIDO2Signature
 	if err := msgpack.Unmarshal(signature, &sig); err != nil {
 		return fmt.Errorf("failed to unmarshal signature: %w", err)
 	}
 
+	var clientData fido2ClientData
+	if err := json.Unmarshal(sig.C, &clientData); err != nil {
+		return fmt.Errorf("invalid client data: %w", err)
+	}
+	if clientData.Type != "webauthn.get" {
+		return fmt.Errorf("invalid client data type %q", clientData.Type)
+	}
+	if m.ExpectedOrigin != "" && clientData.Origin != m.ExpectedOrigin {
+		return fmt.Errorf("origin mismatch")
+	}
+
 	// Verify challenge matches
 	challenge := vaultyscrypto.Hash("sha256", data)
-	if !verifyChallenge(sig.C, challenge) {
+	if !verifyChallenge(clientData.Challenge, challenge) {
 		return fmt.Errorf("challenge mismatch")
 	}
 
 	// Verify the signature using the authenticator data and client data
-	return m.verifySignature(sig.A, sig.C, sig.S, userVerification)
+	return m.verifySignature(sig.A, sig.C, sig.S, userVerification || m.RequireUserVerification)
 }
 
-// verifyChallenge checks if the challenge in client data matches
-func verifyChallenge(clientDataJSON, expectedChallenge []byte) bool {
-	// Parse client data JSON
-	var clientData map[string]interface{}
-	if err := json.Unmarshal(clientDataJSON, &clientData); err != nil {
-		return false
-	}
+// verifyChallenge checks if the base64url challenge from client data matches
+func verifyChallenge(challengeStr string, expectedChallenge []byte) bool {
+	// Accept both padded and unpadded base64url (and, for TS compatibility,
+	// standard base64).
+	challengeStr = strings.TrimRight(challengeStr, "=")
+	challengeStr = strings.ReplaceAll(challengeStr, "+", "-")
+	challengeStr = strings.ReplaceAll(challengeStr, "/", "_")
 
-	// Extract challenge
-	challengeStr, ok := clientData["challenge"].(string)
-	if !ok {
-		return false
-	}
-
-	// Decode base64url challenge
-	// Replace URL-safe characters
-	challengeStr = strings.ReplaceAll(challengeStr, "-", "+")
-	challengeStr = strings.ReplaceAll(challengeStr, "_", "/")
-
-	// Add padding if necessary
-	switch len(challengeStr) % 4 {
-	case 2:
-		challengeStr += "=="
-	case 3:
-		challengeStr += "="
-	}
-
-	decodedChallenge, err := base64.StdEncoding.DecodeString(challengeStr)
+	decodedChallenge, err := base64.RawURLEncoding.DecodeString(challengeStr)
 	if err != nil {
 		return false
 	}
 
-	return bytes.Equal(decodedChallenge, expectedChallenge)
+	return subtle.ConstantTimeCompare(decodedChallenge, expectedChallenge) == 1
 }
 
 // verifySignature verifies the FIDO2 signature
@@ -406,17 +437,23 @@ func (m *FIDO2Manager) verifySignature(authData, clientDataJSON, signature []byt
 		return fmt.Errorf("invalid authenticator data")
 	}
 
-	// Check user verification flag if required
-	if userVerification {
-		flags := authData[32]
-		if flags&0x04 == 0 { // UV flag is bit 2
-			return fmt.Errorf("user verification required but not performed")
-		}
+	if m.ExpectedRPIDHash != nil && subtle.ConstantTimeCompare(authData[:32], m.ExpectedRPIDHash) != 1 {
+		return fmt.Errorf("rpIdHash mismatch")
+	}
+
+	flags := authData[32]
+	if flags&fido2FlagUP == 0 {
+		return fmt.Errorf("user presence flag not set")
+	}
+	if userVerification && flags&fido2FlagUV == 0 {
+		return fmt.Errorf("user verification required but not performed")
 	}
 
 	// Create the signed data: authData || sha256(clientDataJSON)
 	clientDataHash := sha256.Sum256(clientDataJSON)
-	signedData := append(authData, clientDataHash[:]...)
+	signedData := make([]byte, 0, len(authData)+len(clientDataHash))
+	signedData = append(signedData, authData...)
+	signedData = append(signedData, clientDataHash[:]...)
 
 	// Verify based on key type
 	var key COSEKey
@@ -436,6 +473,9 @@ func (m *FIDO2Manager) verifySignature(authData, clientDataJSON, signature []byt
 
 	switch alg {
 	case COSEAlgEdDSA: // Ed25519
+		if len(m.Signer.PublicKey) != ed25519.PublicKeySize || len(signature) != ed25519.SignatureSize {
+			return fmt.Errorf("Ed25519 signature verification failed")
+		}
 		if !ed25519.Verify(m.Signer.PublicKey, signedData, signature) {
 			return fmt.Errorf("Ed25519 signature verification failed")
 		}
@@ -468,67 +508,14 @@ func verifyP256Signature(publicKeyBytes, data, signature []byte) bool {
 	// Hash the data
 	hash := sha256.Sum256(data)
 
-	// Parse signature based on format
-	var r, s *big.Int
-
 	if len(signature) == 64 {
 		// Raw format (r||s), each component is 32 bytes
-		r = new(big.Int).SetBytes(signature[:32])
-		s = new(big.Int).SetBytes(signature[32:])
-	} else {
-		// Try to parse as DER format
-		var err error
-		r, s, err = parseDERSignature(signature)
-		if err != nil {
-			return false
-		}
+		r := new(big.Int).SetBytes(signature[:32])
+		s := new(big.Int).SetBytes(signature[32:])
+		return ecdsa.Verify(publicKey, hash[:], r, s)
 	}
-
-	return ecdsa.Verify(publicKey, hash[:], r, s)
-}
-
-// parseDERSignature parses a DER-encoded ECDSA signature
-func parseDERSignature(signature []byte) (*big.Int, *big.Int, error) {
-	// DER format: 0x30 [total-length] 0x02 [r-length] [r] 0x02 [s-length] [s]
-	if len(signature) < 8 {
-		return nil, nil, fmt.Errorf("signature too short")
-	}
-
-	if signature[0] != 0x30 {
-		return nil, nil, fmt.Errorf("invalid DER signature format")
-	}
-
-	totalLen := int(signature[1])
-	if totalLen+2 != len(signature) {
-		return nil, nil, fmt.Errorf("invalid DER signature length")
-	}
-
-	// Parse r
-	if signature[2] != 0x02 {
-		return nil, nil, fmt.Errorf("invalid DER r marker")
-	}
-
-	rLen := int(signature[3])
-	if len(signature) < 4+rLen+2 {
-		return nil, nil, fmt.Errorf("invalid r length")
-	}
-
-	r := new(big.Int).SetBytes(signature[4 : 4+rLen])
-
-	// Parse s
-	sOffset := 4 + rLen
-	if signature[sOffset] != 0x02 {
-		return nil, nil, fmt.Errorf("invalid DER s marker")
-	}
-
-	sLen := int(signature[sOffset+1])
-	if len(signature) < sOffset+2+sLen {
-		return nil, nil, fmt.Errorf("invalid s length")
-	}
-
-	s := new(big.Int).SetBytes(signature[sOffset+2 : sOffset+2+sLen])
-
-	return r, s, nil
+	// Strict ASN.1 DER
+	return ecdsa.VerifyASN1(publicKey, hash[:], signature)
 }
 
 // GetPublicKey returns the signing public key

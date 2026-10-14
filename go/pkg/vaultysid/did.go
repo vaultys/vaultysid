@@ -1,6 +1,7 @@
 package vaultysid
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 )
@@ -118,6 +119,25 @@ func (v *VaultysID) VerifyDIDDocument(doc *DIDDocument) error {
 	if keyAgrMethod.Type != v.KeyManager.GetEncType() {
 		return fmt.Errorf("key agreement type mismatch: expected %s, got %s",
 			v.KeyManager.GetEncType(), keyAgrMethod.Type)
+	}
+
+	// The keys themselves must be this identity's keys: a document whose
+	// DID, types and controllers match but which advertises an attacker's
+	// keys must be rejected.
+	authKey, err := doc.GetAuthenticationKey()
+	if err != nil {
+		return fmt.Errorf("invalid authentication key: %w", err)
+	}
+	if !bytes.Equal(authKey, v.KeyManager.GetPublicKey()) {
+		return fmt.Errorf("authentication key mismatch")
+	}
+
+	encKey, err := doc.GetKeyAgreementKey()
+	if err != nil {
+		return fmt.Errorf("invalid key agreement key: %w", err)
+	}
+	if !bytes.Equal(encKey, v.KeyManager.GetCypherPublicKey()) {
+		return fmt.Errorf("key agreement key mismatch")
 	}
 
 	return nil

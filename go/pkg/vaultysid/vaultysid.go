@@ -11,8 +11,29 @@ import (
 	"github.com/vaultys/vaultysid/go/pkg/keymanager"
 )
 
-// SIGN_INCIPIT is the prefix used for challenge signing
-var SIGN_INCIPIT = []byte("VAULTYS_SIGN")
+// Domain-separation prefixes (cross-language security spec §2). Every
+// signature an identity produces is over SHA-256(prefix || data) with one of
+// these prefixes, so a signature obtained through one API can never be
+// replayed as a signature for another:
+//
+//   - SIGN_INCIPIT ("VAULTYS_SIGN"): SignChallenge/VerifyChallenge, used by
+//     signFile and application challenges.
+//   - RAW_INCIPIT ("VAULTYS_RAW"): the public raw Sign/Verify.
+//   - HANDSHAKE_INCIPIT ("VAULTYS_HANDSHAKE_V1"): SignHandshake /
+//     VerifyHandshake, used ONLY by the challenger (mutual-auth handshake).
+var (
+	SIGN_INCIPIT      = []byte("VAULTYS_SIGN")
+	RAW_INCIPIT       = []byte("VAULTYS_RAW")
+	HANDSHAKE_INCIPIT = []byte("VAULTYS_HANDSHAKE_V1")
+)
+
+// domainHash returns SHA-256(prefix || data) without aliasing either input.
+func domainHash(prefix, data []byte) []byte {
+	h := sha256.New()
+	h.Write(prefix)
+	h.Write(data)
+	return h.Sum(nil)
+}
 
 // VaultysID represents a decentralized identity
 type VaultysID struct {
@@ -343,50 +364,38 @@ func (v *VaultysID) DID() string {
 
 // Signing and verification
 
-// Sign signs the given data with the identity's private key
+// Sign signs SHA-256("VAULTYS_RAW" || data). It never produces a raw
+// key-manager signature, so it cannot be abused as a signing oracle for
+// handshakes or challenges.
 func (v *VaultysID) Sign(data []byte) ([]byte, error) {
-	return v.KeyManager.Sign(data)
+	return v.KeyManager.Sign(domainHash(RAW_INCIPIT, data))
 }
 
-// Verify verifies a signature against the given data
+// Verify verifies a signature produced by Sign.
 func (v *VaultysID) Verify(data, signature []byte) error {
-	return v.KeyManager.Verify(data, signature)
+	return v.KeyManager.Verify(domainHash(RAW_INCIPIT, data), signature)
 }
 
-// SignChallenge signs a challenge with the proper protocol prefix
+// SignChallenge signs SHA-256("VAULTYS_SIGN" || challenge).
 func (v *VaultysID) SignChallenge(challenge []byte) ([]byte, error) {
-	// Hash the challenge with the sign incipit
-	toHash := append(SIGN_INCIPIT, challenge...)
-	hashed := crypto.Hash("sha256", toHash)
-
-	return v.Sign(hashed)
+	return v.KeyManager.Sign(domainHash(SIGN_INCIPIT, challenge))
 }
 
-// VerifyChallenge verifies a challenge signature
+// VerifyChallenge verifies a signature produced by SignChallenge.
 func (v *VaultysID) VerifyChallenge(challenge []byte, signature []byte) error {
-	// Hash the challenge with the sign incipit
-	toHash := append(SIGN_INCIPIT, challenge...)
-	hashed := crypto.Hash("sha256", toHash)
-
-	return v.Verify(hashed, signature)
+	return v.KeyManager.Verify(domainHash(SIGN_INCIPIT, challenge), signature)
 }
 
-// SignChallengeV0 signs a challenge using the v0 protocol (for backward compatibility)
-func (v *VaultysID) SignChallengeV0(challenge []byte, oldID []byte) ([]byte, error) {
-	// v0 protocol: hash(oldID + challenge)
-	toHash := append(oldID, challenge...)
-	hashed := crypto.Hash("sha256", toHash)
-
-	return v.Sign(hashed)
+// SignHandshake signs SHA-256("VAULTYS_HANDSHAKE_V1" || unsignedChallenge).
+// It must only be called by the challenger on the canonical unsigned
+// challenge bytes it has validated itself.
+func (v *VaultysID) SignHandshake(unsignedChallenge []byte) ([]byte, error) {
+	return v.KeyManager.Sign(domainHash(HANDSHAKE_INCIPIT, unsignedChallenge))
 }
 
-// VerifyChallengeV0 verifies a v0 challenge signature
-func (v *VaultysID) VerifyChallengeV0(challenge []byte, signature []byte, oldID []byte) error {
-	// v0 protocol: hash(oldID + challenge)
-	toHash := append(oldID, challenge...)
-	hashed := crypto.Hash("sha256", toHash)
-
-	return v.Verify(hashed, signature)
+// VerifyHandshake verifies a signature produced by SignHandshake.
+func (v *VaultysID) VerifyHandshake(unsignedChallenge []byte, signature []byte) error {
+	return v.KeyManager.Verify(domainHash(HANDSHAKE_INCIPIT, unsignedChallenge), signature)
 }
 
 // Identity type checking methods
@@ -579,63 +588,46 @@ func DiffieHellman(id1, id2 *VaultysID) ([]byte, error) {
 	return id2.PerformDiffieHellman(id1)
 }
 
-// DHIESEncrypt performs DHIES encryption to a recipient
-// Uses the keymanager's DHIES implementation for Ed25519-based identities
-func (v *VaultysID) DHIESEncrypt(plaintext []byte, recipient *VaultysID) ([]byte, error) {
+// dhiesFor builds a DHIES v2 context from this identity's X25519 keypair.
+func (v *VaultysID) dhiesFor() (*keymanager.DHIES, error) {
 	if v.KeyManager.GetCapability() != "private" {
 		return nil, fmt.Errorf("no private key available")
 	}
-
-	// Create DHIES instance using the keymanager package
-	// The DHIES implementation requires access to the underlying Ed25519 keys
-	// For now, we'll use a type assertion to check if this is possible
-	km, ok := v.KeyManager.(*keymanager.Ed25519Manager)
+	provider, ok := v.KeyManager.(keymanager.CypherSecretProvider)
 	if !ok {
-		// Try to handle other key manager types gracefully
-		// FIDO2 and other implementations don't support DHIES yet
-		return nil, fmt.Errorf("DHIES encryption is only supported for Ed25519-based identities")
+		return nil, fmt.Errorf("DHIES is not supported for this key manager")
 	}
-
-	dhies, err := keymanager.NewDHIES(km)
+	sk, err := provider.GetCypherSecretKey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create DHIES instance: %w", err)
+		return nil, err
 	}
-
-	recipientPublicKey := recipient.KeyManager.GetCypherPublicKey()
-	if len(recipientPublicKey) == 0 {
-		return nil, fmt.Errorf("recipient has no cypher public key")
-	}
-
-	return dhies.Encrypt(recipientPublicKey, plaintext)
+	return keymanager.NewDHIESFromKeys(sk, v.KeyManager.GetCypherPublicKey())
 }
 
-// DHIESDecrypt performs DHIES decryption from a sender
-// Uses the keymanager's DHIES implementation for Ed25519-based identities
-func (v *VaultysID) DHIESDecrypt(ciphertext []byte, sender *VaultysID) ([]byte, error) {
-	if v.KeyManager.GetCapability() != "private" {
-		return nil, fmt.Errorf("no private key available")
+// DHIESEncrypt encrypts plaintext to recipient with DHIES v2 (spec §3),
+// authenticated as coming from this identity.
+func (v *VaultysID) DHIESEncrypt(plaintext []byte, recipient *VaultysID) ([]byte, error) {
+	if recipient == nil {
+		return nil, fmt.Errorf("recipient is nil")
 	}
-
-	// Create DHIES instance using the keymanager package
-	// The DHIES implementation requires access to the underlying Ed25519 keys
-	// For now, we'll use a type assertion to check if this is possible
-	km, ok := v.KeyManager.(*keymanager.Ed25519Manager)
-	if !ok {
-		// Try to handle other key manager types gracefully
-		// FIDO2 and other implementations don't support DHIES yet
-		return nil, fmt.Errorf("DHIES decryption is only supported for Ed25519-based identities")
-	}
-
-	dhies, err := keymanager.NewDHIES(km)
+	d, err := v.dhiesFor()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create DHIES instance: %w", err)
+		return nil, err
 	}
+	return d.Encrypt(recipient.KeyManager.GetCypherPublicKey(), plaintext)
+}
 
+// DHIESDecrypt decrypts a DHIES v2 ciphertext addressed to this identity and
+// verifies it was produced by sender.
+func (v *VaultysID) DHIESDecrypt(ciphertext []byte, sender *VaultysID) ([]byte, error) {
 	if sender == nil {
 		return nil, fmt.Errorf("sender is nil")
 	}
-
-	return dhies.Decrypt(ciphertext, sender.KeyManager.GetCypherPublicKey())
+	d, err := v.dhiesFor()
+	if err != nil {
+		return nil, err
+	}
+	return d.Decrypt(ciphertext, sender.KeyManager.GetCypherPublicKey())
 }
 
 // GetOTP generates a one-time password based on the provided data

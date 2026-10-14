@@ -161,7 +161,6 @@ type BackupVectors struct {
 }
 
 type ChallengeSigningVectors struct {
-	ProtocolV0 ChallengeVector `json:"protocolV0"`
 	ProtocolV1 ChallengeVector `json:"protocolV1"`
 }
 
@@ -416,17 +415,7 @@ func main() {
 	// Challenge Signing Vectors
 	challenge := []byte("test-challenge-data")
 
-	// Protocol V0
-	manager.SetProtocolVersion(0)
-	signatureV0, _ := manager.SignChallenge(challenge)
-	vectors.Challenge.ProtocolV0 = ChallengeVector{
-		Challenge: hex.EncodeToString(challenge),
-		Signature: hex.EncodeToString(signatureV0),
-		Version:   0,
-	}
-
 	// Protocol V1
-	manager.SetProtocolVersion(1)
 	signatureV1, _ := manager.SignChallenge(challenge)
 	vectors.Challenge.ProtocolV1 = ChallengeVector{
 		Challenge: hex.EncodeToString(challenge),

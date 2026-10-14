@@ -2,6 +2,7 @@ package challenger
 
 import (
 	"bytes"
+	"crypto/subtle"
 	"fmt"
 
 	"github.com/vaultys/vaultysid/go/pkg/crypto"
@@ -9,11 +10,29 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-// Challenger implements the handcheck protocol for mutual authentication
+// Challenger implements the VaultysID mutual-authentication handshake
+// (cross-language security spec §1).
+//
+// State machine (anything else sets ERROR, which is terminal):
+//
+//	Initiator: UNINITIALISED --Init-->           INIT
+//	           INIT          --Step2(STEP1)-->   COMPLETE
+//	Responder: UNINITIALISED --Step1(INIT)-->    STEP1
+//	           STEP1         --Finalize(COMPLETE)--> COMPLETE
+//
+// Signatures are SignHandshake/VerifyHandshake over SerializeUnsigned, the
+// canonical msgpack encoding of {version, protocol, service, timestamp, pk1,
+// pk2, nonce, metadata} that byte-matches the TypeScript reference.
 type Challenger struct {
 	vaultysID *vaultysid.VaultysID
-	state     *ChallengerState
+	myID      []byte
 	options   *ChallengerOptions
+
+	state     int
+	challenge *Challenge // last message we produced (INIT / STEP1 / COMPLETE)
+	remoteID  []byte
+	metadata  map[string]string
+	err       error
 }
 
 // NewChallenger creates a new Challenger instance
@@ -21,420 +40,436 @@ func NewChallenger(vid *vaultysid.VaultysID, opts *ChallengerOptions) *Challenge
 	if opts == nil {
 		opts = DefaultOptions()
 	}
+	if opts.TimeWindow <= 0 {
+		opts.TimeWindow = DefaultOptions().TimeWindow
+	}
 	return &Challenger{
 		vaultysID: vid,
+		myID:      vid.ToBytes(),
 		options:   opts,
-		state: &ChallengerState{
-			VaultysID: vid,
-			State:     StateUninitialized,
-			Version:   opts.Version,
-			Metadata:  make(map[string]string),
-		},
+		state:     StateUninitialized,
+		metadata:  make(map[string]string),
 	}
 }
 
-// New creates a new Challenger instance with default options (wrapper for compatibility)
+// New creates a new Challenger instance with default options
 func New(vid *vaultysid.VaultysID) *Challenger {
 	return NewChallenger(vid, nil)
 }
 
-// Init initializes the challenge protocol
+// fail moves the challenger to the terminal ERROR state.
+func (c *Challenger) fail(format string, args ...interface{}) error {
+	err := fmt.Errorf(format, args...)
+	c.state = StateError
+	c.err = err
+	c.remoteID = nil
+	return err
+}
+
+// Init starts a handshake as initiator and returns the INIT message.
 func (c *Challenger) Init(protocol, service string) (*Challenge, error) {
-	if c.state.State != StateUninitialized {
-		return nil, fmt.Errorf("challenger already initialized")
+	if c.state != StateUninitialized {
+		return nil, c.fail("challenger already initialized")
+	}
+	if protocol == "" || service == "" {
+		return nil, c.fail("protocol and service are required")
 	}
 
-	// Generate 16-byte nonce for init
-	nonce, err := crypto.RandomBytes(16)
+	nonce, err := crypto.RandomBytes(nonceHalfSize)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+		return nil, c.fail("failed to generate nonce: %w", err)
 	}
 
-	c.state.Protocol = protocol
-	c.state.Service = service
-	c.state.Nonce = nonce
-	c.state.Timestamp = crypto.Now()
-	c.state.State = StateInit
-
-	// Create init challenge
 	challenge := &Challenge{
-		Version:   c.options.Version,
+		Version:   ProtocolV1,
 		Protocol:  protocol,
 		Service:   service,
-		Timestamp: uint64(c.state.Timestamp),
-		PK1:       c.vaultysID.ToBytes(),
+		Timestamp: uint64(crypto.Now()),
+		PK1:       cloneBytes(c.myID),
 		Nonce:     nonce,
 		Metadata: ChallengeMetadata{
-			PK1: c.state.Metadata,
+			PK1: NewMetadata(c.metadata),
 		},
 		State: StateInit,
 	}
 
-	c.state.LastChallenge = challenge
-	return challenge, nil
+	c.challenge = challenge
+	c.state = StateInit
+	return challenge.Clone(), nil
 }
 
-// Step1 processes the init message and returns step1 response
+// Step1 (responder) processes an INIT message and returns the STEP1 message.
 func (c *Challenger) Step1(initChallenge *Challenge) (*Challenge, error) {
-	// Validate init challenge
-	if initChallenge.State != StateInit {
-		return nil, fmt.Errorf("invalid challenge state: expected INIT, got %d", initChallenge.State)
+	if c.state != StateUninitialized {
+		return nil, c.fail("unexpected INIT: challenger is not uninitialised (state %d)", c.state)
 	}
-
-	if !initChallenge.HasPK1() || len(initChallenge.Nonce) != 16 {
-		return nil, fmt.Errorf("invalid init challenge: missing PK1 or invalid nonce")
+	if initChallenge == nil {
+		return nil, c.fail("nil challenge")
 	}
-
-	// Check timestamp
-	if err := c.validateTimestamp(int64(initChallenge.Timestamp)); err != nil {
-		return nil, err
+	if err := checkStructure(initChallenge, StateInit); err != nil {
+		return nil, c.fail("invalid INIT: %w", err)
 	}
-
-	// Store remote info
-	c.state.RemoteID = initChallenge.PK1
-	c.state.RemoteNonce = initChallenge.Nonce
-	c.state.Protocol = initChallenge.Protocol
-	c.state.Service = initChallenge.Service
-	c.state.Timestamp = int64(initChallenge.Timestamp)
-
-	// Generate our 16-byte nonce
-	ourNonce, err := crypto.RandomBytes(16)
+	if err := c.validateTimestamp(initChallenge.Timestamp); err != nil {
+		return nil, c.fail("invalid INIT: %w", err)
+	}
+	if bytes.Equal(initChallenge.PK1, c.myID) {
+		return nil, c.fail("invalid INIT: pk1 is our own identity (reflection)")
+	}
+	remote, err := vaultysid.FromID(initChallenge.PK1, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate nonce: %w", err)
+		return nil, c.fail("invalid INIT: unparseable pk1: %w", err)
+	}
+	if c.options.Accept != nil {
+		if err := c.options.Accept(remote, initChallenge.Protocol, initChallenge.Service); err != nil {
+			return nil, c.fail("remote refused: %w", err)
+		}
 	}
 
-	// Combine nonces (remote first, then ours)
-	combinedNonce := append(initChallenge.Nonce, ourNonce...)
-	c.state.Nonce = combinedNonce
-
-	// Create unsigned challenge for signing
-	unsignedChallenge := &Challenge{
-		Version:   initChallenge.Version,
-		Protocol:  initChallenge.Protocol,
-		Service:   initChallenge.Service,
-		Timestamp: initChallenge.Timestamp,
-		PK1:       initChallenge.PK1,
-		PK2:       c.vaultysID.ToBytes(),
-		Nonce:     combinedNonce,
-		Metadata: ChallengeMetadata{
-			PK1: make(map[string]string),
-			PK2: make(map[string]string),
-		},
-	}
-
-	// Sign the challenge
-	challengeBytes, err := SerializeUnsigned(unsignedChallenge)
+	ourNonce, err := crypto.RandomBytes(nonceHalfSize)
 	if err != nil {
-		return nil, fmt.Errorf("failed to serialize challenge: %w", err)
+		return nil, c.fail("failed to generate nonce: %w", err)
 	}
+	nonce := make([]byte, 0, 2*nonceHalfSize)
+	nonce = append(nonce, initChallenge.Nonce...)
+	nonce = append(nonce, ourNonce...)
 
-	var signature []byte
-	if initChallenge.Version == ProtocolV0 {
-		signature, err = c.vaultysID.SignChallengeV0(challengeBytes, c.vaultysID.ToBytes())
-	} else {
-		signature, err = c.vaultysID.SignChallenge(challengeBytes)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to sign challenge: %w", err)
-	}
-
-	// Create step1 response
 	step1 := &Challenge{
-		Version:   initChallenge.Version,
+		Version:   ProtocolV1,
 		Protocol:  initChallenge.Protocol,
 		Service:   initChallenge.Service,
 		Timestamp: initChallenge.Timestamp,
-		PK1:       initChallenge.PK1,
-		PK2:       c.vaultysID.ToBytes(),
-		Nonce:     combinedNonce,
-		Sign2:     signature,
+		PK1:       cloneBytes(initChallenge.PK1),
+		PK2:       cloneBytes(c.myID),
+		Nonce:     nonce,
 		Metadata: ChallengeMetadata{
-			PK2: c.state.Metadata,
+			PK1: initChallenge.Metadata.PK1.Clone(),
+			PK2: NewMetadata(c.metadata),
 		},
 		State: StateStep1,
 	}
 
-	c.state.State = StateStep1
-	c.state.LastChallenge = step1
-	return step1, nil
+	unsigned, err := SerializeUnsigned(step1)
+	if err != nil {
+		return nil, c.fail("failed to serialize challenge: %w", err)
+	}
+	step1.Sign2, err = c.vaultysID.SignHandshake(unsigned)
+	if err != nil {
+		return nil, c.fail("failed to sign challenge: %w", err)
+	}
+
+	c.challenge = step1
+	c.remoteID = cloneBytes(step1.PK1)
+	c.state = StateStep1
+	return step1.Clone(), nil
 }
 
-// Step2 processes the step1 message and returns the complete challenge
+// Step2 (initiator) processes the STEP1 message and returns the COMPLETE message.
 func (c *Challenger) Step2(step1Challenge *Challenge) (*Challenge, error) {
-	// Validate step1 challenge
-	if step1Challenge.State != StateStep1 {
-		return nil, fmt.Errorf("invalid challenge state: expected STEP1, got %d", step1Challenge.State)
+	if c.state != StateInit {
+		return nil, c.fail("unexpected STEP1: challenger is not in INIT state (state %d)", c.state)
+	}
+	if step1Challenge == nil {
+		return nil, c.fail("nil challenge")
+	}
+	if err := checkStructure(step1Challenge, StateStep1); err != nil {
+		return nil, c.fail("invalid STEP1: %w", err)
 	}
 
-	if !step1Challenge.HasPK2() || !step1Challenge.HasSign2() || len(step1Challenge.Nonce) != 32 {
-		return nil, fmt.Errorf("invalid step1 challenge: missing fields")
+	sent := c.challenge
+	switch {
+	case step1Challenge.Version != sent.Version:
+		return nil, c.fail("invalid STEP1: version has been tampered with")
+	case step1Challenge.Protocol != sent.Protocol:
+		return nil, c.fail("invalid STEP1: protocol has been tampered with")
+	case step1Challenge.Service != sent.Service:
+		return nil, c.fail("invalid STEP1: service has been tampered with")
+	case step1Challenge.Timestamp != sent.Timestamp:
+		return nil, c.fail("invalid STEP1: timestamp has been tampered with")
+	case !bytes.Equal(step1Challenge.PK1, sent.PK1):
+		return nil, c.fail("invalid STEP1: pk1 has been tampered with")
+	case !step1Challenge.Metadata.PK1.Equal(sent.Metadata.PK1):
+		return nil, c.fail("invalid STEP1: metadata.pk1 has been tampered with")
+	case subtle.ConstantTimeCompare(step1Challenge.Nonce[:nonceHalfSize], sent.Nonce) != 1:
+		return nil, c.fail("invalid STEP1: nonce has been tampered with")
+	case bytes.Equal(step1Challenge.PK2, c.myID):
+		return nil, c.fail("invalid STEP1: pk2 is our own identity (reflection)")
+	}
+	if err := c.validateTimestamp(step1Challenge.Timestamp); err != nil {
+		return nil, c.fail("invalid STEP1: %w", err)
 	}
 
-	// Verify we're the initiator
-	if !bytes.Equal(step1Challenge.PK1, c.vaultysID.ToBytes()) {
-		return nil, fmt.Errorf("PK1 mismatch: not our identity")
-	}
-
-	// Check that the first 16 bytes of nonce match our original nonce
-	if !bytes.Equal(step1Challenge.Nonce[:16], c.state.Nonce) {
-		return nil, fmt.Errorf("nonce mismatch")
-	}
-
-	// Verify the remote signature
-	remoteID, err := vaultysid.FromID(step1Challenge.PK2, nil)
+	remote, err := vaultysid.FromID(step1Challenge.PK2, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse remote ID: %w", err)
+		return nil, c.fail("invalid STEP1: unparseable pk2: %w", err)
 	}
 
-	unsignedChallenge := &Challenge{
-		Version:   step1Challenge.Version,
-		Protocol:  step1Challenge.Protocol,
-		Service:   step1Challenge.Service,
-		Timestamp: step1Challenge.Timestamp,
-		PK1:       step1Challenge.PK1,
-		PK2:       step1Challenge.PK2,
-		Nonce:     step1Challenge.Nonce,
-		Metadata: ChallengeMetadata{
-			PK1: make(map[string]string),
-			PK2: make(map[string]string),
-		},
-	}
-
-	challengeBytes, err := SerializeUnsigned(unsignedChallenge)
+	unsigned, err := SerializeUnsigned(step1Challenge)
 	if err != nil {
-		return nil, fmt.Errorf("failed to serialize challenge: %w", err)
+		return nil, c.fail("failed to serialize challenge: %w", err)
+	}
+	if err := remote.VerifyHandshake(unsigned, step1Challenge.Sign2); err != nil {
+		return nil, c.fail("invalid STEP1: sign2 verification failed: %w", err)
 	}
 
-	// Try v1 verification first, then v0 if it fails
-	err = remoteID.VerifyChallenge(challengeBytes, step1Challenge.Sign2)
-	if err != nil {
-		// Try v0 verification
-		err = remoteID.VerifyChallengeV0(challengeBytes, step1Challenge.Sign2, step1Challenge.PK2)
-		if err != nil {
-			return nil, fmt.Errorf("failed to verify remote signature: %w", err)
+	if c.options.Accept != nil {
+		if err := c.options.Accept(remote, sent.Protocol, sent.Service); err != nil {
+			return nil, c.fail("remote refused: %w", err)
 		}
 	}
 
-	// Sign our part
-	var ourSignature []byte
-	if step1Challenge.Version == ProtocolV0 {
-		ourSignature, err = c.vaultysID.SignChallengeV0(challengeBytes, c.vaultysID.ToBytes())
-	} else {
-		ourSignature, err = c.vaultysID.SignChallenge(challengeBytes)
-	}
+	sign1, err := c.vaultysID.SignHandshake(unsigned)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign challenge: %w", err)
+		return nil, c.fail("failed to sign challenge: %w", err)
 	}
 
-	// Create complete challenge
-	complete := &Challenge{
-		Version:   step1Challenge.Version,
-		Protocol:  step1Challenge.Protocol,
-		Service:   step1Challenge.Service,
-		Timestamp: step1Challenge.Timestamp,
-		PK1:       step1Challenge.PK1,
-		PK2:       step1Challenge.PK2,
-		Nonce:     step1Challenge.Nonce,
-		Sign1:     ourSignature,
-		Sign2:     step1Challenge.Sign2,
-		Metadata:  step1Challenge.Metadata,
-		State:     StateComplete,
-	}
+	complete := step1Challenge.Clone()
+	complete.Sign1 = sign1
+	complete.State = StateComplete
+	complete.Error = ""
 
-	c.state.State = StateComplete
-	c.state.RemoteID = step1Challenge.PK2
-	c.state.LastChallenge = complete
-	return complete, nil
+	c.challenge = complete
+	c.remoteID = cloneBytes(complete.PK2)
+	c.state = StateComplete
+	return complete.Clone(), nil
 }
 
-// Finalize processes the complete challenge and finalizes the protocol
+// Finalize (responder) processes the COMPLETE message.
+//
+// Every field must be identical to the STEP1 message this challenger
+// produced, and sign1 must verify; a COMPLETE received in any other state
+// (including UNINITIALISED, i.e. a replayed certificate) is rejected.
 func (c *Challenger) Finalize(completeChallenge *Challenge) error {
-	// Validate complete challenge
-	if completeChallenge.State != StateComplete {
-		return fmt.Errorf("invalid challenge state: expected COMPLETE, got %d", completeChallenge.State)
+	if c.state != StateStep1 {
+		return c.fail("unexpected COMPLETE: challenger is not in STEP1 state (state %d)", c.state)
+	}
+	if completeChallenge == nil {
+		return c.fail("nil challenge")
+	}
+	if err := checkStructure(completeChallenge, StateComplete); err != nil {
+		return c.fail("invalid COMPLETE: %w", err)
 	}
 
-	if !completeChallenge.HasPK1() || !completeChallenge.HasPK2() ||
-		!completeChallenge.HasSign1() || !completeChallenge.HasSign2() {
-		return fmt.Errorf("incomplete challenge: missing required fields")
+	sent := c.challenge
+	switch {
+	case completeChallenge.Version != sent.Version:
+		return c.fail("invalid COMPLETE: version has been tampered with")
+	case completeChallenge.Protocol != sent.Protocol:
+		return c.fail("invalid COMPLETE: protocol has been tampered with")
+	case completeChallenge.Service != sent.Service:
+		return c.fail("invalid COMPLETE: service has been tampered with")
+	case completeChallenge.Timestamp != sent.Timestamp:
+		return c.fail("invalid COMPLETE: timestamp has been tampered with")
+	case !bytes.Equal(completeChallenge.PK1, sent.PK1):
+		return c.fail("invalid COMPLETE: pk1 has been tampered with")
+	case !bytes.Equal(completeChallenge.PK2, sent.PK2):
+		return c.fail("invalid COMPLETE: pk2 has been tampered with")
+	case subtle.ConstantTimeCompare(completeChallenge.Nonce, sent.Nonce) != 1:
+		return c.fail("invalid COMPLETE: nonce has been tampered with")
+	case !completeChallenge.Metadata.Equal(sent.Metadata):
+		return c.fail("invalid COMPLETE: metadata has been tampered with")
+	case !bytes.Equal(completeChallenge.Sign2, sent.Sign2):
+		return c.fail("invalid COMPLETE: sign2 has been tampered with")
 	}
 
-	// Verify we're the responder
-	if !bytes.Equal(completeChallenge.PK2, c.vaultysID.ToBytes()) {
-		return fmt.Errorf("PK2 mismatch: not our identity")
-	}
-
-	// Verify both signatures
-	id1, err := vaultysid.FromID(completeChallenge.PK1, nil)
+	remote, err := vaultysid.FromID(sent.PK1, nil)
 	if err != nil {
-		return fmt.Errorf("failed to parse PK1: %w", err)
+		return c.fail("invalid COMPLETE: unparseable pk1: %w", err)
 	}
-
-	id2, err := vaultysid.FromID(completeChallenge.PK2, nil)
+	unsigned, err := SerializeUnsigned(sent)
 	if err != nil {
-		return fmt.Errorf("failed to parse PK2: %w", err)
+		return c.fail("failed to serialize challenge: %w", err)
+	}
+	if err := remote.VerifyHandshake(unsigned, completeChallenge.Sign1); err != nil {
+		return c.fail("invalid COMPLETE: sign1 verification failed: %w", err)
 	}
 
-	unsignedChallenge := &Challenge{
-		Version:   completeChallenge.Version,
-		Protocol:  completeChallenge.Protocol,
-		Service:   completeChallenge.Service,
-		Timestamp: completeChallenge.Timestamp,
-		PK1:       completeChallenge.PK1,
-		PK2:       completeChallenge.PK2,
-		Nonce:     completeChallenge.Nonce,
-		Metadata: ChallengeMetadata{
-			PK1: make(map[string]string),
-			PK2: make(map[string]string),
-		},
-	}
+	complete := sent.Clone()
+	complete.Sign1 = cloneBytes(completeChallenge.Sign1)
+	complete.State = StateComplete
 
-	challengeBytes, err := SerializeUnsigned(unsignedChallenge)
-	if err != nil {
-		return fmt.Errorf("failed to serialize challenge: %w", err)
-	}
-
-	// Verify PK1's signature
-	err = id1.VerifyChallenge(challengeBytes, completeChallenge.Sign1)
-	if err != nil {
-		// Try v0 verification
-		err = id1.VerifyChallengeV0(challengeBytes, completeChallenge.Sign1, completeChallenge.PK1)
-		if err != nil {
-			return fmt.Errorf("failed to verify PK1 signature: %w", err)
-		}
-	}
-
-	// Verify PK2's signature (should be ours)
-	err = id2.VerifyChallenge(challengeBytes, completeChallenge.Sign2)
-	if err != nil {
-		// Try v0 verification
-		err = id2.VerifyChallengeV0(challengeBytes, completeChallenge.Sign2, completeChallenge.PK2)
-		if err != nil {
-			return fmt.Errorf("failed to verify PK2 signature: %w", err)
-		}
-	}
-
-	c.state.State = StateComplete
-	c.state.RemoteID = completeChallenge.PK1
-	c.state.LastChallenge = completeChallenge
+	c.challenge = complete
+	c.remoteID = cloneBytes(complete.PK1)
+	c.state = StateComplete
 	return nil
 }
 
 // Process handles an incoming challenge and returns the appropriate response
-func (c *Challenger) Process(incomingChallenge *Challenge) (*Challenge, error) {
-	switch incomingChallenge.State {
+// (nil after a successful Finalize). The message's own state only selects
+// the transition; the challenger's state machine decides whether it is legal.
+func (c *Challenger) Process(incoming *Challenge) (*Challenge, error) {
+	if incoming == nil {
+		return nil, c.fail("nil challenge")
+	}
+	switch incoming.State {
 	case StateInit:
-		return c.Step1(incomingChallenge)
+		return c.Step1(incoming)
 	case StateStep1:
-		return c.Step2(incomingChallenge)
+		return c.Step2(incoming)
 	case StateComplete:
-		err := c.Finalize(incomingChallenge)
-		if err != nil {
+		if err := c.Finalize(incoming); err != nil {
 			return nil, err
 		}
-		return incomingChallenge, nil
+		return nil, nil
 	default:
-		return nil, fmt.Errorf("invalid challenge state: %d", incomingChallenge.State)
+		return nil, c.fail("invalid challenge state: %d", incoming.State)
 	}
+}
+
+// Accept deserializes the next protocol message received from the peer of
+// this live session and processes it through the state machine (see
+// Process). It returns the message to send back, or nil after the
+// responder's successful Finalize.
+//
+// To merely inspect or verify a stored certificate without touching any
+// session, use VerifyCertificate.
+func (c *Challenger) Accept(challengeBytes []byte) (*Challenge, error) {
+	challenge, err := Deserialize(challengeBytes)
+	if err != nil {
+		return nil, c.fail("failed to deserialize challenge: %w", err)
+	}
+	return c.Process(challenge)
 }
 
 // GetState returns the current challenger state
 func (c *Challenger) GetState() int {
-	return c.state.State
+	return c.state
 }
 
-// GetRemoteID returns the remote identity bytes
+// Err returns the error that moved the challenger to ERROR, if any.
+func (c *Challenger) Err() error {
+	return c.err
+}
+
+// HasFailed returns true if the challenger is in the terminal ERROR state.
+func (c *Challenger) HasFailed() bool {
+	return c.state == StateError
+}
+
+// GetRemoteID returns the authenticated remote identity bytes. It is only
+// available once the handshake is COMPLETE.
 func (c *Challenger) GetRemoteID() []byte {
-	return c.state.RemoteID
+	if c.state != StateComplete {
+		return nil
+	}
+	return cloneBytes(c.remoteID)
 }
 
-// GetRemoteVaultysID returns the remote VaultysID
+// GetRemoteVaultysID returns the authenticated remote VaultysID, carrying
+// the handshake certificate. Only available once COMPLETE.
 func (c *Challenger) GetRemoteVaultysID() (*vaultysid.VaultysID, error) {
-	if c.state.RemoteID == nil {
-		return nil, fmt.Errorf("no remote ID available")
+	if c.state != StateComplete || c.remoteID == nil {
+		return nil, fmt.Errorf("handshake is not complete")
 	}
-	return vaultysid.FromID(c.state.RemoteID, nil)
+	cert, err := c.GetCertificate()
+	if err != nil {
+		return nil, err
+	}
+	return vaultysid.FromID(c.remoteID, cert)
+}
+
+// GetCertificate returns the serialized COMPLETE certificate.
+func (c *Challenger) GetCertificate() ([]byte, error) {
+	if c.state != StateComplete || c.challenge == nil {
+		return nil, fmt.Errorf("handshake is not complete")
+	}
+	return Serialize(c.challenge)
+}
+
+// GetContext returns the protocol, service and metadata of the current session.
+func (c *Challenger) GetContext() (protocol, service string, metadata ChallengeMetadata) {
+	if c.challenge == nil {
+		return "", "", ChallengeMetadata{}
+	}
+	return c.challenge.Protocol, c.challenge.Service, ChallengeMetadata{
+		PK1: c.challenge.Metadata.PK1.Clone(),
+		PK2: c.challenge.Metadata.PK2.Clone(),
+	}
 }
 
 // IsComplete returns true if the challenge protocol is complete
 func (c *Challenger) IsComplete() bool {
-	return c.state.State == StateComplete
+	return c.state == StateComplete
 }
 
-// Reset resets the challenger to uninitialized state
+// Reset discards the session and returns the challenger to UNINITIALISED.
 func (c *Challenger) Reset() {
-	c.state = &ChallengerState{
-		VaultysID: c.vaultysID,
-		State:     StateUninitialized,
-		Version:   c.options.Version,
-		Metadata:  make(map[string]string),
-	}
+	c.state = StateUninitialized
+	c.challenge = nil
+	c.remoteID = nil
+	c.err = nil
+	c.metadata = make(map[string]string)
 }
 
-// Accept accepts an incoming challenge and returns a response
-func (c *Challenger) Accept(challengeBytes []byte) (*Challenge, error) {
-	// Deserialize infers State from which fields are present (PK1/PK2/Sign1/Sign2/nonce
-	// length) since State isn't part of the wire format (msgpack:"-"). A raw
-	// msgpack.Unmarshal here would leave State at its zero value (StateInit) for
-	// every message, mishandling step1/complete messages as init messages.
-	challenge, err := Deserialize(challengeBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to deserialize challenge: %w", err)
-	}
-
-	var response *Challenge
-
-	// Process based on challenge state
-	switch challenge.State {
-	case StateInit:
-		// We're the responder, process init and return step1
-		response, err = c.Step1(challenge)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process init: %w", err)
-		}
-	case StateStep1:
-		// We're the initiator, process step1 and return complete
-		response, err = c.Step2(challenge)
-		if err != nil {
-			return nil, fmt.Errorf("failed to process step1: %w", err)
-		}
-	case StateComplete:
-		// We're the responder, finalize the protocol
-		if err := c.Finalize(challenge); err != nil {
-			return nil, fmt.Errorf("failed to finalize: %w", err)
-		}
-		// Return nil for successful finalization
-		return nil, nil
-	default:
-		return nil, fmt.Errorf("invalid challenge state: %d", challenge.State)
-	}
-
-	return response, nil
-}
-
-// SetMetadata sets metadata to include in challenges
+// SetMetadata sets our own metadata, included in the next INIT or STEP1 we produce.
 func (c *Challenger) SetMetadata(key, value string) {
-	c.state.Metadata[key] = value
+	c.metadata[key] = value
 }
 
-// GetMetadata gets a metadata value
+// GetMetadata gets one of our own metadata values
 func (c *Challenger) GetMetadata(key string) (string, bool) {
-	val, ok := c.state.Metadata[key]
+	val, ok := c.metadata[key]
 	return val, ok
 }
 
-// validateTimestamp checks if the timestamp is within the allowed time window.
-// Timestamps are Unix milliseconds, matching TS Challenger's use of Date.now()/liveliness.
-func (c *Challenger) validateTimestamp(timestamp int64) error {
+// validateTimestamp checks the timestamp (Unix ms) against the liveliness window.
+func (c *Challenger) validateTimestamp(timestamp uint64) error {
+	return validateTimestampWindow(timestamp, c.options.TimeWindow.Milliseconds())
+}
+
+func validateTimestampWindow(timestamp uint64, maxDiff int64) error {
 	now := crypto.Now()
-	diff := now - timestamp
+	if timestamp > uint64(1)<<62 {
+		return fmt.Errorf("timestamp out of range")
+	}
+	diff := now - int64(timestamp)
 	if diff < 0 {
 		diff = -diff
 	}
-
-	maxDiff := c.options.TimeWindow.Milliseconds()
-	if diff > maxDiff {
+	if diff >= maxDiff {
 		return fmt.Errorf("timestamp outside allowed window: %d ms", diff)
+	}
+	return nil
+}
+
+// checkStructure validates the fields a message in the given state must
+// (and must not) carry. It performs no signature verification.
+func checkStructure(c *Challenge, state int) error {
+	if c.Version != ProtocolV1 {
+		return fmt.Errorf("unsupported challenge version %d", c.Version)
+	}
+	if c.Protocol == "" || c.Service == "" || c.Timestamp == 0 {
+		return fmt.Errorf("missing protocol, service or timestamp")
+	}
+	if !c.HasPK1() {
+		return fmt.Errorf("missing pk1")
+	}
+	switch state {
+	case StateInit:
+		if c.HasPK2() || c.HasSign1() || c.HasSign2() {
+			return fmt.Errorf("INIT must not carry pk2 or signatures")
+		}
+		if len(c.Nonce) != nonceHalfSize {
+			return fmt.Errorf("INIT nonce must be %d bytes", nonceHalfSize)
+		}
+		if c.Metadata.PK2 != nil {
+			return fmt.Errorf("INIT must not carry metadata.pk2")
+		}
+	case StateStep1:
+		if !c.HasPK2() || !c.HasSign2() || c.HasSign1() {
+			return fmt.Errorf("STEP1 must carry pk2 and sign2 only")
+		}
+		if len(c.Nonce) != 2*nonceHalfSize {
+			return fmt.Errorf("STEP1 nonce must be %d bytes", 2*nonceHalfSize)
+		}
+	case StateComplete:
+		if !c.HasPK2() || !c.HasSign1() || !c.HasSign2() {
+			return fmt.Errorf("COMPLETE must carry pk2, sign1 and sign2")
+		}
+		if len(c.Nonce) != 2*nonceHalfSize {
+			return fmt.Errorf("COMPLETE nonce must be %d bytes", 2*nonceHalfSize)
+		}
+	default:
+		return fmt.Errorf("invalid state %d", state)
 	}
 	return nil
 }
@@ -442,11 +477,8 @@ func (c *Challenger) validateTimestamp(timestamp int64) error {
 // marshalCompact encodes v the way TS's @msgpack/msgpack does: integers use
 // the smallest representation that fits the value (e.g. version=1 encodes as
 // a bare 0x01 positive fixint, not vmihailenco's default 0xcc 0x01 uint8
-// tag). Without this, any integer field whose Go type is wider than the
-// value strictly needs (uint8, int64, ...) encodes to different bytes than
-// TS for the identical value, which silently breaks byte-exact signature
-// verification across languages -- this bit both `version` and `timestamp`
-// before this was added.
+// tag). Without this, integer fields encode to different bytes than TS for
+// the identical value, which breaks byte-exact signature verification.
 func marshalCompact(v interface{}) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
@@ -457,23 +489,15 @@ func marshalCompact(v interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Serialize serializes a challenge to bytes.
-//
-// This marshals the Challenge struct directly rather than building a
-// map[string]interface{}: msgpack.Marshal on a map has no stable key
-// order (Go map iteration is randomized per call), which produced
-// non-reproducible wire bytes and could never byte-match TS's
-// insertion-ordered serialize(). The Challenge struct's own msgpack
-// tags already declare the correct field order and correct
-// per-field omitempty (pk2/sign1/sign2), so marshaling it directly
-// reproduces TS's exact field order and field set for every state
-// (State/Error are tagged `msgpack:"-"` and excluded automatically).
+// Serialize serializes a challenge to its wire format. The Challenge struct
+// tags declare TS's field order and per-state field set (pk2/sign1/sign2
+// omitted when empty; State/Error excluded).
 func Serialize(challenge *Challenge) ([]byte, error) {
 	return marshalCompact(challenge)
 }
 
-// orderedChallengeData is used to ensure consistent field ordering in msgpack
-// Fields must match TypeScript order: version, protocol, service, timestamp, pk1, pk2, nonce, metadata
+// orderedChallengeData is the unsigned view of a challenge, in TS field order:
+// version, protocol, service, timestamp, pk1, pk2, nonce, metadata.
 type orderedChallengeData struct {
 	Version   uint8             `msgpack:"version"`
 	Protocol  string            `msgpack:"protocol"`
@@ -485,19 +509,15 @@ type orderedChallengeData struct {
 	Metadata  ChallengeMetadata `msgpack:"metadata"`
 }
 
-// SerializeUnsigned serializes a challenge without signatures for signing
+// SerializeUnsigned returns the bytes both parties sign: byte-for-byte the
+// TypeScript v1 `serializeUnsigned`, i.e. msgpack of {version, protocol,
+// service, timestamp, pk1, pk2, nonce, metadata}, metadata INCLUDED exactly
+// as carried by the challenge (presence and entry order preserved).
 func SerializeUnsigned(challenge *Challenge) ([]byte, error) {
-	// Ensure metadata is always initialized
-	metadata := challenge.Metadata
-	if metadata.PK1 == nil {
-		metadata.PK1 = make(map[string]string)
+	if challenge.Version != ProtocolV1 {
+		return nil, fmt.Errorf("unsupported challenge version %d", challenge.Version)
 	}
-	if metadata.PK2 == nil {
-		metadata.PK2 = make(map[string]string)
-	}
-
-	// Use ordered struct to match TypeScript field order exactly
-	data := orderedChallengeData{
+	return marshalCompact(orderedChallengeData{
 		Version:   challenge.Version,
 		Protocol:  challenge.Protocol,
 		Service:   challenge.Service,
@@ -505,20 +525,28 @@ func SerializeUnsigned(challenge *Challenge) ([]byte, error) {
 		PK1:       challenge.PK1,
 		PK2:       challenge.PK2,
 		Nonce:     challenge.Nonce,
-		Metadata:  metadata,
-	}
-
-	return marshalCompact(data)
+		Metadata:  challenge.Metadata,
+	})
 }
 
-// Deserialize deserializes a challenge from bytes
-func Deserialize(data []byte) (*Challenge, error) {
+// Deserialize parses a challenge, infers its state from the fields present
+// and validates it. For STEP1 and COMPLETE messages the signatures present
+// are verified. Deserialize is read-only and never panics on malformed
+// input; on failure it returns the partially-decoded challenge in
+// StateError together with the error.
+func Deserialize(data []byte) (ch *Challenge, err error) {
+	defer func() {
+		// Defensive: a parser bug must not become a remote crash.
+		if r := recover(); r != nil {
+			ch, err = &Challenge{State: StateError, Error: "malformed challenge"}, fmt.Errorf("malformed challenge: %v", r)
+		}
+	}()
+
 	var challenge Challenge
 	if err := msgpack.Unmarshal(data, &challenge); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal challenge: %w", err)
+		return &Challenge{State: StateError, Error: err.Error()}, fmt.Errorf("failed to unmarshal challenge: %w", err)
 	}
 
-	// Validate and set state based on fields present
 	if err := validateAndSetState(&challenge); err != nil {
 		challenge.State = StateError
 		challenge.Error = err.Error()
@@ -528,84 +556,67 @@ func Deserialize(data []byte) (*Challenge, error) {
 	return &challenge, nil
 }
 
-// validateAndSetState determines the state based on challenge fields
+// VerifyCertificate deserializes a COMPLETE certificate and verifies both
+// handshake signatures. It is read-only: it never affects any live
+// session, never signs, and works with public-only identities. Liveliness
+// is not checked (certificates are long-lived records).
+func VerifyCertificate(certificate []byte) (*Challenge, error) {
+	ch, err := Deserialize(certificate)
+	if err != nil {
+		return nil, err
+	}
+	if ch.State != StateComplete {
+		return nil, fmt.Errorf("certificate is not a COMPLETE handshake")
+	}
+	return ch, nil
+}
+
+// validateAndSetState determines the state based on challenge fields and
+// verifies whichever signatures are present.
 func validateAndSetState(c *Challenge) error {
-	// Basic validation
-	if c.Protocol == "" || c.Service == "" || c.Timestamp == 0 {
-		return fmt.Errorf("missing required fields")
+	var state int
+	switch {
+	case c.HasPK1() && !c.HasPK2() && !c.HasSign1() && !c.HasSign2():
+		state = StateInit
+	case c.HasPK1() && c.HasPK2() && !c.HasSign1() && c.HasSign2():
+		state = StateStep1
+	case c.HasPK1() && c.HasPK2() && c.HasSign1() && c.HasSign2():
+		state = StateComplete
+	default:
+		return fmt.Errorf("invalid challenge structure")
 	}
-
-	// Determine state based on fields
-	if c.HasPK1() && !c.HasPK2() && !c.HasSign1() && !c.HasSign2() && len(c.Nonce) == 16 {
-		c.State = StateInit
+	if err := checkStructure(c, state); err != nil {
+		return err
+	}
+	c.State = state
+	if state == StateInit {
 		return nil
 	}
-
-	if c.HasPK1() && c.HasPK2() && !c.HasSign1() && c.HasSign2() && len(c.Nonce) == 32 {
-		c.State = StateStep1
-		// Verify sign2
-		id2, err := vaultysid.FromID(c.PK2, nil)
-		if err != nil {
-			return fmt.Errorf("invalid PK2: %w", err)
-		}
-
-		unsignedBytes, err := SerializeUnsigned(c)
-		if err != nil {
-			return fmt.Errorf("failed to serialize for verification: %w", err)
-		}
-
-		err = id2.VerifyChallenge(unsignedBytes, c.Sign2)
-		if err != nil {
-			// Try v0 verification
-			err = id2.VerifyChallengeV0(unsignedBytes, c.Sign2, c.PK2)
-			if err != nil {
-				return fmt.Errorf("failed to verify sign2: %w", err)
-			}
-		}
-		return nil
+	if bytes.Equal(c.PK1, c.PK2) {
+		return fmt.Errorf("pk1 and pk2 must differ")
 	}
 
-	if c.HasPK1() && c.HasPK2() && c.HasSign1() && c.HasSign2() && len(c.Nonce) == 32 {
-		c.State = StateComplete
+	unsigned, err := SerializeUnsigned(c)
+	if err != nil {
+		return fmt.Errorf("failed to serialize for verification: %w", err)
+	}
 
-		// Verify both signatures
+	id2, err := vaultysid.FromID(c.PK2, nil)
+	if err != nil {
+		return fmt.Errorf("invalid pk2: %w", err)
+	}
+	if err := id2.VerifyHandshake(unsigned, c.Sign2); err != nil {
+		return fmt.Errorf("failed to verify sign2: %w", err)
+	}
+
+	if state == StateComplete {
 		id1, err := vaultysid.FromID(c.PK1, nil)
 		if err != nil {
-			return fmt.Errorf("invalid PK1: %w", err)
+			return fmt.Errorf("invalid pk1: %w", err)
 		}
-
-		id2, err := vaultysid.FromID(c.PK2, nil)
-		if err != nil {
-			return fmt.Errorf("invalid PK2: %w", err)
+		if err := id1.VerifyHandshake(unsigned, c.Sign1); err != nil {
+			return fmt.Errorf("failed to verify sign1: %w", err)
 		}
-
-		unsignedBytes, err := SerializeUnsigned(c)
-		if err != nil {
-			return fmt.Errorf("failed to serialize for verification: %w", err)
-		}
-
-		// Verify sign1
-		err = id1.VerifyChallenge(unsignedBytes, c.Sign1)
-		if err != nil {
-			// Try v0 verification
-			err = id1.VerifyChallengeV0(unsignedBytes, c.Sign1, c.PK1)
-			if err != nil {
-				return fmt.Errorf("failed to verify sign1: %w", err)
-			}
-		}
-
-		// Verify sign2
-		err = id2.VerifyChallenge(unsignedBytes, c.Sign2)
-		if err != nil {
-			// Try v0 verification
-			err = id2.VerifyChallengeV0(unsignedBytes, c.Sign2, c.PK2)
-			if err != nil {
-				return fmt.Errorf("failed to verify sign2: %w", err)
-			}
-		}
-
-		return nil
 	}
-
-	return fmt.Errorf("invalid challenge structure")
+	return nil
 }
