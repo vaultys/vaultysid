@@ -33,7 +33,6 @@ async function main() {
   const vaultysId = await VaultysId.generateMachine(ALGORITHM);
   const store = MemoryStorage();
   const idManager = new IdManager(vaultysId, store);
-  idManager.setProtocolVersion(1);
   const execManager = new ExecutionManager(idManager);
 
   console.log(`[${BROKER_NAME}] DID = ${vaultysId.did}`);

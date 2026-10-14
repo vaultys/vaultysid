@@ -360,7 +360,6 @@ describe("Go IdManager Compatibility Tests", () => {
       const goSignature = Buffer.from(goVectors.challenge.protocolV0.signature, "hex");
 
       // Set protocol version
-      manager.setProtocolVersion(0);
 
       // Verify Go signature
       const isValid = await manager.verifyChallenge(challenge, goSignature);
@@ -379,7 +378,6 @@ describe("Go IdManager Compatibility Tests", () => {
       const goSignature = Buffer.from(goVectors.challenge.protocolV1.signature, "hex");
 
       // Set protocol version
-      manager.setProtocolVersion(1);
 
       // Verify Go signature
       const isValid = await manager.verifyChallenge(challenge, goSignature);
@@ -397,12 +395,10 @@ describe("Go IdManager Compatibility Tests", () => {
       const challenge = Buffer.from(goVectors.challenge.protocolV1.challenge, "hex");
 
       // Generate v1 signature
-      manager.setProtocolVersion(1);
       const signatureV1 = await manager.signChallenge(challenge);
       expect(signatureV1).to.exist;
 
       // Generate v0 signature
-      manager.setProtocolVersion(0);
       const signatureV0 = await manager.signChallenge(challenge);
       expect(signatureV0).to.exist;
     });

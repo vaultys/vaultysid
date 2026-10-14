@@ -7,6 +7,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { p256, p384, p521 } from "@noble/curves/nist.js";
 // import { BasicConstraintsExtension, X509Certificate } from "@peculiar/x509";
 import { PQ_COSE_ALG, PQ_COSE_KEY_TYPE, PQ_COSE_KEY_PARAMS, signDilithium, verifyDilithium, createDilithiumCoseKey, generateDilithiumKeyPair } from "../pqCrypto";
+import { assertSoftCredentialsEnabled, getWebAuthnExpectations, WebAuthnExpectations } from "./softCredentialsConfig";
 
 const credentials: Record<string, SoftCredentials> = {};
 
@@ -335,6 +336,7 @@ export default class SoftCredentials {
   // }
 
   static async create(options: CredentialCreationOptions, origin = "test"): Promise<PublicKeyCredential> {
+    assertSoftCredentialsEnabled();
     const credential = new SoftCredentials();
     const publicKey = options.publicKey!;
     credential.options = publicKey;
@@ -444,7 +446,21 @@ export default class SoftCredentials {
     return pkCredentials;
   }
 
-  static simpleVerify(COSEPublicKey: Buffer, response: AssertionResponseLike, userVerification = false) {
+  /**
+   * Verify a WebAuthn assertion against a COSE public key.
+   * Requires clientData.type === "webauthn.get" and the UP flag (plus UV when
+   * userVerification is requested). When an expected rpId / origin is provided
+   * (argument or configureWebAuthn()), rpIdHash / clientData.origin are checked too.
+   */
+  static simpleVerify(COSEPublicKey: Buffer, response: AssertionResponseLike, userVerification = false, expected?: WebAuthnExpectations) {
+    try {
+      return SoftCredentials._simpleVerify(COSEPublicKey, response, userVerification, expected ?? getWebAuthnExpectations());
+    } catch {
+      return false;
+    }
+  }
+
+  private static _simpleVerify(COSEPublicKey: Buffer, response: AssertionResponseLike, userVerification: boolean, expected: WebAuthnExpectations) {
     const ckey = cbor.decode(COSEPublicKey, { extendedResults: true }).value;
     // The caller may hand us ArrayBuffers (real WebAuthn), Buffers (msgpack-decoded
     // signature payload) or plain Uint8Arrays. Normalise once.
@@ -452,9 +468,21 @@ export default class SoftCredentials {
     const clientDataJSON = Buffer.from(response.clientDataJSON as ArrayBuffer);
     const signature = Buffer.from(response.signature as ArrayBuffer);
 
+    // rpIdHash (32) + flags (1) + signCount (4)
+    if (authenticatorData.length < 37) return false;
+
+    const clientData = JSON.parse(clientDataJSON.toString("utf-8"));
+    if (!clientData || clientData.type !== "webauthn.get") return false;
+    if (expected.origin !== undefined && clientData.origin !== expected.origin) return false;
+    if (expected.rpId !== undefined) {
+      const expectedRpIdHash = myhash("sha256", Buffer.from(expected.rpId, "utf-8"));
+      if (!Buffer.from(authenticatorData.subarray(0, 32)).equals(expectedRpIdHash)) return false;
+    }
+
     const flagsInt = authenticatorData[32];
-    const goodflags = userVerification ? !!(flagsInt & 0x04) : !!(flagsInt & 0x01);
-    if (!goodflags) return false;
+    // user presence is always required, user verification on demand
+    if (!(flagsInt & 0x01)) return false;
+    if (userVerification && !(flagsInt & 0x04)) return false;
 
     const hash = myhash("sha256", clientDataJSON);
     const data = Buffer.concat([authenticatorData, hash]);
@@ -492,6 +520,17 @@ export default class SoftCredentials {
     //if (assertion.id !== attestation.id) return false;
     const hash = myhash("sha256", Buffer.from(assertion.response.clientDataJSON));
     const ass = assertion.response as AuthenticatorAssertionResponse;
+    // the assertion itself must be a webauthn.get with user presence (and UV on demand)
+    try {
+      const clientData = JSON.parse(Buffer.from(ass.clientDataJSON).toString("utf-8"));
+      if (clientData?.type !== "webauthn.get") return false;
+    } catch {
+      return false;
+    }
+    const assertionAuthData = Buffer.from(ass.authenticatorData);
+    if (assertionAuthData.length < 37) return false;
+    if (!(assertionAuthData[32] & 0x01)) return false;
+    if (userVerifiation && !(assertionAuthData[32] & 0x04)) return false;
     const att = attestation.response as AuthenticatorAttestationResponse;
     let data = Buffer.concat([Buffer.from(ass.authenticatorData), hash]);
     const ato = cbor.decode(att.attestationObject);
@@ -544,6 +583,7 @@ export default class SoftCredentials {
   }
 
   static async get({ publicKey }: { publicKey: PublicKeyCredentialRequestOptions }, origin = "test"): Promise<PublicKeyCredential> {
+    assertSoftCredentialsEnabled();
     if (!publicKey.allowCredentials) throw new Error();
     const id = Buffer.from(publicKey.allowCredentials[0].id as ArrayBuffer).toString("base64");
     const credential = credentials[id];

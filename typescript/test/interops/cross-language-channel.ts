@@ -188,7 +188,6 @@ if (require.main === module) {
     // Create IdManager with specified algorithm
     const vaultysId = await VaultysId.generatePerson(algorithm as "ed25519" | "dilithium");
     const manager = new IdManager(vaultysId, MemoryStorage());
-    manager.setProtocolVersion(1);
     manager.name = role === "acceptor" ? "Bob (TypeScript)" : "Alice (TypeScript)";
     manager.email = role === "acceptor" ? "bob@typescript.com" : "alice@typescript.com";
 

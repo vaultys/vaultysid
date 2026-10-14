@@ -8,6 +8,8 @@ import GameOfLifeIcon from "./src/GameOfLifeIcon";
 import CryptoChannel from "./src/cryptoChannel";
 import { migrateVaultysId, migrateIdManager } from "./src/utils/migration";
 import DeprecatedKeyManager from "./src/KeyManager/DeprecatedKeyManager";
+import { enableSoftCredentials, isSoftCredentialsEnabled, configureWebAuthn } from "./src/platform/softCredentialsConfig";
+import { dhiesV2Encrypt, dhiesV2Decrypt } from "./src/KeyManager/dhies";
 
 //utils
 import * as crypto from "./src/crypto";
@@ -19,7 +21,7 @@ if (typeof Symbol.dispose === "undefined") {
   Symbol.dispose = Symbol("Symbol.dispose");
 }
 
-export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel, DeprecatedKeyManager, migrateVaultysId, migrateIdManager };
+export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel, DeprecatedKeyManager, migrateVaultysId, migrateIdManager, enableSoftCredentials, isSoftCredentialsEnabled, configureWebAuthn, dhiesV2Encrypt, dhiesV2Decrypt };
 
 export type { Channel, Store, File, StoredApp, StoredContact, FileSignature };
 

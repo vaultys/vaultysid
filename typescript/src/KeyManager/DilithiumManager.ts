@@ -4,6 +4,9 @@ import nacl from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
 import { generateDilithiumKeyPair, signDilithium, verifyDilithium } from "../pqCrypto";
 import CypherManager from "./CypherManager";
+import { decodeRecord, readVersion, requireBytes } from "./validation";
+
+export const DILITHIUM_PK_LENGTH = 2592;
 
 const sha512 = (data: Buffer) => hash("sha512", data);
 
@@ -64,11 +67,11 @@ export default class DilithiumManager extends CypherManager {
   }
 
   static fromSecret(secret: Buffer) {
-    const data = decode(secret) as SecretExport;
+    const data = decodeRecord(secret, "Dilithium secret");
     const km = new DilithiumManager();
-    km.version = data.v ?? 0;
+    km.version = readVersion(data.v);
     km.capability = "private";
-    km.seed = Buffer.from(data.s);
+    km.seed = requireBytes(data.s, "Dilithium seed", 64);
     km.signer = generateDilithiumKeyPair(km.seed.slice(0, 32));
     const seed2 = km.seed.slice(32, 64);
     const cypher = nacl.box.keyPair.fromSecretKey(seed2);
@@ -92,15 +95,15 @@ export default class DilithiumManager extends CypherManager {
   }
 
   static fromId(id: Buffer) {
-    const data = decode(id) as DataExport;
+    const data = decodeRecord(id, "Dilithium id");
     const km = new DilithiumManager();
-    km.version = data.v ?? 0;
+    km.version = readVersion(data.v);
     km.capability = "public";
     km.signer = {
-      publicKey: data.x,
+      publicKey: requireBytes(data.x, "Dilithium public key", DILITHIUM_PK_LENGTH),
     };
     km.cypher = {
-      publicKey: data.e,
+      publicKey: requireBytes(data.e, "X25519 public key", 32),
     };
     // console.log(km)
     return km;
@@ -116,6 +119,10 @@ export default class DilithiumManager extends CypherManager {
   }
 
   verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean {
-    return verifyDilithium(data, signature, this.signer.publicKey);
+    try {
+      return verifyDilithium(data, signature, this.signer.publicKey);
+    } catch {
+      return false;
+    }
   }
 }

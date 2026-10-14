@@ -6,6 +6,7 @@ import { decode, encode } from "@msgpack/msgpack";
 import { ed25519 } from "@noble/curves/ed25519.js";
 import { KeyPair } from "./";
 import CypherManager from "./CypherManager";
+import { decodeRecord, readVersion, requireBytes } from "./validation";
 
 // // @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
 // ed25519.CURVE = { ...ed25519.CURVE };
@@ -109,15 +110,17 @@ export default class Ed25519Manager extends CypherManager {
   }
 
   static fromSecret(secret: Buffer) {
-    const data = decode(secret) as DataExport;
+    const data = decodeRecord(secret, "Ed25519 secret");
+    const x = requireBytes(data.x, "Ed25519 signing secret key", 32);
+    const e = requireBytes(data.e, "X25519 secret key", 32);
     const km = new Ed25519Manager();
-    km.version = data.v ?? 0;
+    km.version = readVersion(data.v);
     km.capability = "private";
     km.signer = {
-      secretKey: data.x.slice(0, 32),
-      publicKey: Buffer.from(ed25519.getPublicKey(data.x.slice(0, 32))),
+      secretKey: x,
+      publicKey: Buffer.from(ed25519.getPublicKey(x)),
     };
-    const cypher = nacl.box.keyPair.fromSecretKey(data.e);
+    const cypher = nacl.box.keyPair.fromSecretKey(e);
     km.cypher = {
       publicKey: Buffer.from(cypher.publicKey),
       secretKey: Buffer.from(cypher.secretKey),
@@ -138,21 +141,25 @@ export default class Ed25519Manager extends CypherManager {
   }
 
   static fromId(id: Buffer) {
-    const data = decode(id) as DataExport;
+    const data = decodeRecord(id, "Ed25519 id");
     const km = new Ed25519Manager();
-    km.version = data.v ?? 0;
+    km.version = readVersion(data.v);
     km.capability = "public";
     km.signer = {
-      publicKey: data.x,
+      publicKey: requireBytes(data.x, "Ed25519 public key", 32),
     };
     km.cypher = {
-      publicKey: data.e,
+      publicKey: requireBytes(data.e, "X25519 public key", 32),
     };
     return km;
   }
 
   verify(data: Buffer, signature: Buffer, userVerificationIgnored?: boolean): boolean {
-    return ed25519.verify(signature, data, this.signer.publicKey);
+    try {
+      return ed25519.verify(signature, data, this.signer.publicKey);
+    } catch {
+      return false;
+    }
   }
 
   cleanSecureData() {

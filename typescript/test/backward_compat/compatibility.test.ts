@@ -52,7 +52,7 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
     });
 
     describe("Signing and Verification", () => {
-      it("should verify signatures created by old version with current version", async () => {
+      it("no longer accepts v0-domain signatures created by the old version (4.0.0 breaking change)", async () => {
         const message = Buffer.from([1, 2, 3, 4, 5]);
 
         // Sign with old version
@@ -61,10 +61,8 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
         expect(oldId.verifyChallenge(message, signature, false)).to.be.true;
 
         const currentId = VaultysIdCurrent.fromId(oldId.id);
-
-        //console.log(currentId, oldId);
-        // Verify with current version
-        expect(currentId.verifyChallenge_v0(message, signature, false, oldId.id)).to.be.true;
+        // the v0 signature domain sha256(id || challenge) was removed
+        expect(currentId.verifyChallenge(message, signature, false)).to.be.false;
       });
     });
 
@@ -215,9 +213,9 @@ describe("Backward Compatibility Tests - @vaultys/id@2.4.9 vs Current", () => {
         const oldVid = VaultysIdOld.fromId(Buffer.from(data.serverId, "base64"));
         expect(oldVid.verifyChallenge("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false)).to.be.true;
 
-        // Verify with current version - should also support this old format
+        // The current version still parses the id, but the v0 signature domain was removed (4.0.0)
         const currentVid = VaultysIdCurrent.fromId(Buffer.from(data.serverId, "base64"));
-        expect(currentVid.verifyChallenge_v0("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false, Buffer.from(data.serverId, "base64"))).to.be.true;
+        expect(currentVid.verifyChallenge("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false)).to.be.false;
       });
 
       it("should work with KeyManager.generate_Id25519() from v2.x", async () => {

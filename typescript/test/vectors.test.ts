@@ -55,7 +55,6 @@ const IDs: Record<string, object> = {
       authType: "P256VerificationKey2020",
       encType: "X25519KeyAgreementKey2019",
       ckey: "pQECAyYgASFYIAahPdTq/F42/PU9WcYGaF4k7BQ1gnD9QIwX2wAcfjKoIlggO56gS5dUKbQZSeBrcYZcOZHZF5F568tgRiDLO2mv5/I=",
-      webAuthn: {},
     },
   },
 };
@@ -96,17 +95,6 @@ describe("Test Vectors - legacy (bip32-ed25519)", () => {
     assert.equal(serializer(id1), serializer(id2));
   });
 
-  it("should validate signature of deprecated ID", async () => {
-    const data = {
-      serverId: "AIShdgGhcMQgElUJZ+qkMSASY7D/3RHa7ONo3X58XYYmtNdDs+H+UJSheMQgQMzbrE2ADcwHYY/XOjQm9UmmaGq9hnH2bQ64vTw+ZVmhZcQg+Ubxwfp1Y+dNOi49vJWJE0CHt/8Ebw+vYpYkjelr5zc=",
-      signature: "anDSvD0r/q7Ozczt40R7Cc2HdjQ0SwFVooU/GWCXfsEtMJ6keUrvfX0wTO2M0uwoPgIr0dZs7Is6JtRPTxU5Ag==",
-      timestamp: 1756929814984,
-    };
-    const id = VaultysId.fromId(data.serverId, undefined, "base64");
-    //console.log(id);
-    assert.equal(id.verifyChallenge_v0("vaultys.link.vaultys.org", Buffer.from(data.signature, "base64"), false, Buffer.from(data.serverId, "base64")), true);
-  });
-
   it("deprecated ID type 1 backward compatibility", async () => {
     const km = await DeprecatedKeyManager.generate_Id25519();
     const vid = new VaultysId(km, undefined, 1);
@@ -121,7 +109,7 @@ describe("Test Vectors - legacy (bip32-ed25519)", () => {
     assert.deepEqual(km.proof, (verifyID.keyManager as DeprecatedKeyManager).proof);
 
     assert.equal(verifyID.verifyChallenge(message, await vid.signChallenge(message), true), true);
-    assert.equal(verifyID.verifyChallenge_v0(message, await vid.signChallenge_v0(message, vid.id), true, vid.id), true);
+    assert.equal(verifyID.verify(message, await vid.sign(message)), true);
   });
 });
 

@@ -1,4 +1,7 @@
 import SoftCredentials from "./SoftCredentials";
+import { isSoftCredentialsEnabled } from "./softCredentialsConfig";
+
+export { enableSoftCredentials, isSoftCredentialsEnabled, configureWebAuthn, getWebAuthnExpectations } from "./softCredentialsConfig";
 
 export interface WebAuthnProvider {
   create(options: PublicKeyCredentialCreationOptions): Promise<PublicKeyCredential>;
@@ -65,9 +68,15 @@ export class NodeWebAuthn implements WebAuthnProvider {
 }
 
 // Factory function
+// There is NO silent fallback to the insecure SoftCredentials authenticator:
+// outside a browser it is only returned when explicitly enabled with
+// enableSoftCredentials(), otherwise this throws.
 export function getWebAuthnProvider(options?: { origin?: string }): WebAuthnProvider {
   if (typeof window !== "undefined") {
     return new BrowserWebAuthn();
+  }
+  if (!isSoftCredentialsEnabled()) {
+    throw new Error("WebAuthn is not available in this environment. The insecure SoftCredentials authenticator must be enabled explicitly with enableSoftCredentials()");
   }
   return new NodeWebAuthn(options?.origin);
 }

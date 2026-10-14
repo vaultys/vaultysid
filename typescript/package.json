@@ -1,6 +1,6 @@
 {
   "name": "@vaultys/id",
-  "version": "3.0.4",
+  "version": "4.0.0",
   "exports": {
     ".": {
       "types": "./dist/node/index.d.ts",
@@ -39,7 +39,8 @@
     "test:interops:reverse": "test/interops/run-cross-language-test.sh reverse",
     "test:interops": "test/interops/run-cross-language-test.sh",
     "test:saltpack:vectors": "tsx test/interops/generate-saltpack-vectors.ts",
-    "test:saltpack:go": "mocha test/interops/go-saltpack-compatibility.test.ts"
+    "test:saltpack:go": "mocha test/interops/go-saltpack-compatibility.test.ts",
+    "test:security:vectors": "tsx test/interops/generate-security-v2-vectors.ts"
   },
   "keywords": [],
   "author": "",

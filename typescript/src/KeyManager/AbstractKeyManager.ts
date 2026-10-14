@@ -1,47 +1,6 @@
 import { DearmorAndDecryptResult } from "@vaultys/saltpack";
 import { Buffer } from "buffer/";
 import { KeyPair } from ".";
-/**
- * DHIES (Diffie-Hellman Integrated Encryption Scheme) for KeyManager
- * Provides authenticated encryption using Diffie-Hellman key exchange
- */
-export declare class DHIES {
-  private keyManager: KeyManager;
-
-  constructor(keyManager: KeyManager);
-
-  /**
-   * Encrypts a message for a recipient using DHIES
-   *
-   * @param message The plaintext message to encrypt
-   * @param recipientPublicKey The recipient's public key
-   * @returns Encrypted message with ephemeral public key and authentication tag, or null if encryption fails
-   */
-  encrypt(message: string | Buffer, recipientPublicKey: Buffer): Promise<Buffer | null>;
-
-  /**
-   * Decrypts a message encrypted with DHIES
-   *
-   * @param encryptedMessage The complete encrypted message from the encrypt method
-   * @returns Decrypted message as a Buffer, or null if decryption fails
-   */
-  decrypt(encryptedMessage: Buffer, senderPublicKey: Buffer): Promise<Buffer | null>;
-
-  /**
-   * Key Derivation Function: Derives encryption and MAC keys from the shared secret
-   */
-  private kdf(sharedSecret: Buffer, salt: Buffer, info: Buffer): Buffer;
-
-  /**
-   * Computes MAC for authenticated encryption
-   */
-  private computeMAC(key: Buffer, data: Buffer): Buffer;
-
-  /**
-   * Constant-time comparison of two buffers to prevent timing attacks
-   */
-  private constantTimeEqual(a: Buffer, b: Buffer): boolean;
-}
 
 export default abstract class KeyManager {
   version!: 0 | 1;
