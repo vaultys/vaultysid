@@ -300,7 +300,7 @@ export default class VaultysId {
    * Restore a VaultysId from its secret. Malformed input throws
    * `Error("Invalid VaultysId secret: ...")`, never an uncaught TypeError.
    */
-  static fromSecret(secret: string, encoding: BufferEncoding = "hex") {
+  static fromSecret(secret: string | Buffer | Uint8Array, encoding: BufferEncoding = "hex") {
     try {
       return VaultysId._fromSecret(secret, encoding);
     } catch (error) {
@@ -308,9 +308,11 @@ export default class VaultysId {
     }
   }
 
-  private static _fromSecret(secret: string, encoding: BufferEncoding = "hex") {
-    if (typeof secret !== "string") throw new Error("secret must be a string");
-    const secretBuffer = Buffer.from(secret, encoding);
+  private static _fromSecret(secret: string | Buffer | Uint8Array, encoding: BufferEncoding = "hex") {
+    let secretBuffer: Buffer;
+    if (typeof secret === "string") secretBuffer = Buffer.from(secret, encoding);
+    else if (secret instanceof Uint8Array) secretBuffer = Buffer.from(secret);
+    else throw new Error("secret must be a string or a Buffer");
     if (secretBuffer.length < 2) throw new Error("empty secret");
     const type = secretBuffer[0];
     if (!KNOWN_TYPES.includes(type)) throw new Error("unknown identity type " + type);

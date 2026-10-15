@@ -164,7 +164,7 @@ func main() {
 
 	// Signing Vectors
 	message := []byte("test message")
-	signature, _ := vid.Sign(message)
+	signature, _ := vid.KeyManager.Sign(message)
 	vectors.Signing.Message = string(message)
 	vectors.Signing.MessageHex = hex.EncodeToString(message)
 	vectors.Signing.Signature = hex.EncodeToString(signature)
@@ -182,7 +182,7 @@ func main() {
 	}
 
 	for _, test := range additionalTests {
-		sig, _ := vid.Sign(test.message)
+		sig, _ := vid.KeyManager.Sign(test.message)
 		vectors.Signing.AdditionalTests = append(vectors.Signing.AdditionalTests, SignatureTestCase{
 			Name:       test.name,
 			Message:    string(test.message),
@@ -317,7 +317,7 @@ func main() {
 		entropy, _ := hex.DecodeString(tc.entropy)
 		vid, _ := vaultysid.FromEntropy(entropy, tc.idType)
 		message := []byte(tc.message)
-		signature, _ := vid.Sign(message)
+		signature, _ := vid.KeyManager.Sign(message)
 
 		vectors.CrossTests = append(vectors.CrossTests, CrossVerificationTest{
 			Name:        tc.name,

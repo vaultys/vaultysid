@@ -153,8 +153,7 @@ describe("Go Comprehensive Compatibility Tests", function () {
 
   describe("Serialization", () => {
     it("should deserialize Go secret", async () => {
-      const secret = Buffer.from(goVectors.serialization.secret, "hex");
-      const vaultysId = VaultysId.fromSecret(secret);
+      const vaultysId = VaultysId.fromSecret(goVectors.serialization.secret);
       const km = vaultysId.keyManager;
 
       // Should have same public keys
@@ -302,23 +301,21 @@ describe("Go Comprehensive Compatibility Tests", function () {
       expect(step1Response.sign2).not.to.exist;
       expect(step1Response.nonce?.length).to.equal(16);
 
-      // Create Alice's challenger to process Bob's response
-      const aliceChallenger = new Challenger(aliceVid, 100000000000000);
+      // TypeScript Bob answers Go Alice's INIT
+      const bobChallenger = new Challenger(bobVid, 100000000000000);
+      await bobChallenger.update(initBytes);
+      const step1 = Challenger.deserializeCertificate(bobChallenger.getCertificate());
+      expect(step1.state).to.equal(1);
+      expect(step1.pk1).to.exist;
+      expect(step1.pk2).to.exist;
+      expect(step1.sign2).to.exist;
+      expect(step1.nonce?.length).to.equal(32);
+      expect(step1.nonce?.subarray(0, 16).equals(step1Response.nonce!)).to.equal(true);
+      expect(step1.sign1).not.to.exist;
 
-      // Alice needs to init first to set her state
-      await aliceChallenger.update(initBytes);
-
-      // Process Bob's step1 message
-      const step1Bytes = Buffer.from(goVectors.challenge.steps[1].messageHex, "hex");
-      const completeResponse = Challenger.deserializeCertificate(aliceChallenger.getCertificate());
-      // console.log(completeResponse);
-      // Verify complete response
-      expect(completeResponse.state).to.equal(1);
-      expect(completeResponse.pk1).to.exist;
-      expect(completeResponse.pk2).to.exist;
-      expect(completeResponse.sign2).to.exist;
-      expect(completeResponse.nonce?.length).to.equal(32);
-      expect(completeResponse.sign1).not.to.exist;
+      // The COMPLETE certificate produced by Go verifies in TypeScript
+      const completeBytes = Buffer.from(goVectors.challenge.steps[2].messageHex, "hex");
+      expect(await Challenger.verifyCertificate(completeBytes)).to.equal(true);
     });
   });
 
