@@ -4,8 +4,9 @@ import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { KeyPair } from ".";
 import KeyManager from "./AbstractKeyManager";
-import { dhiesV2Decrypt, dhiesV2Encrypt } from "./dhies";
+import { dhiesV2Decrypt, dhiesV2Encrypt, dhiesV3Decrypt, dhiesV3Encrypt } from "./dhies";
 import { decodeRecord, requireBytes } from "./validation";
+import { deriveMlKemKeyPair, derivePrfKey, mlKemDecapsulate, MLKEM768_PK_LENGTH } from "../pqCrypto";
 
 const sha256 = (data: Buffer) => hash("sha256", data);
 
@@ -25,11 +26,21 @@ export function getCypherPublicKeyFromId(id: Buffer | Uint8Array) {
   return requireBytes(data.e, "X25519 public key", 32);
 }
 
+/** The ML-KEM-768 public key (`k`) of a post-quantum id, or undefined for a classical id. */
+export function getKemPublicKeyFromId(id: Buffer | Uint8Array) {
+  const data = decodeRecord(id, "id");
+  if (data.k === undefined) return undefined;
+  return requireBytes(data.k, "ML-KEM-768 public key", MLKEM768_PK_LENGTH);
+}
+
 export default abstract class CypherManager extends KeyManager {
   version: 0 | 1 = 1;
   capability: "private" | "public" = "private";
   entropy: Buffer | undefined;
   cypher!: KeyPair;
+  // post-quantum identities only (rfc/PQ-ENCRYPTION.md §3)
+  kem?: KeyPair;
+  prfKey?: Buffer;
   authType: string;
   encType: string;
 
@@ -39,11 +50,30 @@ export default abstract class CypherManager extends KeyManager {
     this.encType = "X25519KeyAgreementKey2019";
   }
 
+  /**
+   * Turn this key manager into the one of a post-quantum identity: derive the
+   * ML-KEM-768 key pair and the PRF key from the full 64-byte seed.
+   */
+  protected derivePostQuantumKeys(seed: Buffer) {
+    this.kem = deriveMlKemKeyPair(seed);
+    this.prfKey = derivePrfKey(seed);
+  }
+
+  /** The key behind hmac() and getSecretHash(): the seed-derived PRF key for post-quantum identities, the X25519 secret otherwise. */
+  private get hmacKey() {
+    return this.prfKey ?? this.cypher.secretKey;
+  }
+
+  isPostQuantum() {
+    return !!this.kem;
+  }
+
   async getCypher() {
     // todo fetch secretKey here
     const cypher = this.cypher;
+    const hmacKey = this.hmacKey;
     return {
-      hmac: (message: string) => (cypher.secretKey ? hmac("sha256", Buffer.from(cypher.secretKey), "VaultysID/" + message + "/end") : undefined),
+      hmac: (message: string) => (hmacKey ? hmac("sha256", Buffer.from(hmacKey), "VaultysID/" + message + "/end") : undefined),
       signcrypt: async (plaintext: string, publicKeys: Buffer[]) => encryptAndArmor(plaintext, cypher as BoxKeyPair, publicKeys),
       decrypt: async (encryptedMessage: string, senderKey?: Buffer | null) => dearmorAndDecrypt(encryptedMessage, cypher as BoxKeyPair, senderKey),
       diffieHellman: async (publicKey: Buffer) => Buffer.from(nacl.scalarMult(cypher.secretKey!, publicKey)),
@@ -54,6 +84,14 @@ export default abstract class CypherManager extends KeyManager {
     if (this.cypher?.secretKey) {
       secureErase(this.cypher.secretKey);
       delete this.cypher.secretKey;
+    }
+    if (this.kem?.secretKey) {
+      secureErase(this.kem.secretKey);
+      delete this.kem.secretKey;
+    }
+    if (this.prfKey) {
+      secureErase(this.prfKey);
+      delete this.prfKey;
     }
     if (this.entropy) {
       secureErase(this.entropy);
@@ -98,7 +136,8 @@ export default abstract class CypherManager extends KeyManager {
   }
 
   /**
-   * Encrypt a message using DHIES v2 (sender-authenticated) for a recipient
+   * Encrypt a message for a recipient: DHIES v3 (hybrid X25519 + ML-KEM-768) when
+   * the recipient is a post-quantum id, DHIES v2 otherwise. Both authenticate the sender.
    * @param message Message to encrypt
    * @param recipientId Recipient's KeyManager ID
    * @returns Encrypted message or null if encryption fails
@@ -107,7 +146,9 @@ export default abstract class CypherManager extends KeyManager {
     if (this.capability === "public") return null;
     try {
       const recipientPublicKey = getCypherPublicKeyFromId(recipientId);
+      const recipientKemPublicKey = getKemPublicKeyFromId(recipientId);
       const cypher = await this.getCypher();
+      if (recipientKemPublicKey) return await dhiesV3Encrypt(message, cypher.diffieHellman, this.cypher.publicKey, recipientPublicKey, recipientKemPublicKey);
       return await dhiesV2Encrypt(message, cypher.diffieHellman, this.cypher.publicKey, recipientPublicKey);
     } catch {
       return null;
@@ -115,7 +156,8 @@ export default abstract class CypherManager extends KeyManager {
   }
 
   /**
-   * Decrypt a DHIES v2 message, authenticating the sender
+   * Decrypt a DHIES message, authenticating the sender. A post-quantum identity
+   * only accepts DHIES v3, a classical one only DHIES v2.
    * @param encryptedMessage Encrypted message from dhiesEncrypt
    * @param senderId Sender's KeyManager ID
    * @returns Decrypted message or null if decryption/authentication fails
@@ -125,6 +167,12 @@ export default abstract class CypherManager extends KeyManager {
     try {
       const senderPublicKey = getCypherPublicKeyFromId(senderId);
       const cypher = await this.getCypher();
+      if (this.kem) {
+        const kem = this.kem;
+        if (!kem.secretKey) return null;
+        const decapsulate = async (cipherText: Buffer) => mlKemDecapsulate(cipherText, kem.secretKey!);
+        return await dhiesV3Decrypt(encryptedMessage, cypher.diffieHellman, decapsulate, this.cypher.publicKey, kem.publicKey, senderPublicKey);
+      }
       return await dhiesV2Decrypt(encryptedMessage, cypher.diffieHellman, this.cypher.publicKey, senderPublicKey);
     } catch {
       return null;
@@ -151,7 +199,7 @@ export default abstract class CypherManager extends KeyManager {
 
   // use better hash to prevent attack
   getSecretHash(data: Buffer) {
-    const toHash = Buffer.concat([data, Buffer.from("secrethash"), this.cypher.secretKey!]);
+    const toHash = Buffer.concat([data, Buffer.from("secrethash"), this.hmacKey!]);
     return hash("sha256", toHash);
   }
 }

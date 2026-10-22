@@ -6,8 +6,9 @@
  */
 
 import { ml_dsa87 } from "@noble/post-quantum/ml-dsa.js";
+import { ml_kem768 } from "@noble/post-quantum/ml-kem.js";
 import { Buffer } from "buffer/";
-import { randomBytes } from "./crypto";
+import { hash, randomBytes, secureErase } from "./crypto";
 
 /**
  * COSE algorithm identifiers for post-quantum algorithms
@@ -106,4 +107,43 @@ export function getDilithiumKeyInfo(): {
     secretKeySize: 4896, // Size in bytes for DILITHIUM5 private key
     signatureSize: 4627, // Size in bytes for DILITHIUM2 signature
   };
+}
+
+// ML-KEM-768 (FIPS 203), used by post-quantum identities (rfc/PQ-ENCRYPTION.md).
+export const MLKEM768_PK_LENGTH = 1184;
+export const MLKEM768_CT_LENGTH = 1088;
+
+const MLKEM_KEYGEN_LABEL = Buffer.from("VAULTYS_MLKEM768_KEYGEN", "ascii");
+const PRF_KEY_LABEL = Buffer.from("VAULTYS_PRF_KEY", "ascii");
+
+/**
+ * Derive the ML-KEM-768 key pair of a post-quantum identity from its full
+ * 64-byte key-manager seed: dz = SHA-512(label || seed), KeyGen_internal(d, z).
+ */
+export function deriveMlKemKeyPair(seed: Uint8Array): { publicKey: Buffer; secretKey: Buffer } {
+  const dz = hash("sha512", Buffer.concat([MLKEM_KEYGEN_LABEL, Buffer.from(seed)]));
+  try {
+    const keyPair = ml_kem768.keygen(dz);
+    return { publicKey: Buffer.from(keyPair.publicKey), secretKey: Buffer.from(keyPair.secretKey) };
+  } finally {
+    secureErase(dz);
+  }
+}
+
+/** PRF/HMAC key of a post-quantum identity: SHA-512(label || seed)[0:32]. */
+export function derivePrfKey(seed: Uint8Array): Buffer {
+  const digest = hash("sha512", Buffer.concat([PRF_KEY_LABEL, Buffer.from(seed)]));
+  const key = Buffer.from(digest.subarray(0, 32));
+  secureErase(digest);
+  return key;
+}
+
+/** `m` pins the 32-byte encapsulation randomness, for test vectors only. */
+export function mlKemEncapsulate(publicKey: Uint8Array, m?: Uint8Array): { cipherText: Buffer; sharedSecret: Buffer } {
+  const { cipherText, sharedSecret } = ml_kem768.encapsulate(publicKey, m);
+  return { cipherText: Buffer.from(cipherText), sharedSecret: Buffer.from(sharedSecret) };
+}
+
+export function mlKemDecapsulate(cipherText: Uint8Array, secretKey: Uint8Array): Buffer {
+  return Buffer.from(ml_kem768.decapsulate(cipherText, secretKey));
 }

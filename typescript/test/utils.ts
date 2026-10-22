@@ -45,13 +45,16 @@ export const createRandomVaultysId = async (): Promise<VaultysId> => {
 
   const type = types[Math.floor(Math.random() * types.length)];
 
+  // one in four software identities is post-quantum (requires a dilithium key manager)
+  const postQuantum = alg !== "ed25519" && Math.random() < 0.25;
+
   switch (type) {
     case 0:
-      return VaultysId.generateMachine(alg);
+      return VaultysId.generateMachine(alg, postQuantum);
     case 1:
-      return VaultysId.generatePerson(alg);
+      return VaultysId.generatePerson(alg, postQuantum);
     case 2:
-      return VaultysId.generateOrganization(alg);
+      return VaultysId.generateOrganization(alg, postQuantum);
     case 3:
       const attestation1 = await navigator.credentials.create(SoftCredentials.createRequest(Math.random() < 0.5 ? -8 : -7, false));
       // @ts-expect-error mockup
@@ -67,6 +70,8 @@ export const createRandomVaultysId = async (): Promise<VaultysId> => {
 
 export const allVaultysIdType = async (): Promise<VaultysId[]> => {
   const result: VaultysId[] = [await VaultysId.generateMachine(), await VaultysId.generateMachine("dilithium"), await VaultysId.generateMachine("dilithium_ed25519"), await VaultysId.generatePerson(), await VaultysId.generatePerson("dilithium"), await VaultysId.generatePerson("dilithium_ed25519")];
+  // post-quantum identities (type 0x10 | role)
+  result.push(await VaultysId.generateMachine("dilithium", true), await VaultysId.generatePerson("dilithium_ed25519", true), await VaultysId.generateOrganization("dilithium", true));
 
   if (typeof window === "undefined") {
     // let attestation = await navigator.credentials.create(SoftCredentials.createRequest(PQ_COSE_ALG.DILITHIUM5));

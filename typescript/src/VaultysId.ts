@@ -6,6 +6,8 @@ import { Buffer } from "buffer/";
 import { PQ_COSE_ALG } from "./pqCrypto";
 import CypherManager from "./KeyManager/CypherManager";
 import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
+import { DILITHIUM_PK_LENGTH } from "./KeyManager/DilithiumManager";
+import { decodeRecord, isBytes } from "./KeyManager/validation";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
@@ -13,7 +15,18 @@ const TYPE_ORGANIZATION = 2;
 const TYPE_FIDO2 = 3;
 const TYPE_FIDO2PRF = 4;
 
-const KNOWN_TYPES = [TYPE_MACHINE, TYPE_PERSON, TYPE_ORGANIZATION, TYPE_FIDO2, TYPE_FIDO2PRF];
+// Post-quantum identities (rfc/PQ-ENCRYPTION.md §4): type = 0x10 | role. They
+// carry an ML-KEM-768 key and a seed-derived PRF key, with a Dilithium or Hybrid
+// key manager. 0x13 / 0x14 are reserved for future PQ hardware identities.
+const TYPE_PQ_FLAG = 0x10;
+const PQ_TYPES = [TYPE_PQ_FLAG | TYPE_MACHINE, TYPE_PQ_FLAG | TYPE_PERSON, TYPE_PQ_FLAG | TYPE_ORGANIZATION];
+
+const KNOWN_TYPES = [TYPE_MACHINE, TYPE_PERSON, TYPE_ORGANIZATION, TYPE_FIDO2, TYPE_FIDO2PRF, ...PQ_TYPES];
+
+const isPostQuantumType = (type: number) => PQ_TYPES.includes(type);
+const roleOf = (type: number) => type & 0x0f;
+
+type Algorithm = "dilithium_ed25519" | "dilithium" | "ed25519";
 
 // Signature domains. Every signature produced through VaultysId is computed over
 // SHA-256(domain || data) so that a signature obtained in one context can never
@@ -103,6 +116,16 @@ export default class VaultysId {
     if (!cleanId || cleanId.length < 2) throw new Error("empty or unsupported id");
     const type = cleanId[0];
     if (!KNOWN_TYPES.includes(type)) throw new Error("unknown identity type " + type);
+    if (isPostQuantumType(type)) {
+      // dispatch on the signing key, never on the total length
+      const data = decodeRecord(cleanId.slice(1), "post-quantum id");
+      if (data.v !== 1) throw new Error("post-quantum ids must be serialized with version 1");
+      if (data.k === undefined) throw new Error("post-quantum id without ML-KEM key");
+      const xLength = isBytes(data.x) ? data.x.length : -1;
+      if (xLength === DILITHIUM_PK_LENGTH) return new VaultysId(DilithiumManager.fromId(cleanId.slice(1)), certificate, type);
+      if (xLength === 32 + DILITHIUM_PK_LENGTH) return new VaultysId(HybridManager.fromId(cleanId.slice(1)), certificate, type);
+      throw new Error("post-quantum id with an unsupported key manager");
+    }
     if (type === TYPE_FIDO2) {
       const f2m = Fido2Manager.fromId(cleanId.slice(1));
       return new VaultysId(f2m, certificate, type);
@@ -240,13 +263,16 @@ export default class VaultysId {
     return options;
   };
 
-  static async fromEntropy(entropy: Buffer, type: number, alg: "dilithium_ed25519" | "dilithium" | "ed25519" = "ed25519") {
+  static async fromEntropy(entropy: Buffer, type: number, alg: Algorithm = "ed25519") {
     const cleanedEntropy = entropy as Buffer;
+    if (isPostQuantumType(type) && alg === "ed25519") throw new Error("post-quantum identities require a dilithium or dilithium_ed25519 key manager");
     if (alg === "dilithium") {
       const km = await DilithiumManager.createFromEntropy(cleanedEntropy);
+      if (isPostQuantumType(type)) km.enablePostQuantum();
       return new VaultysId(km, undefined, type);
     } else if (alg === "dilithium_ed25519") {
       const km = await HybridManager.createFromEntropy(cleanedEntropy);
+      if (isPostQuantumType(type)) km.enablePostQuantum();
       return new VaultysId(km, undefined, type);
     } else {
       const km = await Ed25519Manager.createFromEntropy(cleanedEntropy);
@@ -316,6 +342,14 @@ export default class VaultysId {
     if (secretBuffer.length < 2) throw new Error("empty secret");
     const type = secretBuffer[0];
     if (!KNOWN_TYPES.includes(type)) throw new Error("unknown identity type " + type);
+    if (isPostQuantumType(type)) {
+      let pqm: DilithiumManager | HybridManager;
+      if (secretBuffer.length === 73) pqm = DilithiumManager.fromSecret(secretBuffer.slice(1));
+      else if (secretBuffer.length === 84) pqm = HybridManager.fromSecret(secretBuffer.slice(1));
+      else throw new Error("post-quantum secret with an unsupported key manager");
+      if (pqm.version !== 1) throw new Error("post-quantum secrets must be serialized with version 1");
+      return new VaultysId(pqm.enablePostQuantum(), undefined, type);
+    }
     if (type == TYPE_FIDO2) {
       const f2m = Fido2Manager.fromSecret(secretBuffer.slice(1));
       return new VaultysId(f2m, undefined, type);
@@ -343,43 +377,28 @@ export default class VaultysId {
     }
   }
 
-  static async generatePerson(alg: "dilithium_ed25519" | "dilithium" | "ed25519" = "ed25519") {
-    if (alg === "dilithium") {
-      const km = await DilithiumManager.generate();
-      return new VaultysId(km, undefined, TYPE_PERSON);
-    } else if (alg === "dilithium_ed25519") {
-      const km = await HybridManager.generate();
-      return new VaultysId(km, undefined, TYPE_PERSON);
-    } else {
-      const km = await Ed25519Manager.generate();
-      return new VaultysId(km, undefined, TYPE_PERSON);
-    }
+  /**
+   * @param postQuantum create a post-quantum identity (type 0x10 | role): requires
+   * a dilithium or dilithium_ed25519 key manager.
+   */
+  static async generatePerson(alg: Algorithm = "ed25519", postQuantum = false) {
+    return VaultysId.fromEntropy(randomBytes(32), postQuantum ? TYPE_PQ_FLAG | TYPE_PERSON : TYPE_PERSON, alg);
   }
 
-  static async generateOrganization(alg: "dilithium_ed25519" | "dilithium" | "ed25519" = "ed25519") {
-    if (alg === "dilithium") {
-      const km = await DilithiumManager.generate();
-      return new VaultysId(km, undefined, TYPE_ORGANIZATION);
-    } else if (alg === "dilithium_ed25519") {
-      const km = await HybridManager.generate();
-      return new VaultysId(km, undefined, TYPE_ORGANIZATION);
-    } else {
-      const km = await Ed25519Manager.generate();
-      return new VaultysId(km, undefined, TYPE_ORGANIZATION);
-    }
+  /**
+   * @param postQuantum create a post-quantum identity (type 0x10 | role): requires
+   * a dilithium or dilithium_ed25519 key manager.
+   */
+  static async generateOrganization(alg: Algorithm = "ed25519", postQuantum = false) {
+    return VaultysId.fromEntropy(randomBytes(32), postQuantum ? TYPE_PQ_FLAG | TYPE_ORGANIZATION : TYPE_ORGANIZATION, alg);
   }
 
-  static async generateMachine(alg: "dilithium_ed25519" | "dilithium" | "ed25519" = "ed25519") {
-    if (alg === "dilithium") {
-      const km = await DilithiumManager.generate();
-      return new VaultysId(km, undefined, TYPE_MACHINE);
-    } else if (alg === "dilithium_ed25519") {
-      const km = await HybridManager.generate();
-      return new VaultysId(km, undefined, TYPE_MACHINE);
-    } else {
-      const km = await Ed25519Manager.generate();
-      return new VaultysId(km, undefined, TYPE_MACHINE);
-    }
+  /**
+   * @param postQuantum create a post-quantum identity (type 0x10 | role): requires
+   * a dilithium or dilithium_ed25519 key manager.
+   */
+  static async generateMachine(alg: Algorithm = "ed25519", postQuantum = false) {
+    return VaultysId.fromEntropy(randomBytes(32), postQuantum ? TYPE_PQ_FLAG | TYPE_MACHINE : TYPE_MACHINE, alg);
   }
 
   get relationshipCertificate() {
@@ -405,6 +424,23 @@ export default class VaultysId {
   }
 
   get didDocument() {
+    const kem = (this.keyManager as CypherManager).kem;
+    const keyAgreement = [
+      {
+        id: `${this.did}#keys-2`,
+        type: this.keyManager.encType,
+        controller: this.did,
+        publicKeyMultibase: "m" + Buffer.from(this.keyManager.cypher.publicKey).toString("base64"),
+      },
+    ];
+    if (kem) {
+      keyAgreement.push({
+        id: `${this.did}#keys-3`,
+        type: "MLKEM768KeyAgreementKey2025",
+        controller: this.did,
+        publicKeyMultibase: "m" + Buffer.from(kem.publicKey).toString("base64"),
+      });
+    }
     return {
       "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
       id: this.did,
@@ -416,14 +452,7 @@ export default class VaultysId {
           publicKeyMultibase: "m" + Buffer.from(this.keyManager.signer.publicKey).toString("base64"),
         },
       ],
-      keyAgreement: [
-        {
-          id: `${this.did}#keys-2`,
-          type: this.keyManager.encType,
-          controller: this.did,
-          publicKeyMultibase: "m" + Buffer.from(this.keyManager.cypher.publicKey).toString("base64"),
-        },
-      ],
+      keyAgreement,
     };
   }
 
@@ -432,6 +461,8 @@ export default class VaultysId {
   }
 
   toVersion(v: 0 | 1) {
+    // post-quantum ids only exist in version 1: converting them would change their DID
+    if (this.isPostQuantum()) return this;
     this.keyManager.version = v;
     return this;
   }
@@ -440,16 +471,21 @@ export default class VaultysId {
     return this.keyManager.version;
   }
 
+  // role checks ignore the post-quantum flag
   isHardware() {
-    return this.type === TYPE_FIDO2 || this.type === TYPE_FIDO2PRF;
+    return roleOf(this.type) === TYPE_FIDO2 || roleOf(this.type) === TYPE_FIDO2PRF;
   }
 
   isMachine() {
-    return this.type === TYPE_MACHINE;
+    return roleOf(this.type) === TYPE_MACHINE;
   }
 
   isPerson() {
-    return this.type === TYPE_PERSON;
+    return roleOf(this.type) === TYPE_PERSON;
+  }
+
+  isPostQuantum() {
+    return isPostQuantumType(this.type);
   }
 
   getOTPHmac(timelock = 1 * 3600000) {
