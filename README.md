@@ -26,6 +26,7 @@ The same wire format is implemented in three languages and continuously tested f
 - 🛡️ **Post-quantum ready** — Dilithium (ML-DSA-87) and hybrid Ed25519 + Dilithium identities.
 - 🔑 **Hardware-backed keys** — FIDO2 / WebAuthn (including PRF) for passkeys and security keys.
 - **External Ed25519 signing** through the TypeScript signer interface and the optional [Node.js KMIP adapter](kmip/README.md).
+- **Passport Active Authentication** for TypeScript identities, with an optional [desktop NFC reader](passport-nfc/README.md).
 - 🤝 **Handcheck protocol** — mutual authentication with nonces, timestamps and signed metadata exchange.
 - 📇 **IdManager** — contacts, apps, signed files and metadata on top of a pluggable storage layer.
 - 🌐 **Runs everywhere** — Node.js, browsers, native Go binaries and Rust (incl. `cdylib`).
@@ -124,6 +125,7 @@ It covers identity generation, signing/verification of data, challenges and file
 | Organization | `2` | Software keys for organizations |
 | FIDO2 | `3` | Keys held by a security key / passkey |
 | FIDO2 PRF | `4` | FIDO2 with the PRF extension for encryption |
+| Passport AA | `5` | RSA or ECDSA signing with a passport chip's Active Authentication key in TypeScript |
 
 Software identities can use `ed25519`, `dilithium` or the hybrid `dilithium_ed25519` algorithm.
 
@@ -145,6 +147,7 @@ The protocols are documented as RFC-style specs in [`rfc/`](rfc/):
 ├── rfc/               Protocol specifications
 ├── interops/          Cross-language interoperability test runners
 ├── kmip/              Optional Node.js KMIP signer (@vaultys/id-kmip)
+├── passport-nfc/      Optional desktop and mobile passport NFC readers
 ├── scripts/           CLI installers (sh / PowerShell)
 └── test/              Repo-level integration tests
 ```

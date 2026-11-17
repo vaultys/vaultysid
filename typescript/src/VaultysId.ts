@@ -9,6 +9,8 @@ import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 import { DILITHIUM_PK_LENGTH } from "./KeyManager/DilithiumManager";
 import { decodeRecord, isBytes } from "./KeyManager/validation";
 import type { Ed25519Signer } from "./Ed25519Signer";
+import PassportAAManager, { TYPE_PASSPORT_AA } from "./KeyManager/PassportAAManager";
+import type { PassportAAOptions } from "./KeyManager/PassportAAManager";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
@@ -22,7 +24,7 @@ const TYPE_FIDO2PRF = 4;
 const TYPE_PQ_FLAG = 0x10;
 const PQ_TYPES = [TYPE_PQ_FLAG | TYPE_MACHINE, TYPE_PQ_FLAG | TYPE_PERSON, TYPE_PQ_FLAG | TYPE_ORGANIZATION];
 
-const KNOWN_TYPES = [TYPE_MACHINE, TYPE_PERSON, TYPE_ORGANIZATION, TYPE_FIDO2, TYPE_FIDO2PRF, ...PQ_TYPES];
+const KNOWN_TYPES = [TYPE_MACHINE, TYPE_PERSON, TYPE_ORGANIZATION, TYPE_FIDO2, TYPE_FIDO2PRF, TYPE_PASSPORT_AA, ...PQ_TYPES];
 
 const isPostQuantumType = (type: number) => PQ_TYPES.includes(type);
 const roleOf = (type: number) => type & 0x0f;
@@ -117,6 +119,7 @@ export default class VaultysId {
     if (!cleanId || cleanId.length < 2) throw new Error("empty or unsupported id");
     const type = cleanId[0];
     if (!KNOWN_TYPES.includes(type)) throw new Error("unknown identity type " + type);
+    if (type === TYPE_PASSPORT_AA) return new VaultysId(PassportAAManager.fromId(cleanId.slice(1)), certificate, type);
     if (isPostQuantumType(type)) {
       // dispatch on the signing key, never on the total length
       const data = decodeRecord(cleanId.slice(1), "post-quantum id");
@@ -265,6 +268,7 @@ export default class VaultysId {
   };
 
   static async fromEntropy(entropy: Buffer, type: number, alg: Algorithm = "ed25519") {
+    if (type === TYPE_PASSPORT_AA) throw new Error("Use VaultysId.fromPassportAA to create a passport identity");
     const cleanedEntropy = entropy as Buffer;
     if (isPostQuantumType(type) && alg === "ed25519") throw new Error("post-quantum identities require a dilithium or dilithium_ed25519 key manager");
     if (alg === "dilithium") {
@@ -328,9 +332,15 @@ export default class VaultysId {
     return new VaultysId(await Ed25519Manager.fromSigner(signer, encryptionSecretKey), undefined, TYPE_PERSON);
   }
 
+  /** Create a type 05 identity backed by a passport Active Authentication key. */
+  static fromPassportAA(options: PassportAAOptions) {
+    return new VaultysId(PassportAAManager.fromPassport(options), undefined, TYPE_PASSPORT_AA);
+  }
+
   /** @internal Copy the identity for use at a protocol-specific serialization version. */
   copyForProtocol() {
     if (this.keyManager.capability === "public") return VaultysId.fromId(this.id);
+    if (this.keyManager instanceof PassportAAManager) return new VaultysId(this.keyManager.copyForProtocol(), undefined, this.type);
     if (this.keyManager instanceof Ed25519Manager) {
       const copy = this.keyManager.copyWithExternalSigner();
       if (copy) return new VaultysId(copy, undefined, this.type);
@@ -358,6 +368,7 @@ export default class VaultysId {
     if (secretBuffer.length < 2) throw new Error("empty secret");
     const type = secretBuffer[0];
     if (!KNOWN_TYPES.includes(type)) throw new Error("unknown identity type " + type);
+    if (type === TYPE_PASSPORT_AA) throw new Error("Restore a passport identity with VaultysId.fromPassportAA");
     if (isPostQuantumType(type)) {
       let pqm: DilithiumManager | HybridManager;
       if (secretBuffer.length === 73) pqm = DilithiumManager.fromSecret(secretBuffer.slice(1));
@@ -477,8 +488,8 @@ export default class VaultysId {
   }
 
   toVersion(v: 0 | 1) {
-    // post-quantum ids only exist in version 1: converting them would change their DID
-    if (this.isPostQuantum()) return this;
+    // Post-quantum and passport AA IDs exist only in version 1.
+    if (this.isPostQuantum() || this.type === TYPE_PASSPORT_AA) return this;
     this.keyManager.version = v;
     return this;
   }
@@ -489,7 +500,7 @@ export default class VaultysId {
 
   // role checks ignore the post-quantum flag
   isHardware() {
-    return roleOf(this.type) === TYPE_FIDO2 || roleOf(this.type) === TYPE_FIDO2PRF;
+    return roleOf(this.type) === TYPE_FIDO2 || roleOf(this.type) === TYPE_FIDO2PRF || this.type === TYPE_PASSPORT_AA;
   }
 
   isMachine() {

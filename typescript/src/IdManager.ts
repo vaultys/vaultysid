@@ -12,6 +12,7 @@ import nacl from "tweetnacl";
 import { VaultysBackup } from "./platform/abstract";
 import { platformCrypto } from "./platform";
 import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
+import PassportAAManager, { TYPE_PASSPORT_AA } from "./KeyManager/PassportAAManager";
 
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
@@ -52,7 +53,9 @@ export type File = {
 
 export const instanciateContact = (c: StoredContact) => {
   let vaultysId: VaultysId;
-  if (c.type === 3) {
+  if (c.type === TYPE_PASSPORT_AA) {
+    vaultysId = new VaultysId(PassportAAManager.instantiate(c.keyManager as PassportAAManager), c.certificate, c.type);
+  } else if (c.type === 3) {
     vaultysId = new VaultysId(Fido2Manager.instantiate(c.keyManager), c.certificate, c.type);
   } else if (c.type === 4) {
     vaultysId = new VaultysId(Fido2PRFManager.instantiate(c.keyManager), c.certificate, c.type);
@@ -905,7 +908,8 @@ export default class IdManager {
     } else {
       const contactstore = this.store.substore("contacts");
       if (!contactstore.get(contact.did)) {
-        contactstore.set(contact.did, contact as StoredContact);
+        const publicContact = contact.type === TYPE_PASSPORT_AA ? VaultysId.fromId(contact.id, contact.certificate) : contact;
+        contactstore.set(contact.did, publicContact as StoredContact);
         this.store.save();
       }
     }

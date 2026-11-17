@@ -75,6 +75,56 @@ load it with `VaultysId.fromId()`.
 For KMIP in Node.js, see the [optional adapter and local installation instructions](../kmip/README.md).
 Browser bundles can use `@vaultys/id` on its own.
 
+## Passport Active Authentication
+
+`VaultysId.fromPassportAA()` creates a version 1, type `0x05` identity from
+the passport chip's AA key. Supply DG15, DG14 for ECDSA, a reader for the
+selected passport application, and a stable 32-byte local X25519 secret.
+
+For a USB contactless reader on a desktop, use the optional
+[`@vaultys/passport-nfc` adapter](../passport-nfc/README.md) to read the data
+groups and supply the AA reader. For phone-based NFC, use the
+[iOS and Android libraries](../passport-nfc/mobile/README.md) with your app's
+native bridge. For an existing native NFC session, use the transceiver
+adapter below.
+
+```typescript
+import { VaultysId, createPassportAAReader } from "@vaultys/id";
+
+const reader = createPassportAAReader(transceive);
+const identity = VaultysId.fromPassportAA({
+  dg15,
+  dg14,
+  reader,
+  encryptionSecretKey,
+});
+
+const signature = await identity.sign(message);
+const valid = VaultysId.fromId(identity.id).verify(message, signature);
+```
+
+The `transceive` callback sends the logical APDU to the chip. Your NFC
+integration selects the eMRTD application, reads the data groups, handles
+BAC/PACE and secure messaging as needed, and returns unwrapped response bytes
+including the status word. Set the second argument to `true` if the session
+requires extended-length APDUs. A native integration can also supply a
+`PassportAAReader` that performs all four AA operations in one session.
+
+The TypeScript implementation supports RSA with ISO 9796-2 partial recovery
+and ECDSA with named NIST P-256, P-384 and P-521 or Brainpool P256r1, P384r1
+and P512r1 curves. ECDSA uses the supported SHA-2 algorithm advertised in
+DG14. The public ID and signature can be verified offline, including in a
+browser. A `Challenger` can use this identity in an ordinary handcheck.
+
+Restore signing with `fromPassportAA()` and the same X25519 secret.
+`IdManager` can store the public identity as a contact. A local
+`IdManager` profile and its backup require an exportable signing secret.
+AA proves access to the registered key. Passport authenticity, civil
+identity and holder verification require separate evidence.
+
+See the [type 05 wire draft](../rfc/PASSPORT-AA.md). The mock integration
+tests run with `pnpm exec mocha test/passportAA.test.ts`.
+
 ## Checkout examples
 The repository also have some examples. Try them:
 - `pnpx tsx example/sideChannelAttack.js`

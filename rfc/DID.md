@@ -42,6 +42,7 @@ The protocol defines the following identity types, encoded as the first byte of 
 | 2     | ORGANIZATION | Identity for organizations or groups          |
 | 3     | FIDO2        | Identity bound to a FIDO2 authenticator       |
 | 4     | FIDO2PRF     | Identity using FIDO2 PRF extension            |
+| 5     | PASSPORT_AA  | Passport Active Authentication identity ([draft](PASSPORT-AA.md)) |
 
 ### 3.2. Identity Structure
 
