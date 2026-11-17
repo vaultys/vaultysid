@@ -355,9 +355,9 @@ describe("Breaking security changes", () => {
       assert.ok(getWebAuthnProvider());
     });
 
-    it("assertions require webauthn.get, user presence and the configured rpId/origin", () => {
+    it("assertions require webauthn.get, user presence and the configured rpId/origin", async () => {
       const sk = ed25519.utils.randomSecretKey();
-      const cose = cbor.encode(
+      const cose = await cbor.encodeAsync(
         new Map<number, number | Uint8Array>([
           [1, 1],
           [3, -8],

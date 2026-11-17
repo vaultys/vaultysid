@@ -24,6 +24,7 @@ if (typeof Symbol.dispose === "undefined") {
 export { crypto, Buffer, VaultysId, Challenger, MemoryChannel, MemoryStorage, StreamChannel, convertWebReadableStreamToNodeReadable, convertWebWritableStreamToNodeWritable, LocalStorage, IdManager, KeyManager, GameOfLifeIcon, CryptoChannel, DeprecatedKeyManager, migrateVaultysId, migrateIdManager, enableSoftCredentials, isSoftCredentialsEnabled, configureWebAuthn, dhiesV2Encrypt, dhiesV2Decrypt, dhiesV3Encrypt, dhiesV3Decrypt };
 
 export type { Channel, Store, File, StoredApp, StoredContact, FileSignature };
+export type { Ed25519Signer } from "./src/Ed25519Signer";
 
 export type ChallengeType = {
   protocol: string;

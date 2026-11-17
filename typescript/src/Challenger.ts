@@ -210,7 +210,7 @@ export default class Challenger {
   constructor(vaultysId: VaultysId, liveliness = 60 * 1000) {
     this.state = UNINITIALISED;
     // work on a copy of the VaultysId, serialized with the handshake version
-    this.vaultysId = vaultysId.keyManager.capability === "public" ? VaultysId.fromId(vaultysId.id) : VaultysId.fromSecret(vaultysId.getSecret());
+    this.vaultysId = vaultysId.copyForProtocol();
     this.vaultysId.toVersion(HANDSHAKE_VERSION);
     this.liveliness = liveliness;
   }

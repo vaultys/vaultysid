@@ -8,6 +8,7 @@ import CypherManager from "./KeyManager/CypherManager";
 import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 import { DILITHIUM_PK_LENGTH } from "./KeyManager/DilithiumManager";
 import { decodeRecord, isBytes } from "./KeyManager/validation";
+import type { Ed25519Signer } from "./Ed25519Signer";
 
 const TYPE_MACHINE = 0;
 const TYPE_PERSON = 1;
@@ -320,6 +321,21 @@ export default class VaultysId {
 
   static async personFromEntropy(entropy: Buffer) {
     return VaultysId.fromEntropy(entropy, TYPE_PERSON);
+  }
+
+  /** Create a type 01 person identity with external Ed25519 signing and a local X25519 key. */
+  static async fromSigner(signer: Ed25519Signer, encryptionSecretKey: Uint8Array) {
+    return new VaultysId(await Ed25519Manager.fromSigner(signer, encryptionSecretKey), undefined, TYPE_PERSON);
+  }
+
+  /** @internal Copy the identity for use at a protocol-specific serialization version. */
+  copyForProtocol() {
+    if (this.keyManager.capability === "public") return VaultysId.fromId(this.id);
+    if (this.keyManager instanceof Ed25519Manager) {
+      const copy = this.keyManager.copyWithExternalSigner();
+      if (copy) return new VaultysId(copy, undefined, this.type);
+    }
+    return VaultysId.fromSecret(this.getSecret());
   }
 
   /**

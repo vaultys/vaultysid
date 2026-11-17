@@ -42,7 +42,7 @@ class FIDO2TestVectorGenerator {
     this.generateTransportEncoding();
 
     // Test 7: COSE key formats
-    this.generateCOSEKeyFormats();
+    await this.generateCOSEKeyFormats();
 
     // Save vectors to file
     this.saveVectors();
@@ -293,7 +293,7 @@ class FIDO2TestVectorGenerator {
     });
   }
 
-  private generateCOSEKeyFormats() {
+  private async generateCOSEKeyFormats() {
     console.log("7. Generating COSE key format vectors...");
 
     // Ed25519 COSE key
@@ -302,7 +302,7 @@ class FIDO2TestVectorGenerator {
         .fill(0)
         .map((_, i) => i),
     );
-    const ed25519CoseKey = cbor.encode({
+    const ed25519CoseKey = await cbor.encodeAsync({
       1: 1, // kty: OKP
       3: -8, // alg: EdDSA
       [-2]: ed25519PubKey, // x: public key
@@ -319,7 +319,7 @@ class FIDO2TestVectorGenerator {
         .fill(0)
         .map((_, i) => i * 2 + 1),
     );
-    const p256CoseKey = cbor.encode({
+    const p256CoseKey = await cbor.encodeAsync({
       1: 2, // kty: EC2
       3: -7, // alg: ES256
       [-1]: 1, // crv: P-256

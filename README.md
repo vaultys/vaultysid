@@ -25,6 +25,7 @@ The same wire format is implemented in three languages and continuously tested f
 - 🔐 **Modern cryptography** — Ed25519 signatures, X25519 key agreement, DHIES encryption, HMAC/OTP derivation.
 - 🛡️ **Post-quantum ready** — Dilithium (ML-DSA-87) and hybrid Ed25519 + Dilithium identities.
 - 🔑 **Hardware-backed keys** — FIDO2 / WebAuthn (including PRF) for passkeys and security keys.
+- **External Ed25519 signing** through the TypeScript signer interface and the optional [Node.js KMIP adapter](kmip/README.md).
 - 🤝 **Handcheck protocol** — mutual authentication with nonces, timestamps and signed metadata exchange.
 - 📇 **IdManager** — contacts, apps, signed files and metadata on top of a pluggable storage layer.
 - 🌐 **Runs everywhere** — Node.js, browsers, native Go binaries and Rust (incl. `cdylib`).
@@ -69,6 +70,10 @@ await a.update(b.getCertificate());
 await b.update(a.getCertificate());
 a.isComplete() && b.isComplete(); // true
 ```
+
+On Node.js, use [`@vaultys/id-kmip`](kmip/README.md) to delegate type `0x01`
+Ed25519 signing to a compatible KMIP endpoint. Browser apps use `@vaultys/id`
+alone. They can verify signatures from a KMIP-backed identity using its public ID.
 
 ### Go
 
@@ -115,7 +120,7 @@ It covers identity generation, signing/verification of data, challenges and file
 | Type | Value | Notes |
 |---|---|---|
 | Machine | `0` | Software keys, servers and devices |
-| Person | `1` | Software keys for individuals |
+| Person | `1` | Software keys for individuals, with optional external Ed25519 signing in TypeScript |
 | Organization | `2` | Software keys for organizations |
 | FIDO2 | `3` | Keys held by a security key / passkey |
 | FIDO2 PRF | `4` | FIDO2 with the PRF extension for encryption |
@@ -139,7 +144,7 @@ The protocols are documented as RFC-style specs in [`rfc/`](rfc/):
 ├── rust/              Rust crate
 ├── rfc/               Protocol specifications
 ├── interops/          Cross-language interoperability test runners
-├── kmip-client-go/    KMIP integration tooling
+├── kmip/              Optional Node.js KMIP signer (@vaultys/id-kmip)
 ├── scripts/           CLI installers (sh / PowerShell)
 └── test/              Repo-level integration tests
 ```
@@ -151,6 +156,10 @@ The protocols are documented as RFC-style specs in [`rfc/`](rfc/):
 ```bash
 cd typescript && pnpm install && pnpm build && pnpm test
 ```
+
+Run the WebAuthn tests with `pnpm exec mocha 'test/fido2*.test.ts' test/softCredentials.test.ts`
+from `typescript/`. Use `pnpm test:web` for the browser suite after installing
+the Playwright browsers.
 
 **Go** (Go 1.25+)
 

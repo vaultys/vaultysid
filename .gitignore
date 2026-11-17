@@ -9,6 +9,7 @@ test/assets/streamed_file_signcrypted.png
 vaultysbox/
 /test/
 /typescript/dist
+/kmip/dist
 /typescript/test/interops/compatibility-data
 /typescript/test/interops/tmp
 /interops/typescript

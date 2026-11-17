@@ -11,7 +11,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [24.x, 22.x, 20.x]
+        node-version: [26.x, 24.x, 22.x, 20.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -43,3 +43,7 @@ jobs:
       - run: cd typescript && pnpm install
 
       - run: cd typescript && pnpm test
+
+      - run: cd kmip && pnpm install --frozen-lockfile
+
+      - run: cd kmip && pnpm test

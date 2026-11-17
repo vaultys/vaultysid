@@ -47,11 +47,33 @@ protocols below are not compatible with 3.x and older:
 Cross-language vectors: `test/interops/security-v2-vectors.json` (`npx tsx test/interops/generate-security-v2-vectors.ts`).
 
 ## Getting Started
-- install nodejs (20.x recommended) and pnpm (https://pnpm.io/fr/installation)
-- checkout this repo
-- install dependencies: `pnpm i`
-- compile for web `pnpm build_web` or for node `pnpm build`
-- run test `pnpm test`
+
+From `typescript/`, use Node.js 20 or later and pnpm.
+
+```sh
+pnpm install
+pnpm build
+pnpm test
+```
+
+`pnpm build` builds the Node.js and browser packages. CI tests on Node.js 20,
+22, 24 and 26. The Node.js WebAuthn tests explicitly enable the software
+authenticator and await CBOR encoding and signature verification.
+
+For the browser suite, run `pnpm exec playwright install` once, then
+`pnpm test:web`.
+
+## External signing
+
+`VaultysId.fromSigner(signer, encryptionSecretKey)` creates a type `0x01`
+identity from a PureEd25519 signer and a local 32-byte X25519 secret. A
+signer implements the `Ed25519Signer` interface exported by `@vaultys/id`.
+The signer receives the domain-separated bytes prepared by VaultysID and
+returns a raw 64-byte signature. Share `identity.id` with verifiers, who can
+load it with `VaultysId.fromId()`.
+
+For KMIP in Node.js, see the [optional adapter and local installation instructions](../kmip/README.md).
+Browser bundles can use `@vaultys/id` on its own.
 
 ## Checkout examples
 The repository also have some examples. Try them:
