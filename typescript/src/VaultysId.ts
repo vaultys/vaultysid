@@ -7,6 +7,7 @@ import { PQ_COSE_ALG } from "./pqCrypto";
 import CypherManager from "./KeyManager/CypherManager";
 import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 import { DILITHIUM_PK_LENGTH } from "./KeyManager/DilithiumManager";
+import { DHIES_V3_SIGNED_TAG } from "./KeyManager/dhies";
 import { decodeRecord, isBytes } from "./KeyManager/validation";
 import type { Ed25519Signer } from "./Ed25519Signer";
 import PassportAAManager, { TYPE_PASSPORT_AA } from "./KeyManager/PassportAAManager";
@@ -40,6 +41,22 @@ type Algorithm = "dilithium_ed25519" | "dilithium" | "ed25519";
 const SIGN_INCIPIT = Buffer.from("VAULTYS_SIGN", "utf8");
 export const HANDSHAKE_INCIPIT = Buffer.from("VAULTYS_HANDSHAKE_V1", "utf8");
 export const RAW_INCIPIT = Buffer.from("VAULTYS_RAW", "utf8");
+// - VAULTYS_DHIES_V3S: PROPOSAL, sender signature inside signed DHIES v3 messages
+//   (rfc/PQ-ENCRYPTION.md, Appendix A), produced only with `{ senderSignature: true }`
+export const DHIES_V3S_INCIPIT = Buffer.from("VAULTYS_DHIES_V3S", "utf8");
+
+/**
+ * PROPOSAL (rfc/PQ-ENCRYPTION.md, Appendix A). Options of dhiesEncrypt: with
+ * `senderSignature: true`, a post-quantum recipient gets a signed DHIES v3 message
+ * (tag 0x04) carrying the sender's ML-DSA signature. Costs the signature size
+ * (4.6 kB for ML-DSA-87) and deniability: the recipient can show the signature.
+ */
+export type DhiesEncryptOptions = { senderSignature?: boolean };
+/**
+ * PROPOSAL. Options of dhiesDecrypt: "accept" also opens signed messages,
+ * "require" only opens signed messages. Without options, signed messages are refused.
+ */
+export type DhiesDecryptOptions = { senderSignature?: "accept" | "require" };
 
 const toBuffer = (data: Buffer | Uint8Array | string, encoding: BufferEncoding = "hex") => (typeof data === "string" ? Buffer.from(data, encoding) : Buffer.from(data));
 
@@ -568,14 +585,33 @@ export default class VaultysId {
    * @param recipientId Recipient's VaultysId ID
    * @returns Encrypted message or null if encryption fails
    */
-  async dhiesEncrypt(message: string | Buffer, recipientId: Buffer | string): Promise<Buffer | null> {
+  async dhiesEncrypt(message: string | Buffer, recipientId: Buffer | string, options?: DhiesEncryptOptions): Promise<Buffer | null> {
     let cleanId: Buffer;
     if (typeof recipientId === "string") {
       cleanId = Buffer.from(recipientId.slice(2), "hex");
     } else {
       cleanId = recipientId.slice(1);
     }
+    if (options?.senderSignature) return this.dhiesV3SignedEncrypt(message, recipientId, cleanId);
     return this.keyManager.dhiesEncrypt(message, cleanId);
+  }
+
+  /** Whether this identity signs with ML-DSA (Dilithium or Hybrid key manager). */
+  private signsWithMlDsa() {
+    return this.keyManager instanceof DilithiumManager || this.keyManager instanceof HybridManager;
+  }
+
+  private async dhiesV3SignedEncrypt(message: string | Buffer, recipientId: Buffer | string, cleanId: Buffer): Promise<Buffer | null> {
+    try {
+      // post-quantum sender authentication needs an ML-DSA signer and a PQ recipient
+      if (!this.signsWithMlDsa()) return null;
+      const recipientFullId = toBuffer(recipientId);
+      if (!VaultysId.fromId(recipientFullId).isPostQuantum()) return null;
+      const sign = (tbs: Buffer) => this.signInDomain(DHIES_V3S_INCIPIT, tbs);
+      return await (this.keyManager as CypherManager).dhiesV3SignedEncrypt(message, cleanId, this.id, recipientFullId, sign);
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -583,14 +619,33 @@ export default class VaultysId {
    * @param encryptedMessage Encrypted message from dhiesEncrypt
    * @returns Decrypted message as Buffer or null if decryption fails
    */
-  async dhiesDecrypt(encryptedMessage: Buffer, senderId: Buffer | string): Promise<Buffer | null> {
+  async dhiesDecrypt(encryptedMessage: Buffer, senderId: Buffer | string, options?: DhiesDecryptOptions): Promise<Buffer | null> {
     let cleanId: Buffer;
     if (typeof senderId === "string") {
       cleanId = Buffer.from(senderId.slice(2), "hex");
     } else {
       cleanId = senderId.slice(1);
     }
+    const mode = options?.senderSignature;
+    if (mode === "accept" || mode === "require") {
+      const signed = encryptedMessage?.[0] === DHIES_V3_SIGNED_TAG;
+      if (signed) return this.dhiesV3SignedDecrypt(encryptedMessage, senderId, cleanId);
+      if (mode === "require") return null;
+    }
     return this.keyManager.dhiesDecrypt(encryptedMessage, cleanId);
+  }
+
+  private async dhiesV3SignedDecrypt(encryptedMessage: Buffer, senderId: Buffer | string, cleanId: Buffer): Promise<Buffer | null> {
+    try {
+      if (!this.isPostQuantum()) return null;
+      const senderFullId = toBuffer(senderId);
+      const sender = VaultysId.fromId(senderFullId);
+      if (!sender.signsWithMlDsa()) return null;
+      const verify = (tbs: Buffer, signature: Buffer) => sender.verifyInDomain(DHIES_V3S_INCIPIT, tbs, signature, false);
+      return await (this.keyManager as CypherManager).dhiesV3SignedDecrypt(encryptedMessage, cleanId, senderFullId, this.id, verify);
+    } catch {
+      return null;
+    }
   }
 
   private async signInDomain(domain: Buffer, data: Buffer | Uint8Array | string): Promise<Buffer> {
