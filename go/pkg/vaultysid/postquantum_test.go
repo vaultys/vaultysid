@@ -162,3 +162,40 @@ func TestPQPublicIdentityCannotDecrypt(t *testing.T) {
 		t.Error("public identity computed getSecretHash")
 	}
 }
+
+func TestHybridIdentities(t *testing.T) {
+	entropy, _ := crypto.RandomBytes(32)
+	for _, idType := range []IdentityType{TypePerson, TypePQPerson} {
+		id, err := FromEntropyAlg(entropy, idType, "dilithium_ed25519")
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := map[IdentityType]int{TypePerson: 2670, TypePQPerson: 3859}[idType]
+		if len(id.ToBytes()) != want {
+			t.Errorf("type %d: serialized length %d, want %d", idType, len(id.ToBytes()), want)
+		}
+		secret, _ := id.GetSecret()
+		restored, err := FromSecret(secret)
+		if err != nil || !bytes.Equal(restored.ToBytes(), id.ToBytes()) {
+			t.Fatalf("type %d: FromSecret: %v", idType, err)
+		}
+		public, err := FromID(id.ToBytes(), nil)
+		if err != nil || public.KeyManager.GetAuthType() != "DilithiumEdDSAVerificationKey2025" {
+			t.Fatalf("type %d: FromID: %v", idType, err)
+		}
+		sig, _ := id.SignChallenge([]byte("challenge"))
+		if err := public.VerifyChallenge([]byte("challenge"), sig); err != nil {
+			t.Errorf("type %d: %v", idType, err)
+		}
+	}
+	// a hybrid PQ identity receives DHIES v3
+	pq, _ := FromEntropyAlg(entropy, TypePQOrganization, "dilithium_ed25519")
+	classical, _ := GeneratePerson()
+	out, err := classical.DHIESEncrypt([]byte("m"), pq)
+	if err != nil || out[0] != 0x03 {
+		t.Fatalf("DHIES v3 to hybrid: %v", err)
+	}
+	if got, err := pq.DHIESDecrypt(out, classical); err != nil || string(got) != "m" {
+		t.Fatalf("decrypt: %v", err)
+	}
+}

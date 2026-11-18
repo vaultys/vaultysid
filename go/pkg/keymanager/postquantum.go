@@ -213,6 +213,13 @@ func PostQuantumFromID(id []byte) (PostQuantumKeyManager, error) {
 		km.Cypher = KeyPair{PublicKey: data.E}
 		km.KEMPublicKey = data.K
 		return km, nil
+	case HybridPublicKeySize:
+		km, err := hybridFromKeys(1, data.X, data.E)
+		if err != nil {
+			return nil, err
+		}
+		km.KEMPublicKey = data.K
+		return km, nil
 	default:
 		return nil, fmt.Errorf("invalid post-quantum id: unsupported key manager (signing key of %d bytes)", len(data.X))
 	}
@@ -226,6 +233,20 @@ func PostQuantumFromSecret(secret []byte) (PostQuantumKeyManager, error) {
 	switch len(secret) {
 	case 72:
 		km, err := FromSecretDilithiumInternal(secret)
+		if err != nil {
+			return nil, err
+		}
+		if km.Version != 1 {
+			km.CleanSecureData()
+			return nil, fmt.Errorf("post-quantum secrets must be serialized with version 1")
+		}
+		if err := km.EnablePostQuantum(); err != nil {
+			km.CleanSecureData()
+			return nil, err
+		}
+		return km, nil
+	case 83:
+		km, err := HybridFromSecret(secret)
 		if err != nil {
 			return nil, err
 		}

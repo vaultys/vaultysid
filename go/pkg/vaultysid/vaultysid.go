@@ -108,7 +108,7 @@ func FromEntropy(entropy []byte, idType IdentityType) (*VaultysID, error) {
 // FromEntropyAlg creates a VaultysID from the given entropy bytes using
 // the named algorithm, matching TS VaultysId.fromEntropy's alg parameter:
 // "ed25519" (default), "dilithium" (post-quantum ML-DSA-87), or
-// "dilithium_ed25519" (hybrid -- not yet implemented in Go).
+// "dilithium_ed25519" (hybrid Ed25519 + ML-DSA-87).
 func FromEntropyAlg(entropy []byte, idType IdentityType, alg string) (*VaultysID, error) {
 	if len(entropy) != 32 {
 		return nil, fmt.Errorf("entropy must be 32 bytes, got %d", len(entropy))
@@ -129,7 +129,7 @@ func FromEntropyAlg(entropy []byte, idType IdentityType, alg string) (*VaultysID
 	case "dilithium":
 		km, err = keymanager.DilithiumCreateFromEntropy(entropy)
 	case "dilithium_ed25519":
-		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
+		km, err = keymanager.CreateHybridFromEntropy(entropy)
 	case "", "ed25519":
 		km, err = keymanager.CreateFromEntropy(entropy)
 	default:
@@ -152,6 +152,12 @@ func postQuantumFromEntropy(entropy []byte, alg string) (keymanager.PostQuantumK
 	switch alg {
 	case "dilithium":
 		km, err := keymanager.CreateDilithiumFromEntropyInternal(entropy)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create key manager: %w", err)
+		}
+		pqm = km
+	case "dilithium_ed25519":
+		km, err := keymanager.CreateHybridFromEntropy(entropy)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create key manager: %w", err)
 		}
@@ -225,7 +231,10 @@ func FromID(id []byte, certificate []byte) (*VaultysID, error) {
 			return nil, fmt.Errorf("failed to parse Dilithium key manager: %w", err)
 		}
 	case len(kmData) == 2637+32:
-		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
+		km, err = keymanager.HybridFromID(kmData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse hybrid key manager: %w", err)
+		}
 	default:
 		km, err = keymanager.FromID(kmData)
 		if err != nil {
@@ -306,7 +315,10 @@ func FromSecret(secret []byte) (*VaultysID, error) {
 			return nil, fmt.Errorf("failed to create Dilithium key manager from secret: %w", err)
 		}
 	case len(kmSecret) == 83:
-		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
+		km, err = keymanager.HybridFromSecret(kmSecret)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create hybrid key manager from secret: %w", err)
+		}
 	default:
 		km, err = keymanager.FromSecret(kmSecret)
 		if err != nil {
