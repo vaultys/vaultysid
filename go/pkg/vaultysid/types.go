@@ -9,7 +9,27 @@ const (
 	TypeOrganization IdentityType = 2
 	TypeFIDO2        IdentityType = 3
 	TypeFIDO2PRF     IdentityType = 4
+
+	// Post-quantum identities (rfc/PQ-ENCRYPTION.md §4.1): type = 0x10 | role.
+	// They carry an ML-KEM-768 key and a seed-derived PRF key, with a
+	// Dilithium or Hybrid key manager. 0x13 and 0x14 are reserved.
+	TypePQFlag         IdentityType = 0x10
+	TypePQMachine      IdentityType = TypePQFlag | TypeMachine
+	TypePQPerson       IdentityType = TypePQFlag | TypePerson
+	TypePQOrganization IdentityType = TypePQFlag | TypeOrganization
+	typeRoleMask       IdentityType = 0x0F
 )
+
+// Role returns the role of the identity type (type & 0x0F): every role check
+// must use it, never the raw type byte (rfc/PQ-ENCRYPTION.md §4.1).
+func (t IdentityType) Role() IdentityType {
+	return t & typeRoleMask
+}
+
+// IsPostQuantum reports whether t is one of the post-quantum types 0x10-0x12.
+func (t IdentityType) IsPostQuantum() bool {
+	return t == TypePQMachine || t == TypePQPerson || t == TypePQOrganization
+}
 
 // KeyManager is the interface that all key management implementations must satisfy
 type KeyManager interface {
@@ -102,6 +122,12 @@ func (t IdentityType) String() string {
 		return "fido2"
 	case TypeFIDO2PRF:
 		return "fido2prf"
+	case TypePQMachine:
+		return "pq-machine"
+	case TypePQPerson:
+		return "pq-person"
+	case TypePQOrganization:
+		return "pq-organization"
 	default:
 		return "unknown"
 	}
@@ -127,10 +153,10 @@ func ParseIdentityType(s string) (IdentityType, error) {
 
 // IsValid checks if the IdentityType is valid
 func (t IdentityType) IsValid() bool {
-	return t <= TypeFIDO2PRF
+	return t <= TypeFIDO2PRF || t.IsPostQuantum()
 }
 
 // IsHardware returns true if the identity type represents hardware-backed identity
 func (t IdentityType) IsHardware() bool {
-	return t == TypeFIDO2 || t == TypeFIDO2PRF
+	return t.Role() == TypeFIDO2 || t.Role() == TypeFIDO2PRF
 }
