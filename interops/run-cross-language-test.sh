@@ -38,7 +38,7 @@ case "$MODE" in
 
         # Start TypeScript acceptor in background
         echo -e "${CYAN}[1/2] Starting TypeScript IdManager (acceptContact)...${NC}"
-        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" > test/interops/tmp/ts-acceptor.log 2>&1 &
+        cd typescript && pnpm exec tsx test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" > test/interops/tmp/ts-acceptor.log 2>&1 &
         TS_PID=$!
 
         # Give TypeScript time to initialize
@@ -92,7 +92,7 @@ case "$MODE" in
         echo -e "${CYAN}[2/2] Starting TypeScript IdManager (askContact)...${NC}\n"
         echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}\n"
 
-        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts asker "$CHANNEL_NAME" ed25519
+        cd typescript && pnpm exec tsx test/interops/cross-language-channel.ts asker "$CHANNEL_NAME" ed25519
         TS_EXIT=$?
 
         # Wait for Rust to complete
@@ -126,7 +126,7 @@ case "$MODE" in
 
         # Start TypeScript acceptor with Dilithium in background
         echo -e "${CYAN}[1/2] Starting TypeScript IdManager with Dilithium (acceptContact)...${NC}"
-        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" dilithium > test/interops/tmp/ts-acceptor-dilithium.log 2>&1 &
+        cd typescript && pnpm exec tsx test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" dilithium > test/interops/tmp/ts-acceptor-dilithium.log 2>&1 &
         TS_PID=$!
 
         # Give TypeScript time to initialize
@@ -170,7 +170,7 @@ case "$MODE" in
 
         # Start TypeScript acceptor with Ed25519 in background
         echo -e "${CYAN}[1/2] Starting TypeScript IdManager with Ed25519 (acceptContact)...${NC}"
-        cd typescript && pnpx ts-node test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" ed25519 > test/interops/tmp/ts-acceptor-mixed.log 2>&1 &
+        cd typescript && pnpm exec tsx test/interops/cross-language-channel.ts acceptor "$CHANNEL_NAME" ed25519 > test/interops/tmp/ts-acceptor-mixed.log 2>&1 &
         TS_PID=$!
 
         # Give TypeScript time to initialize
@@ -211,7 +211,7 @@ case "$MODE" in
     "manual")
         echo -e "${GREEN}Manual mode - run the commands in separate terminals:${NC}\n"
         echo -e "${YELLOW}Terminal 1 (TypeScript acceptor):${NC}"
-        echo -e "  pnpm ts-node test/interops/cross-language-channel.ts acceptor $CHANNEL_NAME [ed25519|dilithium]\n"
+        echo -e "  pnpm exec tsx test/interops/cross-language-channel.ts acceptor $CHANNEL_NAME [ed25519|dilithium]\n"
         echo -e "${YELLOW}Terminal 2 (Rust asker):${NC}"
         echo -e "  cd rust && cargo run --bin cross_language_test -- asker $CHANNEL_NAME [ed25519|dilithium]\n"
         exit 0
