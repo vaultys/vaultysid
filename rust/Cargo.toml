@@ -40,6 +40,7 @@ curve25519-dalek = "4.1"
 sha2 = "0.10"
 hmac = "0.12"
 chacha20poly1305 = "0.10"
+hkdf = "0.12"
 rand = "0.8"
 rand_core = "=0.6.4"
 rand_chacha = "0.3"
@@ -47,6 +48,9 @@ rand_chacha = "0.3"
 getrandom = "0.2"
 
 # Post-quantum cryptography
+# X-Wing KEM (draft-connolly-cfrg-xwing-kem); hazmat for deterministic encapsulation in test vectors
+x-wing = { version = "0.1.1", features = ["hazmat", "zeroize"] }
+kem = "0.3"
 libcrux-ml-dsa = "0.0.11"
 # Post-quantum identities and DHIES v3 (rfc/PQ-ENCRYPTION.md): ML-KEM-768 (FIPS 203)
 # and the NaCl secretbox (XSalsa20-Poly1305) used by DHIES. `hazmat` exposes
