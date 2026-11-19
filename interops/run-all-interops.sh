@@ -35,10 +35,10 @@ run_test() {
 
     if eval "$test_command"; then
         echo -e "\n${GREEN}✅ ${test_name} PASSED${NC}\n"
-        ((TESTS_PASSED++))
+        TESTS_PASSED=$((TESTS_PASSED + 1))
     else
         echo -e "\n${RED}❌ ${test_name} FAILED${NC}\n"
-        ((TESTS_FAILED++))
+        TESTS_FAILED=$((TESTS_FAILED + 1))
         FAILED_TESTS="${FAILED_TESTS}\n  - ${test_name}"
     fi
     return 0
@@ -57,7 +57,7 @@ echo -e "${MAGENTA}Part 1: Generating TypeScript Test Data (Ed25519 & Dilithium)
 echo -e "${MAGENTA}═══════════════════════════════════════════════════════════════════════${NC}\n"
 
 run_test "TypeScript Test Data Generation" \
-    "cd typescript && pnpx ts-node ./test/interops/compatibility-export.ts"
+    "cd typescript && pnpm exec tsx ./test/interops/compatibility-export.ts"
 
 # Part 2: Rust Compatibility Tests
 echo -e "${MAGENTA}═══════════════════════════════════════════════════════════════════════${NC}"
@@ -110,7 +110,7 @@ cd ..
 # Run TypeScript performance test (if available)
 if [ -f "typescript/test/interops/performance-test.ts" ]; then
     echo -e "${CYAN}TypeScript Performance Test:${NC}"
-    cd typescript && pnpx ts-node test/interops/performance-test.ts || true
+    cd typescript && pnpm exec tsx test/interops/performance-test.ts || true
     cd ..
 fi
 

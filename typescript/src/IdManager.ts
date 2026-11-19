@@ -14,6 +14,12 @@ import { platformCrypto } from "./platform";
 import DeprecatedKeyManager from "./KeyManager/DeprecatedKeyManager";
 import PassportAAManager, { TYPE_PASSPORT_AA } from "./KeyManager/PassportAAManager";
 
+/**
+ * Storage key for "wot" and "signatures": `<timestamp>-<hex SHA-256(data)>`. The timestamp alone made two entries
+ * of the same millisecond overwrite each other; keys still sort by date and stay opaque strings.
+ */
+export const timestampedKey = (data: Buffer | Uint8Array, now: number = Date.now()) => `${now}-${hash("sha256", Buffer.from(data)).toString("hex")}`;
+
 // "vaultys/encryption/" + version = 0x01
 const ENCRYPTION_HEADER = Buffer.from("7661756c7479732f656e6372797074696f6e2f01", "hex");
 const PRF_NONCE_LENGTH = 32;
@@ -414,7 +420,7 @@ export default class IdManager {
 
   async signChallenge(challenge: Buffer) {
     const signature = await this.vaultysId.signChallenge(challenge);
-    this.store.substore("signatures").set("" + Date.now(), {
+    this.store.substore("signatures").set(timestampedKey(signature), {
       signature,
       challenge,
     });
@@ -429,7 +435,7 @@ export default class IdManager {
       challenge,
       signature: await this.vaultysId.signChallenge(challenge),
     };
-    this.store.substore("signatures").set(Date.now() + "", payload);
+    this.store.substore("signatures").set(timestampedKey(payload.signature ?? challenge), payload);
     this.store.save();
     return payload;
   }
@@ -817,7 +823,7 @@ export default class IdManager {
       }
       // there is a caveat here, we are not sure that the last bit of information has been received
       channel.send(certificate);
-      this.store.substore("wot").set(Date.now() + "", certificate);
+      this.store.substore("wot").set(timestampedKey(certificate), certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
     } else {
@@ -876,7 +882,7 @@ export default class IdManager {
     }
     if (challenger.isComplete()) {
       const certificate = challenger.getCertificate();
-      this.store.substore("wot").set(Date.now() + "", certificate);
+      this.store.substore("wot").set(timestampedKey(certificate), certificate);
       // TODO create/update merkle tree + sign it
       return challenger;
     } else {

@@ -108,7 +108,7 @@ func FromEntropy(entropy []byte, idType IdentityType) (*VaultysID, error) {
 // FromEntropyAlg creates a VaultysID from the given entropy bytes using
 // the named algorithm, matching TS VaultysId.fromEntropy's alg parameter:
 // "ed25519" (default), "dilithium" (post-quantum ML-DSA-87), or
-// "dilithium_ed25519" (hybrid -- not yet implemented in Go).
+// "dilithium_ed25519" (hybrid Ed25519 + ML-DSA-87).
 func FromEntropyAlg(entropy []byte, idType IdentityType, alg string) (*VaultysID, error) {
 	if len(entropy) != 32 {
 		return nil, fmt.Errorf("entropy must be 32 bytes, got %d", len(entropy))
@@ -117,11 +117,19 @@ func FromEntropyAlg(entropy []byte, idType IdentityType, alg string) (*VaultysID
 	var km KeyManager
 	var err error
 
+	if idType.IsPostQuantum() {
+		pqm, err := postQuantumFromEntropy(entropy, alg)
+		if err != nil {
+			return nil, err
+		}
+		return &VaultysID{Type: idType, KeyManager: pqm}, nil
+	}
+
 	switch alg {
 	case "dilithium":
 		km, err = keymanager.DilithiumCreateFromEntropy(entropy)
 	case "dilithium_ed25519":
-		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
+		km, err = keymanager.CreateHybridFromEntropy(entropy)
 	case "", "ed25519":
 		km, err = keymanager.CreateFromEntropy(entropy)
 	default:
@@ -135,6 +143,32 @@ func FromEntropyAlg(entropy []byte, idType IdentityType, alg string) (*VaultysID
 		Type:       idType,
 		KeyManager: km,
 	}, nil
+}
+
+// postQuantumFromEntropy creates the key manager of a post-quantum identity
+// (rfc/PQ-ENCRYPTION.md §4): Dilithium or Hybrid only.
+func postQuantumFromEntropy(entropy []byte, alg string) (keymanager.PostQuantumKeyManager, error) {
+	var pqm keymanager.PostQuantumKeyManager
+	switch alg {
+	case "dilithium":
+		km, err := keymanager.CreateDilithiumFromEntropyInternal(entropy)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create key manager: %w", err)
+		}
+		pqm = km
+	case "dilithium_ed25519":
+		km, err := keymanager.CreateHybridFromEntropy(entropy)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create key manager: %w", err)
+		}
+		pqm = km
+	default:
+		return nil, fmt.Errorf("post-quantum identities require a dilithium or dilithium_ed25519 key manager, got %q", alg)
+	}
+	if err := pqm.EnablePostQuantum(); err != nil {
+		return nil, err
+	}
+	return pqm, nil
 }
 
 // MachineFromEntropy creates a machine identity from entropy
@@ -161,8 +195,18 @@ func FromID(id []byte, certificate []byte) (*VaultysID, error) {
 	idType := IdentityType(id[0])
 
 	// Validate identity type
-	if idType > TypeFIDO2PRF {
+	if !idType.IsValid() {
 		return nil, fmt.Errorf("invalid identity type: %d", idType)
+	}
+
+	// Post-quantum identities dispatch on the signing key length, never on
+	// the total length (rfc/PQ-ENCRYPTION.md §4.2).
+	if idType.IsPostQuantum() {
+		km, err := keymanager.PostQuantumFromID(id[1:])
+		if err != nil {
+			return nil, err
+		}
+		return &VaultysID{Type: idType, KeyManager: km, Certificate: certificate}, nil
 	}
 
 	var km KeyManager
@@ -187,7 +231,10 @@ func FromID(id []byte, certificate []byte) (*VaultysID, error) {
 			return nil, fmt.Errorf("failed to parse Dilithium key manager: %w", err)
 		}
 	case len(kmData) == 2637+32:
-		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
+		km, err = keymanager.HybridFromID(kmData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse hybrid key manager: %w", err)
+		}
 	default:
 		km, err = keymanager.FromID(kmData)
 		if err != nil {
@@ -232,8 +279,18 @@ func FromSecret(secret []byte) (*VaultysID, error) {
 	idType := IdentityType(secret[0])
 
 	// Validate identity type
-	if idType > TypeFIDO2PRF {
+	if !idType.IsValid() {
 		return nil, fmt.Errorf("invalid identity type: %d", idType)
+	}
+
+	// Post-quantum identities: the secret record selects Dilithium or Hybrid
+	// (rfc/PQ-ENCRYPTION.md §4.2), and the ML-KEM and PRF keys are derived.
+	if idType.IsPostQuantum() {
+		km, err := keymanager.PostQuantumFromSecret(secret[1:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to create post-quantum key manager from secret: %w", err)
+		}
+		return &VaultysID{Type: idType, KeyManager: km}, nil
 	}
 
 	var km KeyManager
@@ -258,7 +315,10 @@ func FromSecret(secret []byte) (*VaultysID, error) {
 			return nil, fmt.Errorf("failed to create Dilithium key manager from secret: %w", err)
 		}
 	case len(kmSecret) == 83:
-		return nil, fmt.Errorf("hybrid (dilithium_ed25519) identities are not yet implemented")
+		km, err = keymanager.HybridFromSecret(kmSecret)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create hybrid key manager from secret: %w", err)
+		}
 	default:
 		km, err = keymanager.FromSecret(kmSecret)
 		if err != nil {
@@ -400,42 +460,49 @@ func (v *VaultysID) VerifyHandshake(unsignedChallenge []byte, signature []byte) 
 
 // Identity type checking methods
 
+// Role checks ignore the post-quantum flag (rfc/PQ-ENCRYPTION.md §4.1).
+
 // IsMachine returns true if this is a machine identity
 func (v *VaultysID) IsMachine() bool {
-	return v.Type == TypeMachine
+	return v.Type.Role() == TypeMachine
 }
 
 // IsPerson returns true if this is a person identity
 func (v *VaultysID) IsPerson() bool {
-	return v.Type == TypePerson
+	return v.Type.Role() == TypePerson
 }
 
 // IsOrganization returns true if this is an organization identity
 func (v *VaultysID) IsOrganization() bool {
-	return v.Type == TypeOrganization
+	return v.Type.Role() == TypeOrganization
 }
 
 // IsHardware returns true if this is a hardware-backed identity (FIDO2)
 func (v *VaultysID) IsHardware() bool {
-	return v.Type == TypeFIDO2 || v.Type == TypeFIDO2PRF
+	return v.Type.IsHardware()
+}
+
+// IsPostQuantum returns true for the post-quantum types 0x10-0x12, which
+// carry an ML-KEM-768 key and a seed-derived PRF key.
+func (v *VaultysID) IsPostQuantum() bool {
+	return v.Type.IsPostQuantum()
+}
+
+// GetKEMPublicKey returns the ML-KEM-768 encapsulation key (field k) of a
+// post-quantum identity, or nil.
+func (v *VaultysID) GetKEMPublicKey() []byte {
+	if !v.Type.IsPostQuantum() {
+		return nil
+	}
+	if pqm, ok := v.KeyManager.(keymanager.PostQuantumKeyManager); ok && pqm.IsPostQuantum() {
+		return pqm.GetKEMPublicKey()
+	}
+	return nil
 }
 
 // GetType returns the identity type as a string
 func (v *VaultysID) GetType() string {
-	switch v.Type {
-	case TypeMachine:
-		return "machine"
-	case TypePerson:
-		return "person"
-	case TypeOrganization:
-		return "organization"
-	case TypeFIDO2:
-		return "fido2"
-	case TypeFIDO2PRF:
-		return "fido2prf"
-	default:
-		return "unknown"
-	}
+	return v.Type.String()
 }
 
 // Certificate management
@@ -459,6 +526,19 @@ func (v *VaultysID) HasCertificate() bool {
 // This ensures consistency with TypeScript which wraps the message with "VaultysID/" prefix and "/end" suffix
 func (v *VaultysID) HMAC(input string) ([]byte, error) {
 	return v.KeyManager.HMAC(input)
+}
+
+// GetSecretHash returns SHA-256(data || "secrethash" || key), matching TS
+// CypherManager.getSecretHash: the key is the seed-derived PRF key for a
+// post-quantum identity (rfc/PQ-ENCRYPTION.md §3.2).
+func (v *VaultysID) GetSecretHash(data []byte) ([]byte, error) {
+	hasher, ok := v.KeyManager.(interface {
+		GetSecretHash(data []byte) ([]byte, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("getSecretHash is not supported for this key manager")
+	}
+	return hasher.GetSecretHash(data)
 }
 
 // GetCypherPublicKey returns the cipher public key from the key manager
@@ -537,7 +617,12 @@ func (v *VaultysID) GetVersion() int {
 }
 
 // ToVersion sets the key manager version (for compatibility)
+// Post-quantum ids exist only in version 1: ToVersion leaves them unchanged,
+// as TS toVersion does.
 func (v *VaultysID) ToVersion(version int) error {
+	if v.Type.IsPostQuantum() {
+		return nil
+	}
 	return v.KeyManager.SetVersion(version)
 }
 
@@ -604,11 +689,24 @@ func (v *VaultysID) dhiesFor() (*keymanager.DHIES, error) {
 	return keymanager.NewDHIESFromKeys(sk, v.KeyManager.GetCypherPublicKey())
 }
 
-// DHIESEncrypt encrypts plaintext to recipient with DHIES v2 (spec §3),
-// authenticated as coming from this identity.
+// DHIESEncrypt encrypts plaintext to recipient, authenticated as coming from
+// this identity: DHIES v3 (X25519 + ML-KEM-768, rfc/PQ-ENCRYPTION.md §5) when
+// the recipient is a post-quantum identity, DHIES v2 otherwise (§5.4). Any
+// identity with an X25519 key can send v3.
 func (v *VaultysID) DHIESEncrypt(plaintext []byte, recipient *VaultysID) ([]byte, error) {
 	if recipient == nil {
 		return nil, fmt.Errorf("recipient is nil")
+	}
+	if recipient.Type.IsPostQuantum() {
+		ek := recipient.GetKEMPublicKey()
+		if ek == nil {
+			return nil, fmt.Errorf("post-quantum recipient without ML-KEM key")
+		}
+		sk, err := v.cypherSecret()
+		if err != nil {
+			return nil, err
+		}
+		return keymanager.DHIESEncryptV3(sk, v.KeyManager.GetCypherPublicKey(), recipient.KeyManager.GetCypherPublicKey(), ek, plaintext)
 	}
 	d, err := v.dhiesFor()
 	if err != nil {
@@ -617,17 +715,42 @@ func (v *VaultysID) DHIESEncrypt(plaintext []byte, recipient *VaultysID) ([]byte
 	return d.Encrypt(recipient.KeyManager.GetCypherPublicKey(), plaintext)
 }
 
-// DHIESDecrypt decrypts a DHIES v2 ciphertext addressed to this identity and
-// verifies it was produced by sender.
+// DHIESDecrypt decrypts a DHIES ciphertext addressed to this identity and
+// verifies it was produced by sender. A post-quantum identity only accepts
+// DHIES v3 and a classical one only DHIES v2, so a message to a post-quantum
+// identity cannot be downgraded (rfc/PQ-ENCRYPTION.md §5.4).
 func (v *VaultysID) DHIESDecrypt(ciphertext []byte, sender *VaultysID) ([]byte, error) {
 	if sender == nil {
 		return nil, fmt.Errorf("sender is nil")
+	}
+	if v.Type.IsPostQuantum() {
+		pqm, ok := v.KeyManager.(keymanager.PostQuantumKeyManager)
+		if !ok || !pqm.IsPostQuantum() {
+			return nil, keymanager.ErrDHIESDecrypt
+		}
+		sk, err := v.cypherSecret()
+		if err != nil {
+			return nil, err
+		}
+		return keymanager.DHIESDecryptV3(sk, v.KeyManager.GetCypherPublicKey(), pqm.GetKEMPublicKey(), pqm.KEMDecapsulate, sender.KeyManager.GetCypherPublicKey(), ciphertext)
 	}
 	d, err := v.dhiesFor()
 	if err != nil {
 		return nil, err
 	}
 	return d.Decrypt(ciphertext, sender.KeyManager.GetCypherPublicKey())
+}
+
+// cypherSecret returns this identity's X25519 secret key.
+func (v *VaultysID) cypherSecret() ([]byte, error) {
+	if v.KeyManager.GetCapability() != "private" {
+		return nil, fmt.Errorf("no private key available")
+	}
+	provider, ok := v.KeyManager.(keymanager.CypherSecretProvider)
+	if !ok {
+		return nil, fmt.Errorf("DHIES is not supported for this key manager")
+	}
+	return provider.GetCypherSecretKey()
 }
 
 // GetOTP generates a one-time password based on the provided data

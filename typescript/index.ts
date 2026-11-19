@@ -9,11 +9,16 @@ import CryptoChannel from "./src/cryptoChannel";
 import { migrateVaultysId, migrateIdManager } from "./src/utils/migration";
 import DeprecatedKeyManager from "./src/KeyManager/DeprecatedKeyManager";
 import { enableSoftCredentials, isSoftCredentialsEnabled, configureWebAuthn } from "./src/platform/softCredentialsConfig";
-import { dhiesV2Encrypt, dhiesV2Decrypt, dhiesV3Encrypt, dhiesV3Decrypt } from "./src/KeyManager/dhies";
+import { dhiesV2Encrypt as dhiesV2EncryptWith, dhiesV2Decrypt, dhiesV3Encrypt as dhiesV3EncryptWith, dhiesV3Decrypt, type StaticDiffieHellman } from "./src/KeyManager/dhies";
 
 //utils
 import * as crypto from "./src/crypto";
 const Buffer = crypto.Buffer;
+
+// The package exports DHIES encryption WITHOUT the `testing` parameter: a fixed ephemeral key, nonce or ML-KEM
+// randomness would reuse keys and nonces. Vector generators import src/KeyManager/dhies directly.
+const dhiesV2Encrypt = (message: string | Uint8Array, senderDH: StaticDiffieHellman, senderPublicKey: Uint8Array, recipientPublicKey: Uint8Array) => dhiesV2EncryptWith(message, senderDH, senderPublicKey, recipientPublicKey);
+const dhiesV3Encrypt = (message: string | Uint8Array, senderDH: StaticDiffieHellman, senderPublicKey: Uint8Array, recipientPublicKey: Uint8Array, recipientKemPublicKey: Uint8Array) => dhiesV3EncryptWith(message, senderDH, senderPublicKey, recipientPublicKey, recipientKemPublicKey);
 
 if (typeof Symbol.dispose === "undefined") {
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment

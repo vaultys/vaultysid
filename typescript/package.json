@@ -40,7 +40,8 @@
     "test:interops": "test/interops/run-cross-language-test.sh",
     "test:saltpack:vectors": "tsx test/interops/generate-saltpack-vectors.ts",
     "test:saltpack:go": "mocha test/interops/go-saltpack-compatibility.test.ts",
-    "test:security:vectors": "tsx test/interops/generate-security-v2-vectors.ts"
+    "test:security:vectors": "tsx test/interops/generate-security-v2-vectors.ts",
+    "test:pq:vectors": "tsx test/interops/generate-pq-identity-vectors.ts"
   },
   "keywords": [],
   "author": "",

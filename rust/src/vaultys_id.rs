@@ -3,6 +3,9 @@ use crate::error::{Error, Result};
 use crate::key_manager::{
     abstract_key_manager::AbstractKeyManager, DilithiumManager, Ed25519Manager,
 };
+use crate::post_quantum::{
+    self, is_post_quantum_type, role_of, DILITHIUM_PUBLIC_KEY_LENGTH, HYBRID_PUBLIC_KEY_LENGTH,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -14,6 +17,9 @@ const TYPE_FIDO2: u8 = 3;
 const TYPE_FIDO2PRF: u8 = 4;
 
 const SIGN_INCIPIT: &[u8] = b"VAULTYS_SIGN";
+
+const HYBRID_NOT_IMPLEMENTED: &str =
+    "Hybrid (dilithium_ed25519) key managers are not implemented in Rust";
 
 /// Supported cryptographic algorithms
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,6 +141,24 @@ impl VaultysId {
         let id_type = secret[0];
         let secret_data = &secret[1..];
 
+        if is_post_quantum_type(id_type) {
+            // rfc/PQ-ENCRYPTION.md §4.2: the secret record selects the key manager
+            let mut km = match secret.len() {
+                73 => DilithiumManager::from_secret(secret_data)?,
+                84 => return Err(Error::NotImplemented(HYBRID_NOT_IMPLEMENTED.into())),
+                _ => return Err(Error::InvalidIdFormat),
+            };
+            if km.base.version != 1 {
+                return Err(Error::UnsupportedVersion(km.base.version));
+            }
+            km.enable_post_quantum()?;
+            return Ok(Self {
+                id_type,
+                key_manager: Box::new(km),
+                certificate,
+            });
+        }
+
         match id_type {
             TYPE_MACHINE | TYPE_PERSON | TYPE_ORGANIZATION => {
                 // Determine which manager to use based on secret length
@@ -186,6 +210,30 @@ impl VaultysId {
         let id_type = clean_id[0];
         let id_data = &clean_id[1..];
 
+        if is_post_quantum_type(id_type) {
+            // rfc/PQ-ENCRYPTION.md §4.2: dispatch on the signing key, never on the
+            // total length
+            let record = post_quantum::parse_post_quantum_record(id_data)?;
+            let key_manager: Box<dyn AbstractKeyManager> = match record.x.len() {
+                DILITHIUM_PUBLIC_KEY_LENGTH => {
+                    Box::new(DilithiumManager::from_post_quantum_id(id_data)?)
+                }
+                HYBRID_PUBLIC_KEY_LENGTH => {
+                    return Err(Error::NotImplemented(HYBRID_NOT_IMPLEMENTED.into()))
+                }
+                _ => {
+                    return Err(Error::InvalidKeyFormat(
+                        "post-quantum id with an unsupported key manager".into(),
+                    ))
+                }
+            };
+            return Ok(Self {
+                id_type,
+                key_manager,
+                certificate,
+            });
+        }
+
         match id_type {
             TYPE_FIDO2 | TYPE_FIDO2PRF => {
                 // FIDO2 managers not implemented in this version
@@ -229,6 +277,28 @@ impl VaultysId {
         id_type: u8,
         alg: Algorithm,
     ) -> Result<Self> {
+        // same rule as TypeScript and Go: the key managers hash the entropy and would accept any length silently
+        if entropy.len() != 32 {
+            return Err(Error::InvalidKeyFormat("entropy must be 32 bytes".into()));
+        }
+
+        if is_post_quantum_type(id_type) {
+            let mut km = match alg {
+                Algorithm::Dilithium => DilithiumManager::from_entropy(entropy)?,
+                Algorithm::Ed25519 => {
+                    return Err(Error::InvalidKeyFormat(
+                        "post-quantum identities require a Dilithium key manager".into(),
+                    ))
+                }
+            };
+            km.enable_post_quantum()?;
+            return Ok(Self {
+                id_type,
+                key_manager: Box::new(km),
+                certificate: None,
+            });
+        }
+
         let key_manager: Box<dyn AbstractKeyManager> = match id_type {
             TYPE_MACHINE | TYPE_PERSON | TYPE_ORGANIZATION => match alg {
                 Algorithm::Dilithium => Box::new(DilithiumManager::from_entropy(entropy)?),
@@ -359,7 +429,7 @@ impl VaultysId {
         let id = self.id();
 
         // This is a simplified DID document
-        serde_json::json!({
+        let mut document = serde_json::json!({
             "@context": ["https://www.w3.org/ns/did/v1"],
             "id": did.clone(),
             "authentication": [{
@@ -374,27 +444,64 @@ impl VaultysId {
                 "controller": did.clone(),
                 "publicKeyMultibase": crate::crypto::to_base64(&id)
             }]
-        })
+        });
+        // rfc/PQ-ENCRYPTION.md §4.4
+        if let Some(k) = self.kem_public_key() {
+            document["keyAgreement"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::json!({
+                    "id": format!("{}#keys-3", did),
+                    "type": "MLKEM768KeyAgreementKey2025",
+                    "controller": did.clone(),
+                    "publicKeyMultibase": format!("m{}", crate::crypto::to_base64(k))
+                }));
+        }
+        document
     }
+
+    // Role checks ignore the post-quantum flag (rfc/PQ-ENCRYPTION.md §4.1).
 
     /// Check if this is a hardware ID
     pub fn is_hardware(&self) -> bool {
-        matches!(self.id_type, TYPE_FIDO2 | TYPE_FIDO2PRF)
+        matches!(role_of(self.id_type), TYPE_FIDO2 | TYPE_FIDO2PRF)
     }
 
     /// Check if this is a machine ID
     pub fn is_machine(&self) -> bool {
-        self.id_type == TYPE_MACHINE
+        role_of(self.id_type) == TYPE_MACHINE
     }
 
     /// Check if this is a person ID
     pub fn is_person(&self) -> bool {
-        self.id_type == TYPE_PERSON
+        role_of(self.id_type) == TYPE_PERSON
     }
 
     /// Check if this is an organization ID
     pub fn is_organization(&self) -> bool {
-        self.id_type == TYPE_ORGANIZATION
+        role_of(self.id_type) == TYPE_ORGANIZATION
+    }
+
+    /// True for the post-quantum types `0x10`-`0x12`, which carry an ML-KEM-768 key
+    /// and a seed-derived PRF key.
+    pub fn is_post_quantum(&self) -> bool {
+        is_post_quantum_type(self.id_type)
+    }
+
+    /// ML-KEM-768 encapsulation key (field `k`) of a post-quantum identity.
+    pub fn kem_public_key(&self) -> Option<&[u8]> {
+        if self.is_post_quantum() {
+            self.key_manager.kem_public_key()
+        } else {
+            None
+        }
+    }
+
+    /// `HMAC-SHA256(key, "VaultysID/" || message || "/end")`, as TypeScript
+    /// `VaultysId.hmac`: keyed with the PRF key for a post-quantum identity.
+    /// Implemented for Dilithium key managers only.
+    pub fn hmac(&self, message: &str) -> Result<Vec<u8>> {
+        self.key_manager.prf_hmac(message)
     }
 
     /// Get OTP HMAC
@@ -412,17 +519,57 @@ impl VaultysId {
             .perform_diffie_hellman(&*other_vaultys_id.key_manager)
     }
 
-    /// DHIES encrypt
+    /// DHIES encrypt. A post-quantum recipient gets DHIES v3 (X25519 + ML-KEM-768,
+    /// rfc/PQ-ENCRYPTION.md §5); other recipients keep the existing Rust DHIES.
     pub async fn dhies_encrypt(&self, message: &[u8], recipient_id: &[u8]) -> Result<Vec<u8>> {
+        if recipient_id
+            .first()
+            .copied()
+            .is_some_and(is_post_quantum_type)
+        {
+            // full validation of the recipient id first
+            let recipient = Self::from_id(recipient_id, None, None)?;
+            let (recipient_public, _) = post_quantum::encryption_keys_of_id(recipient_id)?;
+            let recipient_ek = recipient.kem_public_key().ok_or(Error::InvalidIdFormat)?;
+            let (sender_public, _) = post_quantum::encryption_keys_of_id(&self.id())?;
+            let cypher = self.key_manager.get_cypher()?;
+            let sender_dh = |public_key: &[u8]| cypher.diffie_hellman(public_key);
+            return post_quantum::dhies_v3_encrypt(
+                &sender_dh,
+                &sender_public,
+                &recipient_public,
+                recipient_ek,
+                message,
+            );
+        }
         self.key_manager.dhies_encrypt(message, recipient_id)
     }
 
-    /// DHIES decrypt
+    /// DHIES decrypt. A post-quantum identity only accepts DHIES v3 (§5.4), which
+    /// removes any downgrade path.
     pub async fn dhies_decrypt(
         &self,
         encrypted_message: &[u8],
         sender_id: &[u8],
     ) -> Result<Vec<u8>> {
+        if self.is_post_quantum() {
+            let failed = || Error::DecryptionFailed("DHIES v3".into());
+            let (sender_public, _) =
+                post_quantum::encryption_keys_of_id(sender_id).map_err(|_| failed())?;
+            let (recipient_public, _) = post_quantum::encryption_keys_of_id(&self.id())?;
+            let recipient_ek = self.kem_public_key().ok_or_else(failed)?;
+            let cypher = self.key_manager.get_cypher().map_err(|_| failed())?;
+            let dh = |public_key: &[u8]| cypher.diffie_hellman(public_key);
+            let decapsulate = |cipher_text: &[u8]| self.key_manager.kem_decapsulate(cipher_text);
+            return post_quantum::dhies_v3_decrypt(
+                &dh,
+                &decapsulate,
+                &recipient_public,
+                recipient_ek,
+                &sender_public,
+                encrypted_message,
+            );
+        }
         self.key_manager.dhies_decrypt(encrypted_message, sender_id)
     }
 

@@ -5,6 +5,7 @@ pub mod file_storage;
 pub mod id_manager;
 pub mod key_manager;
 pub mod memory_channel;
+pub mod post_quantum;
 pub mod vaultys_id;
 
 pub use challenger::{ChallengeType, Challenger};
