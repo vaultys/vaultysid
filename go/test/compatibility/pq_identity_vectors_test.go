@@ -31,6 +31,11 @@ type pqIdentityVectors struct {
 		SecretHashData string `json:"secretHashData"`
 		SecretHash     string `json:"secretHash"`
 	} `json:"prf"`
+	Signatures []struct {
+		Identity  string `json:"identity"`
+		Message   string `json:"message"`
+		Signature string `json:"signature"`
+	} `json:"signatures"`
 	DHIESV3 []struct {
 		Name      string `json:"name"`
 		Sender    string `json:"sender"`
@@ -78,20 +83,12 @@ func pqHex(t *testing.T, s string) []byte {
 	return b
 }
 
-// hybridSupported: the Go library does not implement Hybrid
-// (dilithium_ed25519) key managers yet; their vectors are skipped.
-const hybridSupported = false
-
 // loadPQIdentities restores every vector identity from its secret, checks its
 // id, DID and ML-KEM key, and returns them by name.
 func loadPQIdentities(t *testing.T, v pqIdentityVectors) map[string]*vaultysid.VaultysID {
 	t.Helper()
 	ids := map[string]*vaultysid.VaultysID{}
 	for name, ident := range v.Identities {
-		if ident.Algorithm == "dilithium_ed25519" && !hybridSupported {
-			t.Logf("%s: skipped, Hybrid key managers are not implemented in Go", name)
-			continue
-		}
 		id, err := vaultysid.FromSecret(pqHex(t, ident.Secret))
 		if err != nil {
 			t.Fatalf("%s: FromSecret: %v", name, err)
@@ -113,14 +110,11 @@ func loadPQIdentities(t *testing.T, v pqIdentityVectors) map[string]*vaultysid.V
 func TestPQIdentityVectors(t *testing.T) {
 	v := loadPQIdentityVectors(t)
 	ids := loadPQIdentities(t, v)
-	if len(ids) != 7 && (hybridSupported || len(ids) != 4) {
-		t.Fatalf("unexpected number of identities: %d", len(ids))
+	if len(ids) != 7 {
+		t.Fatalf("expected 7 identities, got %d", len(ids))
 	}
 	for name, ident := range v.Identities {
 		id := ids[name]
-		if id == nil {
-			continue
-		}
 		if int(id.Type) != ident.Type || id.IsPostQuantum() != (ident.Type >= 0x10) {
 			t.Errorf("%s: type", name)
 		}
@@ -147,9 +141,6 @@ func TestPQPRFVectors(t *testing.T) {
 	}
 	for _, p := range v.PRF {
 		id := ids[p.Identity]
-		if id == nil {
-			continue
-		}
 		mac, err := id.HMAC(p.Message)
 		if err != nil || hex.EncodeToString(mac) != p.HMAC {
 			t.Errorf("%s: hmac mismatch (%v)", p.Identity, err)
@@ -161,15 +152,45 @@ func TestPQPRFVectors(t *testing.T) {
 	}
 }
 
+func TestPQSignatureVectors(t *testing.T) {
+	v := loadPQIdentityVectors(t)
+	if len(v.Signatures) != 2 {
+		t.Fatalf("expected 2 signature vectors, got %d", len(v.Signatures))
+	}
+	for _, s := range v.Signatures {
+		id, err := vaultysid.FromID(pqHex(t, v.Identities[s.Identity].ID), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		msg, sig := pqHex(t, s.Message), pqHex(t, s.Signature)
+		if err := id.Verify(msg, sig); err != nil {
+			t.Errorf("%s: TypeScript signature rejected: %v", s.Identity, err)
+		}
+		sig[len(sig)-1] ^= 1
+		if id.Verify(msg, sig) == nil {
+			t.Errorf("%s: tampered signature accepted", s.Identity)
+		}
+	}
+	// and Go signatures verify under a public copy
+	ids := loadPQIdentities(t, v)
+	for name, id := range ids {
+		sig, err := id.Sign([]byte("go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		public, _ := vaultysid.FromID(id.ToBytes(), nil)
+		if err := public.Verify([]byte("go"), sig); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+}
+
 func TestPQDHIESV3Vectors(t *testing.T) {
 	v := loadPQIdentityVectors(t)
 	ids := loadPQIdentities(t, v)
 	for _, c := range v.DHIESV3 {
 		t.Run(c.Name, func(t *testing.T) {
 			recipient, sender := ids[c.Recipient], ids[c.Sender]
-			if recipient == nil || sender == nil {
-				t.Skip("Hybrid key managers are not implemented in Go")
-			}
 			plaintext, err := recipient.DHIESDecrypt(pqHex(t, c.Out), sender)
 			if err != nil || hex.EncodeToString(plaintext) != c.Plaintext {
 				t.Fatalf("cannot decrypt the TypeScript message: %v", err)
