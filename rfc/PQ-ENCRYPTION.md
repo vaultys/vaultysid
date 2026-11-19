@@ -1,6 +1,6 @@
 # Request for Comments: VaultysID Post-Quantum Identities and Encryption
 
-**Status:** Draft, for review. Nothing in this document is implemented yet.
+**Status:** Draft, for review. Implemented in the TypeScript reference implementation; the test vectors of §11 are generated from it.
 
 ## 1. Introduction
 
