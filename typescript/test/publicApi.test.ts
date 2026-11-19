@@ -23,4 +23,10 @@ describe("public API", () => {
     const d = await dhiesV2EncryptWith("same", senderDH, sender.publicKey, recipient.publicKey, pinned);
     assert.ok(Buffer.from(c).equals(Buffer.from(d)));
   });
+
+  it("exports service identities and the X-Wing channel", () => {
+    for (const name of ["canonicalServiceId", "deriveServiceIdentity", "initiateXWingChannel", "acceptXWingChannel", "connectOverXWing", "acceptOverXWing"]) {
+      assert.strictEqual(typeof (pkg as Record<string, unknown>)[name], "function", name);
+    }
+  });
 });
