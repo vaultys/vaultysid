@@ -67,6 +67,17 @@ func (v *VaultysID) DIDDocument() *DIDDocument {
 	}
 	doc.KeyAgreement = []VerificationMethod{keyAgrMethod}
 
+	// Post-quantum identities also list their ML-KEM-768 key
+	// (rfc/PQ-ENCRYPTION.md §4.4).
+	if ek := v.GetKEMPublicKey(); ek != nil {
+		doc.KeyAgreement = append(doc.KeyAgreement, VerificationMethod{
+			ID:                 fmt.Sprintf("%s#kem", did),
+			Type:               "MLKEM768KeyAgreementKey2025",
+			Controller:         did,
+			PublicKeyMultibase: "u" + base64.RawURLEncoding.EncodeToString(ek),
+		})
+	}
+
 	return doc
 }
 

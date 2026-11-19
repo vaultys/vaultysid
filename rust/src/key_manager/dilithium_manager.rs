@@ -11,7 +11,7 @@ use rmp_serde::from_slice;
 use serde::ser::{SerializeMap, Serializer};
 use serde::Deserialize;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 // Structs for deserializing MessagePack data from TypeScript
 #[derive(Deserialize)]
@@ -36,6 +36,11 @@ pub struct DilithiumManager {
     pub signer: KeyPairImpl,
     pub cypher: KeyPairImpl,
     seed: Option<Vec<u8>>,
+    /// ML-KEM-768 encapsulation key (field `k`) of a post-quantum identity
+    /// (rfc/PQ-ENCRYPTION.md §4.3), `None` for a classical one.
+    kem_public_key: Option<Vec<u8>>,
+    /// Seed-derived PRF key of a post-quantum identity (§3.2).
+    prf_key: Option<Zeroizing<Vec<u8>>>,
 }
 
 impl Drop for DilithiumManager {
@@ -81,6 +86,8 @@ impl DilithiumManager {
                 secret_key: None,
             },
             seed: None,
+            kem_public_key: None,
+            prf_key: None,
         }
     }
 
@@ -145,8 +152,9 @@ impl DilithiumManager {
         let mut buf = Vec::new();
         let mut se = rmp_serde::Serializer::new(&mut buf);
 
-        // Create a map with 3 entries
-        let mut map = se.serialize_map(Some(3)).unwrap();
+        // {v, x, e}, plus k for a post-quantum identity (rfc/PQ-ENCRYPTION.md §4.3)
+        let entries = if self.kem_public_key.is_some() { 4 } else { 3 };
+        let mut map = se.serialize_map(Some(entries)).unwrap();
 
         // "v" -> version (as integer)
         map.serialize_entry("v", &self.base.version).unwrap();
@@ -158,6 +166,11 @@ impl DilithiumManager {
         // "e" -> cypher public key (as bytes)
         map.serialize_entry("e", &serde_bytes::Bytes::new(&self.cypher.public_key))
             .unwrap();
+
+        if let Some(k) = &self.kem_public_key {
+            map.serialize_entry("k", &serde_bytes::Bytes::new(k))
+                .unwrap();
+        }
 
         map.end().unwrap();
         buf
@@ -256,6 +269,65 @@ impl DilithiumManager {
         };
 
         Ok(km)
+    }
+
+    /// Public-only key manager of a post-quantum id (record after the type byte),
+    /// checked as in rfc/PQ-ENCRYPTION.md §4.2: version 1, `e` of 32 bytes, `k` of
+    /// 1184 bytes and an ML-DSA-87 key of 2592 bytes.
+    pub fn from_post_quantum_id(id: &[u8]) -> Result<Self> {
+        let data = crate::post_quantum::parse_post_quantum_record(id)?;
+        if data.x.len() != crate::post_quantum::DILITHIUM_PUBLIC_KEY_LENGTH {
+            return Err(Error::InvalidKeyFormat(
+                "not a Dilithium post-quantum id".into(),
+            ));
+        }
+        let mut km = Self::new();
+        km.base.version = 1;
+        km.base.capability = Capability::Public;
+        km.signer = KeyPairImpl {
+            public_key: data.x,
+            secret_key: None,
+        };
+        km.cypher = KeyPairImpl {
+            public_key: data.e,
+            secret_key: None,
+        };
+        km.kem_public_key = data.k;
+        Ok(km)
+    }
+
+    /// Derives the ML-KEM-768 key and the PRF key from the seed, making this the key
+    /// manager of a post-quantum identity (rfc/PQ-ENCRYPTION.md §3). Post-quantum
+    /// identities only exist in version 1.
+    pub fn enable_post_quantum(&mut self) -> Result<()> {
+        let seed = self.seed.as_ref().ok_or(Error::KeyNotAvailable)?;
+        let ek = crate::post_quantum::derive_mlkem_public_key(seed)?;
+        let prf_key = crate::post_quantum::derive_prf_key(seed)?;
+        self.kem_public_key = Some(ek);
+        self.prf_key = Some(prf_key);
+        self.base.version = 1;
+        Ok(())
+    }
+
+    /// True if this key manager carries an ML-KEM key.
+    pub fn is_post_quantum(&self) -> bool {
+        self.kem_public_key.is_some()
+    }
+
+    /// The key behind the PRF and `get_secret_hash`: the PRF key for a post-quantum
+    /// identity (never the X25519 secret), the X25519 secret otherwise.
+    fn hmac_key(&self) -> Result<&[u8]> {
+        if self.is_post_quantum() {
+            return self
+                .prf_key
+                .as_ref()
+                .map(|k| k.as_slice())
+                .ok_or(Error::KeyNotAvailable);
+        }
+        self.cypher
+            .secret_key
+            .as_deref()
+            .ok_or(Error::KeyNotAvailable)
     }
 
     /// Instantiate from JSON value
@@ -424,6 +496,8 @@ impl DilithiumManager {
         self.cypher.secret_key = None;
         self.base.entropy = None;
         self.seed = None;
+        // Zeroizing wipes the PRF key on drop
+        self.prf_key = None;
     }
 }
 
@@ -541,12 +615,34 @@ impl AbstractKeyManager for DilithiumManager {
     }
 
     fn get_secret_hash(&self, data: &[u8]) -> Result<Vec<u8>> {
+        if self.is_post_quantum() {
+            return Ok(crate::post_quantum::secret_hash(self.hmac_key()?, data));
+        }
         let cypher_manager = CypherManager {
             base: self.base.clone(),
             cypher: self.cypher.clone(),
             signer: self.signer.clone(),
         };
         cypher_manager.get_secret_hash(data)
+    }
+
+    fn kem_public_key(&self) -> Option<&[u8]> {
+        self.kem_public_key.as_deref()
+    }
+
+    fn kem_decapsulate(&self, cipher_text: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
+        if !self.is_post_quantum() || self.base.capability != Capability::Private {
+            return Err(Error::KeyNotAvailable);
+        }
+        let seed = self.seed.as_ref().ok_or(Error::KeyNotAvailable)?;
+        crate::post_quantum::mlkem_decapsulate(seed, cipher_text)
+    }
+
+    fn prf_hmac(&self, message: &str) -> Result<Vec<u8>> {
+        if self.base.capability != Capability::Private {
+            return Err(Error::KeyNotAvailable);
+        }
+        crate::post_quantum::prf_hmac(self.hmac_key()?, message)
     }
 
     fn auth_type(&self) -> &str {

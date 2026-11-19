@@ -87,7 +87,7 @@ impl Channel for CrossLanguageChannel {
         println!("[Rust Channel] Preparing to send {} bytes", data.len());
         println!(
             "[Rust Channel] Data preview (first 100 bytes): {}...",
-            &encoded_data.chars().take(100).collect::<String>()
+            encoded_data.chars().take(100).collect::<String>()
         );
 
         let message = ChannelMessage {
@@ -194,7 +194,7 @@ impl Channel for CrossLanguageChannel {
                     );
                     println!(
                         "[Rust Channel] Data preview (first 100 chars): {}...",
-                        &message.data.chars().take(100).collect::<String>()
+                        message.data.chars().take(100).collect::<String>()
                     );
 
                     let data = base64::engine::general_purpose::STANDARD

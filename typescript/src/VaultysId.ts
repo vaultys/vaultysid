@@ -267,9 +267,15 @@ export default class VaultysId {
     return options;
   };
 
-  static async fromEntropy(entropy: Buffer, type: number, alg: Algorithm = "ed25519") {
+  /**
+   * Creates an identity from 32 bytes of entropy. The entropy is copied: the key manager owns its copy and may erase
+   * it, the caller's buffer is left untouched. Any other length is refused (the key managers hash the entropy and
+   * would otherwise accept a weak or truncated value silently).
+   */
+  static async fromEntropy(entropy: Buffer | Uint8Array, type: number, alg: Algorithm = "ed25519") {
     if (type === TYPE_PASSPORT_AA) throw new Error("Use VaultysId.fromPassportAA to create a passport identity");
-    const cleanedEntropy = entropy as Buffer;
+    if (!(entropy instanceof Uint8Array) || entropy.length !== 32) throw new Error("entropy must be 32 bytes");
+    const cleanedEntropy = Buffer.from(Uint8Array.from(entropy));
     if (isPostQuantumType(type) && alg === "ed25519") throw new Error("post-quantum identities require a dilithium or dilithium_ed25519 key manager");
     if (alg === "dilithium") {
       const km = await DilithiumManager.createFromEntropy(cleanedEntropy);

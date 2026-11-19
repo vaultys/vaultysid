@@ -33,6 +33,8 @@ type DilithiumManager struct {
 	Seed   []byte
 	Signer KeyPair
 	Cypher KeyPair
+	// pqKeys is set for post-quantum identities only (rfc/PQ-ENCRYPTION.md).
+	pqKeys
 }
 
 // dilithiumSecretExport matches TS DilithiumManager's SecretExport type
@@ -121,17 +123,50 @@ func GenerateDilithiumInternal() (*DilithiumManager, error) {
 	return CreateDilithiumFromEntropyInternal(entropy)
 }
 
-// ToBytes reuses Ed25519Manager's dataExport{v,x,e} struct: both managers
-// export the identical {version, signer public key, cypher public key}
-// shape, and TS's DilithiumManager.id encodes to the same field names.
+// ToBytes encodes {v, x, e} like TS's DilithiumManager.id, plus the ML-KEM
+// key k for a post-quantum identity (rfc/PQ-ENCRYPTION.md §4.3).
 func (m *DilithiumManager) ToBytes() []byte {
-	data := dataExport{
-		V: m.Version,
-		X: m.Signer.PublicKey,
-		E: m.Cypher.PublicKey,
+	return encodeKeyManagerRecord(m.Version, m.Signer.PublicKey, m.Cypher.PublicKey, m.KEMPublicKey)
+}
+
+// EnablePostQuantum derives the ML-KEM-768 key pair and the PRF key from the
+// seed, making this the key manager of a post-quantum identity
+// (rfc/PQ-ENCRYPTION.md §3). Post-quantum identities only exist in version 1.
+func (m *DilithiumManager) EnablePostQuantum() error {
+	if m.Capability != "private" || len(m.Seed) != pqSeedSize {
+		return fmt.Errorf("a seed is required to derive post-quantum keys")
 	}
-	encoded, _ := msgpack.Marshal(data)
-	return encoded
+	if err := m.pqKeys.enable(m.Seed); err != nil {
+		return err
+	}
+	m.Version = 1
+	return nil
+}
+
+// IsPostQuantum reports whether this key manager carries an ML-KEM key.
+func (m *DilithiumManager) IsPostQuantum() bool { return m.pqKeys.isPostQuantum() }
+
+// GetKEMPublicKey returns the ML-KEM-768 encapsulation key, or nil.
+func (m *DilithiumManager) GetKEMPublicKey() []byte { return m.KEMPublicKey }
+
+// KEMDecapsulate decapsulates with the key re-derived from the seed.
+func (m *DilithiumManager) KEMDecapsulate(ciphertext []byte) ([]byte, error) {
+	if m.Capability != "private" {
+		return nil, fmt.Errorf("no private key")
+	}
+	return m.pqKeys.decapsulate(m.Seed, ciphertext)
+}
+
+// GetSecretHash matches TS CypherManager.getSecretHash.
+func (m *DilithiumManager) GetSecretHash(data []byte) ([]byte, error) {
+	if m.Capability != "private" {
+		return nil, fmt.Errorf("no private key")
+	}
+	key, err := m.pqKeys.hmacKey(m.Cypher.SecretKey)
+	if err != nil {
+		return nil, err
+	}
+	return secretHash(data, key), nil
 }
 
 func (m *DilithiumManager) GetSecret() ([]byte, error) {
@@ -260,8 +295,12 @@ func (m *DilithiumManager) HMAC(message string) ([]byte, error) {
 	if m.Capability != "private" {
 		return nil, fmt.Errorf("no private key")
 	}
+	key, err := m.pqKeys.hmacKey(m.Cypher.SecretKey)
+	if err != nil {
+		return nil, err
+	}
 	data := []byte("VaultysID/" + message + "/end")
-	return crypto.HMAC("sha256", m.Cypher.SecretKey, data), nil
+	return crypto.HMAC("sha256", key, data), nil
 }
 
 func (m *DilithiumManager) GetVersion() int {
@@ -269,6 +308,10 @@ func (m *DilithiumManager) GetVersion() int {
 }
 
 func (m *DilithiumManager) SetVersion(version int) error {
+	if m.IsPostQuantum() {
+		// post-quantum ids exist only in version 1 (TS toVersion is a no-op)
+		return nil
+	}
 	if version != 0 && version != 1 {
 		return fmt.Errorf("unsupported version: %d", version)
 	}
@@ -277,6 +320,7 @@ func (m *DilithiumManager) SetVersion(version int) error {
 }
 
 func (m *DilithiumManager) CleanSecureData() {
+	m.pqKeys.clean()
 	if m.Cypher.SecretKey != nil {
 		crypto.SecureErase(m.Cypher.SecretKey)
 		m.Cypher.SecretKey = nil

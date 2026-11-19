@@ -40,7 +40,11 @@
     "test:interops": "test/interops/run-cross-language-test.sh",
     "test:saltpack:vectors": "tsx test/interops/generate-saltpack-vectors.ts",
     "test:saltpack:go": "mocha test/interops/go-saltpack-compatibility.test.ts",
-    "test:security:vectors": "tsx test/interops/generate-security-v2-vectors.ts"
+    "test:security:vectors": "tsx test/interops/generate-security-v2-vectors.ts",
+    "test:service:vectors": "tsx test/interops/generate-service-identity-vectors.ts",
+    "test:channel:vectors": "tsx test/interops/generate-xwing-channel-vectors.ts",
+    "test:anchor:vectors": "tsx test/interops/generate-service-anchor-vectors.ts",
+    "test:pq:vectors": "tsx test/interops/generate-pq-identity-vectors.ts"
   },
   "keywords": [],
   "author": "",
@@ -80,6 +84,7 @@
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3",
+    "@noble/ciphers": "^2.2.0",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@noble/post-quantum": "^0.6.1",

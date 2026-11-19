@@ -14,6 +14,20 @@ from DG15 and `e` contains the 32-byte local X25519 public key. The integer
 specified by the chip's DG14 ActiveAuthenticationInfo. The DID is derived
 from the resulting public identity as in [DID.md](DID.md).
 
+## Scope
+
+Type `0x05` requires a document whose chip has an Active Authentication key in
+DG15. Many passports have one; some European identity cards do not. One French
+electronic identity card (CNIe) read over NFC, for example, gave PACE access
+with the CAN, advertised DG1, DG2, DG3, DG11, DG12, DG13 and DG14 but neither
+DG7 nor DG15, and supported Chip Authentication (key in DG14). No type `0x05`
+identity can be created for such a card. Chip Authentication cannot replace
+Active Authentication here: it is an implicit authentication by key agreement
+and produces no signature that a third party can verify.
+
+The `passport-nfc` helper derives the PACE password from the MRZ only; access
+with the CAN, the usual way to open an identity card, is not offered.
+
 The reader operates on an already selected passport application and handles
 access control and secure messaging where required. No MRZ, document number,
 reader configuration or civil identity evidence appears in the public ID.

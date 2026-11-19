@@ -1,0 +1,466 @@
+{
+  "description": "rfc/SERVICE-IDENTITIES.md §7. canonical: input, options, canonical output or \"invalid\". derive: master = SHA-256(\"vaultysid/test/\" || masterName), a PUBLIC test value; info = lp(\"v1\") || lp(alg) || lp(typeName) || lp(canonical); entropy = HKDF-SHA-256(master, \"vaultysid/service-identity/v1\", info, 32); identity = VaultysId.fromEntropy(entropy, type, alg); idSha256 = SHA-256(id). Fully deterministic.",
+  "testValuesArePublic": true,
+  "canonical": [
+    {
+      "input": "https://Example.com/",
+      "options": {},
+      "output": "https://example.com"
+    },
+    {
+      "input": "https://example.com",
+      "options": {},
+      "output": "https://example.com"
+    },
+    {
+      "input": "https://example.com:443",
+      "options": {},
+      "output": "https://example.com"
+    },
+    {
+      "input": "HTTPS://EXAMPLE.COM",
+      "options": {},
+      "output": "https://example.com"
+    },
+    {
+      "input": "https://sub.example.com",
+      "options": {},
+      "output": "https://sub.example.com"
+    },
+    {
+      "input": "https://example.com:8443",
+      "options": {},
+      "output": "https://example.com:8443"
+    },
+    {
+      "input": "https://example.com:80",
+      "options": {},
+      "output": "https://example.com:80"
+    },
+    {
+      "input": "http://example.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "http://example.com",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "http://example.com"
+    },
+    {
+      "input": "HTTP://Example.COM:80/",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "http://example.com"
+    },
+    {
+      "input": "http://example.com:80/",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "http://example.com:80/",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "http://example.com"
+    },
+    {
+      "input": "http://example.com:8080",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com:0443",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com:",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com:/",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com:65536",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com/login",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com//",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com?q",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com#f",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://user@example.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com\\",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://ex%61mple.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": " https://example.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.com.",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example..com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://intranet",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://-example.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://ab--cd.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://exémple.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://еxample.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://xn--exmple-cva.com",
+      "options": {},
+      "output": "https://xn--exmple-cva.com"
+    },
+    {
+      "input": "https://XN--XAMPLE-2OF.COM/",
+      "options": {},
+      "output": "https://xn--xample-2of.com"
+    },
+    {
+      "input": "https://xn--zz.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "https://example.123",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "http://localhost:3000",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "http://localhost:3000",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "http://localhost:3000"
+    },
+    {
+      "input": "http://app.localhost:5173/",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "http://app.localhost:5173"
+    },
+    {
+      "input": "https://127.0.0.1",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "http://127.0.0.1:3000",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "http://127.0.0.1:3000"
+    },
+    {
+      "input": "http://[::1]:8080",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "http://[::1]:8080",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "http://[::1]:8080"
+    },
+    {
+      "input": "http://[0:0::1]",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "invalid"
+    },
+    {
+      "input": "https://0x7f.1",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "invalid"
+    },
+    {
+      "input": "https://127.1",
+      "options": {
+        "allowDevelopmentHosts": true
+      },
+      "output": "invalid"
+    },
+    {
+      "input": "app:com.example.myapp",
+      "options": {},
+      "output": "app:com.example.myapp"
+    },
+    {
+      "input": "app:Com.x",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "APP:com.example",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "app:x",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "app:com.example.my_app",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "example.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "ftp://example.com",
+      "options": {},
+      "output": "invalid"
+    },
+    {
+      "input": "did:vaultys:01ab",
+      "options": {},
+      "output": "invalid"
+    }
+  ],
+  "masterName": "vectors/master",
+  "master": "02f4768afa527138ce480537c73a43ad76af0607d143c47d89da34375e9a4627",
+  "derive": [
+    {
+      "service": "https://Service-A.test:443/",
+      "canonical": "https://service-a.test",
+      "alg": "ed25519",
+      "type": 1,
+      "typeName": "person",
+      "info": "000000027631000000076564323535313900000006706572736f6e0000001668747470733a2f2f736572766963652d612e74657374",
+      "entropy": "8fb679aa9b1cbe9b88973611eaceeff09ba9bdc618b8b924431c2739aad93e86",
+      "did": "did:vaultys:01d4c499ce5e1592362841b7e643321262d9e5b4",
+      "idLength": 77,
+      "idSha256": "17ac7db7fe9f0753b43e410945d5a9332d326dcc9bb416171de8693f632f8ecc",
+      "id": "0183a17601a178c4203670e968ce68a7141f4aadecdfe8ba732269022b6aa41e6e0867931ec8dbda8ca165c4204fd34ab8055b3e77d44fb2af2205c0f01ae2b2f68dea0012d56f17b1d3613165"
+    },
+    {
+      "service": "https://Service-A.test:443/",
+      "canonical": "https://service-a.test",
+      "alg": "dilithium",
+      "type": 1,
+      "typeName": "person",
+      "info": "0000000276310000000964696c69746869756d00000006706572736f6e0000001668747470733a2f2f736572766963652d612e74657374",
+      "entropy": "e9a1bf439f720a2d381d4e950510d039861159fb4c25518b849d7e2c1f460cc8",
+      "did": "did:vaultys:01b61350168854361ac9745c8f1f35de9ce419c0",
+      "idLength": 2638,
+      "idSha256": "05456537dde3f95e3f6c57910af17903c4cc872e5ee53d10ef05219e9d965d7c"
+    },
+    {
+      "service": "https://Service-A.test:443/",
+      "canonical": "https://service-a.test",
+      "alg": "dilithium_ed25519",
+      "type": 1,
+      "typeName": "person",
+      "info": "0000000276310000001164696c69746869756d5f6564323535313900000006706572736f6e0000001668747470733a2f2f736572766963652d612e74657374",
+      "entropy": "da79e7536db067bc2fce17d4249d64faf7935c5c1a859eb916a17badb5d9efc0",
+      "did": "did:vaultys:019ac94c644b0e5047d0554e21b317567192950a",
+      "idLength": 2670,
+      "idSha256": "7f40f1700f08cbb2e66b81acfc72f09d7a1bd389efc6641d41632bb4d79534f2"
+    },
+    {
+      "service": "https://service-b.test",
+      "canonical": "https://service-b.test",
+      "alg": "ed25519",
+      "type": 1,
+      "typeName": "person",
+      "info": "000000027631000000076564323535313900000006706572736f6e0000001668747470733a2f2f736572766963652d622e74657374",
+      "entropy": "172b19feda4ccc6ca7106cc9940c4802281f40bd5554ee03cf3f64c4b29ce017",
+      "did": "did:vaultys:01141e4f480fca3d7c07084a2f2e1dbc99426470",
+      "idLength": 77,
+      "idSha256": "f40749ea8a0fcc22527ca0f9662870f31297c7b5c0cd7e110018d3dc2058f424",
+      "id": "0183a17601a178c4203d97b792846b965e6a4bddea30d590c67f1276535756394f8f55784331affea8a165c420af3cae10ec8e29bb5e728e2cb033e1c149854c5d7ec50640b7a05e90c2975a5b"
+    },
+    {
+      "service": "https://service-b.test",
+      "canonical": "https://service-b.test",
+      "alg": "dilithium",
+      "type": 1,
+      "typeName": "person",
+      "info": "0000000276310000000964696c69746869756d00000006706572736f6e0000001668747470733a2f2f736572766963652d622e74657374",
+      "entropy": "5c94a30799474806e97d47efc2a84e0885b1d42f6336ceb9ff53169b9f77cdd7",
+      "did": "did:vaultys:01cdb98fac8f2b2a308a53246b1d15432d6174ef",
+      "idLength": 2638,
+      "idSha256": "e7755402b6f0ca907084022df2dce755d457fc1d23f2b4854a632470cd6fed10"
+    },
+    {
+      "service": "https://service-b.test",
+      "canonical": "https://service-b.test",
+      "alg": "dilithium_ed25519",
+      "type": 1,
+      "typeName": "person",
+      "info": "0000000276310000001164696c69746869756d5f6564323535313900000006706572736f6e0000001668747470733a2f2f736572766963652d622e74657374",
+      "entropy": "47bc990883d51aa5ddbd812e7a0b8dae17ec05538c08efc0ccb3a5035bc985ed",
+      "did": "did:vaultys:01a1796bee9077457f5b2f7955c9d637d7815cae",
+      "idLength": 2670,
+      "idSha256": "3712f531f15aad189d4227ff73ee07efb425b17044b2488e342522caad198837"
+    },
+    {
+      "service": "app:test.service.c",
+      "canonical": "app:test.service.c",
+      "alg": "ed25519",
+      "type": 1,
+      "typeName": "person",
+      "info": "000000027631000000076564323535313900000006706572736f6e000000126170703a746573742e736572766963652e63",
+      "entropy": "b20a05aa6e0f2a3a803246101de7f5edebdd8868dc0d47fdbd8d4f930d53b39d",
+      "did": "did:vaultys:01f7254581f7e1dc6ea8ca13ece693a5d144ede0",
+      "idLength": 77,
+      "idSha256": "5f64e0566094b73ac0d55052d4935b003ecd437a59472c78be8e004512e32703",
+      "id": "0183a17601a178c42050d63f5e8780680c246854dc86a5ded7e8902cf949c06ad476f5f92f62ebd0aba165c420c0b845b636711267984f06c807b698fcee0be5b80c145591235e943cfed15034"
+    },
+    {
+      "service": "app:test.service.c",
+      "canonical": "app:test.service.c",
+      "alg": "dilithium",
+      "type": 1,
+      "typeName": "person",
+      "info": "0000000276310000000964696c69746869756d00000006706572736f6e000000126170703a746573742e736572766963652e63",
+      "entropy": "17159bbe7a922bc3f914fa79cfea9ef9d581bd19050b1cceb66046372f671e48",
+      "did": "did:vaultys:0166006ea96c89ec7ef597d17a08e859017a4d46",
+      "idLength": 2638,
+      "idSha256": "a6ba5d7adb1e3f2298b8b7c650ec39d2d31006b5d0d4b2982ff353b0e2e2c51c"
+    },
+    {
+      "service": "app:test.service.c",
+      "canonical": "app:test.service.c",
+      "alg": "dilithium_ed25519",
+      "type": 1,
+      "typeName": "person",
+      "info": "0000000276310000001164696c69746869756d5f6564323535313900000006706572736f6e000000126170703a746573742e736572766963652e63",
+      "entropy": "2666b3718692843bcd13132f8726786f73d3e12cbe630c17aaa632ad90d59696",
+      "did": "did:vaultys:01fd8ead878448a4051d31c2fbd3900a0953d2cf",
+      "idLength": 2670,
+      "idSha256": "62900ed626fe1c9ba90730c132449095bb1a88b29a7416d1bb0e35bccb1581b4"
+    },
+    {
+      "service": "https://service-a.test",
+      "canonical": "https://service-a.test",
+      "alg": "dilithium_ed25519",
+      "type": 17,
+      "typeName": "person-pq",
+      "info": "0000000276310000001164696c69746869756d5f6564323535313900000009706572736f6e2d70710000001668747470733a2f2f736572766963652d612e74657374",
+      "entropy": "1344488101debc48d4cfad7008e2df7326c8377c627832883083ac5205ffcd5a",
+      "did": "did:vaultys:116d323fd2c0a0ba571a74a5529fdea0d613efce",
+      "idLength": 3859,
+      "idSha256": "73aeaa84a58cb241a21317c9e1082f27796c5250ba5a9fa967dfb4bed3d64c64"
+    },
+    {
+      "service": "https://service-a.test",
+      "canonical": "https://service-a.test",
+      "alg": "dilithium",
+      "type": 17,
+      "typeName": "person-pq",
+      "info": "0000000276310000000964696c69746869756d00000009706572736f6e2d70710000001668747470733a2f2f736572766963652d612e74657374",
+      "entropy": "af8cbb289639260774da40a9225609bd760220e79ec428a735bc78047a7f98dd",
+      "did": "did:vaultys:119a85994fa08a2be1d767f3ac667063cd690c7a",
+      "idLength": 3827,
+      "idSha256": "a1328ae0ea073a2e2f312c3f14e5c7998dce18e8304a4b4e72258be082203599"
+    },
+    {
+      "service": "https://service-a.test",
+      "canonical": "https://service-a.test",
+      "alg": "ed25519",
+      "type": 2,
+      "typeName": "organization",
+      "info": "00000002763100000007656432353531390000000c6f7267616e697a6174696f6e0000001668747470733a2f2f736572766963652d612e74657374",
+      "entropy": "89fb3b31816f54d1745d22ac20245a8a99363f3b06311dfe9332f404f2c5c1d3",
+      "did": "did:vaultys:0286122e5c60be1676c517d1759d90ba47a7967a",
+      "idLength": 77,
+      "idSha256": "a8a50550796eed4d5470b247c721ff9629e26eef1e8dc5f789403500a2b361ba",
+      "id": "0283a17601a178c42003be59fd5ffc65945507e00ddd23cc75c8de394d1f50bb4a460a55ee580f450ba165c420ddc95f79e82d6b068b7f5b48a07fc37cb3c4e532614bdfe8febf0767c34f606c"
+    },
+    {
+      "service": "https://service-a.test",
+      "canonical": "https://service-a.test",
+      "alg": "ed25519",
+      "type": 0,
+      "typeName": "machine",
+      "info": "0000000276310000000765643235353139000000076d616368696e650000001668747470733a2f2f736572766963652d612e74657374",
+      "entropy": "437da40de8794c168d06233f22c5e830cde10bf6ca4eb89c89964a67ad77031d",
+      "did": "did:vaultys:00fbff002c51d667180df810250ff6cf00faaa2e",
+      "idLength": 77,
+      "idSha256": "557648691be8561324108308b620c4b22744a4c07214d81bbaaba1a6d4f23ee8",
+      "id": "0083a17601a178c420e1b407679c9ca3fb0ed1be0ce000d84429cc82c19ba2998f84b61d6052fc7543a165c4203145e8b01e37608826442596defd4ef6c6b61346b3273c5a0f10dfec42a3d83e"
+    }
+  ]
+}

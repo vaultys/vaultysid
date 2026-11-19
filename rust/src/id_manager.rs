@@ -674,6 +674,12 @@ impl IdManager {
                 .unwrap()
                 .as_millis()
                 .to_string();
+            // `<timestamp>-<hex SHA-256(certificate)>`: two certificates of the same millisecond no longer overwrite each other
+            let timestamp = format!(
+                "{}-{}",
+                timestamp,
+                crate::crypto::to_hex(&crate::crypto::hash("sha256", &final_cert))
+            );
             self.store
                 .lock()
                 .await
@@ -785,6 +791,12 @@ impl IdManager {
             .unwrap()
             .as_millis()
             .to_string();
+        // `<timestamp>-<hex SHA-256(certificate)>`: two certificates of the same millisecond no longer overwrite each other
+        let timestamp = format!(
+            "{}-{}",
+            timestamp,
+            crate::crypto::to_hex(&crate::crypto::hash("sha256", &final_cert))
+        );
         self.store
             .lock()
             .await
