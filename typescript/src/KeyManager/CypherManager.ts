@@ -4,7 +4,7 @@ import { Buffer } from "buffer/";
 import nacl, { BoxKeyPair } from "tweetnacl";
 import { KeyPair } from ".";
 import KeyManager from "./AbstractKeyManager";
-import { dhiesV2Decrypt, dhiesV2Encrypt, dhiesV3Decrypt, dhiesV3Encrypt } from "./dhies";
+import { dhiesV2Decrypt, dhiesV2Encrypt, dhiesV3Decrypt, dhiesV3Encrypt, dhiesV3SignedDecrypt, dhiesV3SignedEncrypt, TranscriptSigner, TranscriptVerifier } from "./dhies";
 import { decodeRecord, requireBytes } from "./validation";
 import { deriveMlKemKeyPair, derivePrfKey, mlKemDecapsulate, MLKEM768_PK_LENGTH } from "../pqCrypto";
 
@@ -174,6 +174,40 @@ export default abstract class CypherManager extends KeyManager {
         return await dhiesV3Decrypt(encryptedMessage, cypher.diffieHellman, decapsulate, this.cypher.publicKey, kem.publicKey, senderPublicKey);
       }
       return await dhiesV2Decrypt(encryptedMessage, cypher.diffieHellman, this.cypher.publicKey, senderPublicKey);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * PROPOSAL (rfc/PQ-ENCRYPTION.md, Appendix A): DHIES v3 with the sender's
+   * signature over the transcript and the plaintext digest. Only used when
+   * VaultysId.dhiesEncrypt is called with `{ senderSignature: true }`.
+   * @param recipientId Recipient's KeyManager ID (must carry an ML-KEM key)
+   * @param senderFullId, recipientFullId serialized VaultysIds, type byte included
+   */
+  async dhiesV3SignedEncrypt(message: string | Buffer, recipientId: Buffer, senderFullId: Buffer, recipientFullId: Buffer, signTranscript: TranscriptSigner): Promise<Buffer | null> {
+    if (this.capability === "public") return null;
+    try {
+      const recipientPublicKey = getCypherPublicKeyFromId(recipientId);
+      const recipientKemPublicKey = getKemPublicKeyFromId(recipientId);
+      if (!recipientKemPublicKey) return null;
+      const cypher = await this.getCypher();
+      return await dhiesV3SignedEncrypt(message, cypher.diffieHellman, this.cypher.publicKey, recipientPublicKey, recipientKemPublicKey, senderFullId, recipientFullId, signTranscript);
+    } catch {
+      return null;
+    }
+  }
+
+  /** PROPOSAL (rfc/PQ-ENCRYPTION.md, Appendix A): decrypts a signed DHIES v3 message. */
+  async dhiesV3SignedDecrypt(encryptedMessage: Buffer, senderId: Buffer, senderFullId: Buffer, recipientFullId: Buffer, verifyTranscript: TranscriptVerifier): Promise<Buffer | null> {
+    if (this.capability === "public" || !this.kem?.secretKey) return null;
+    try {
+      const senderPublicKey = getCypherPublicKeyFromId(senderId);
+      const cypher = await this.getCypher();
+      const kem = this.kem;
+      const decapsulate = async (cipherText: Buffer) => mlKemDecapsulate(cipherText, kem.secretKey!);
+      return await dhiesV3SignedDecrypt(encryptedMessage, cypher.diffieHellman, decapsulate, this.cypher.publicKey, kem.publicKey, senderPublicKey, senderFullId, recipientFullId, verifyTranscript);
     } catch {
       return null;
     }
