@@ -1,6 +1,6 @@
 # Request for Comments: VaultysID Service Identities
 
-**Status:** Draft, for review. Implemented in the TypeScript reference implementation (`typescript/src/serviceIdentity.ts`); the test vectors of §7 are generated from it.
+**Status:** Draft, for review. Implemented in the TypeScript reference implementation (`typescript/src/serviceIdentity.ts`, `serviceAnchor.ts`), which generates the test vectors of §7 and §8.5. Go (`go/pkg/serviceid`) and Rust (`rust/src/service_identity.rs`) pass the same vectors; on this branch Go derives Ed25519 and Dilithium identities and Rust Ed25519 ones (hybrid and post-quantum types arrive with the Go and Rust post-quantum identity work).
 
 ## 1. Introduction
 

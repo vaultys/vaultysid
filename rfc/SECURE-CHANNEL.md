@@ -1,6 +1,6 @@
 # Request for Comments: VaultysID X-Wing Secure Channel and Bound Handshake
 
-**Status:** Draft, for review. Implemented in the TypeScript reference implementation (`typescript/src/xwingChannel.ts`); the test vectors of §6 are generated from it.
+**Status:** Draft, for review. Implemented in the TypeScript reference implementation (`typescript/src/xwingChannel.ts`), which generates the test vectors of §6. Go (`go/pkg/xwingchannel`) implements the channel and the bound handshake; Rust (`rust/src/xwing_channel.rs`) implements the channel only, as its challenger does not implement the 4.0 handshake yet. Both pass the same vectors.
 
 ## 1. Introduction
 
