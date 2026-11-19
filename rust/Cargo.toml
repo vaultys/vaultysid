@@ -48,6 +48,13 @@ getrandom = "0.2"
 
 # Post-quantum cryptography
 libcrux-ml-dsa = "0.0.11"
+# Post-quantum identities and DHIES v3 (rfc/PQ-ENCRYPTION.md): ML-KEM-768 (FIPS 203)
+# and the NaCl secretbox (XSalsa20-Poly1305) used by DHIES. `hazmat` exposes
+# encapsulate_deterministic(m), called with fresh random m (and fixed m in tests).
+# libcrux-ml-dsa >= 0.0.9 no longer pins hax-lib: libcrux-ml-kem 0.0.11 resolves alongside it (checked),
+# so it could replace ml-kem (RustCrypto) later; ml-kem is kept here to keep this change small.
+ml-kem = { version = "0.3.4", default-features = false, features = ["hazmat", "zeroize"] }
+crypto_secretbox = { version = "0.1.1", default-features = false, features = ["alloc", "salsa20"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

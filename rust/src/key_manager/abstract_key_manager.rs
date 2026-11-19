@@ -82,6 +82,28 @@ pub trait AbstractKeyManager: Send + Sync {
 
     /// Get encryption type
     fn enc_type(&self) -> &str;
+
+    /// ML-KEM-768 encapsulation key of a post-quantum key manager
+    /// (rfc/PQ-ENCRYPTION.md §4.3), `None` otherwise.
+    fn kem_public_key(&self) -> Option<&[u8]> {
+        None
+    }
+
+    /// ML-KEM-768 decapsulation with the key re-derived from the seed of a private
+    /// post-quantum key manager.
+    fn kem_decapsulate(&self, _cipher_text: &[u8]) -> Result<zeroize::Zeroizing<[u8; 32]>> {
+        Err(crate::error::Error::NotImplemented(
+            "ML-KEM decapsulation requires a private post-quantum key manager".into(),
+        ))
+    }
+
+    /// `HMAC-SHA256(key, "VaultysID/" || message || "/end")`, as TypeScript
+    /// `getCypher().hmac`: keyed with the PRF key for a post-quantum identity.
+    fn prf_hmac(&self, _message: &str) -> Result<Vec<u8>> {
+        Err(crate::error::Error::NotImplemented(
+            "prf_hmac is only implemented for Dilithium key managers".into(),
+        ))
+    }
 }
 
 /// Main KeyManager trait that extends AbstractKeyManager
