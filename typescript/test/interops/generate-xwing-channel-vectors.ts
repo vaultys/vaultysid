@@ -68,10 +68,13 @@ export async function buildVectors() {
 }
 
 export const VECTORS_PATH = join(__dirname, "xwing-channel-vectors.json");
+/** Copies read by the Go and Rust tests. */
+export const VECTOR_COPIES = [join(__dirname, "../../../go/test/compatibility/testdata/xwing-channel-vectors.json"), join(__dirname, "../../../rust/tests/data/xwing-channel-vectors.json")];
 
 if (require.main === module) {
   buildVectors().then((vectors) => {
-    writeFileSync(VECTORS_PATH, JSON.stringify(vectors, null, 2) + "\n");
+    const text = JSON.stringify(vectors, null, 2) + "\n";
+    for (const path of [VECTORS_PATH, ...VECTOR_COPIES]) writeFileSync(path, text);
     console.log(`wrote ${VECTORS_PATH}: ${vectors.records.length} records`);
   });
 }

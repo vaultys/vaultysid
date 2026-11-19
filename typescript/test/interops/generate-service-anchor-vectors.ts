@@ -43,10 +43,13 @@ export async function buildVectors() {
 }
 
 export const VECTORS_PATH = join(__dirname, "service-anchor-vectors.json");
+/** Copies read by the Go and Rust tests. */
+export const VECTOR_COPIES = [join(__dirname, "../../../go/test/compatibility/testdata/service-anchor-vectors.json"), join(__dirname, "../../../rust/tests/data/service-anchor-vectors.json")];
 
 if (require.main === module) {
   buildVectors().then((vectors) => {
-    writeFileSync(VECTORS_PATH, JSON.stringify(vectors, null, 2) + "\n");
+    const text = JSON.stringify(vectors, null, 2) + "\n";
+    for (const path of [VECTORS_PATH, ...VECTOR_COPIES]) writeFileSync(path, text);
     console.log(`wrote ${VECTORS_PATH}`);
   });
 }
