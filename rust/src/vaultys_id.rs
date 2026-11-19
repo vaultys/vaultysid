@@ -229,6 +229,10 @@ impl VaultysId {
         id_type: u8,
         alg: Algorithm,
     ) -> Result<Self> {
+        // same rule as TypeScript and Go: the key managers hash the entropy and would accept any length silently
+        if entropy.len() != 32 {
+            return Err(Error::InvalidKeyFormat("entropy must be 32 bytes".into()));
+        }
         let key_manager: Box<dyn AbstractKeyManager> = match id_type {
             TYPE_MACHINE | TYPE_PERSON | TYPE_ORGANIZATION => match alg {
                 Algorithm::Dilithium => Box::new(DilithiumManager::from_entropy(entropy)?),
