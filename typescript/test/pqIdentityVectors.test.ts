@@ -37,6 +37,16 @@ describe("Cross-language post-quantum identity vectors", () => {
     }
   });
 
+  it("verify the signature vectors", () => {
+    for (const vector of committed.signatures) {
+      const id = VaultysId.fromId(fromHex(committed.identities[vector.identity].id));
+      assert.ok(id.verify(fromHex(vector.message), fromHex(vector.signature)), vector.identity);
+      const tampered = fromHex(vector.signature);
+      tampered[tampered.length - 1] ^= 1;
+      assert.ok(!id.verify(fromHex(vector.message), tampered), vector.identity);
+    }
+  });
+
   it("decrypt the DHIES v3 vectors", async () => {
     for (const vector of committed.dhiesV3) {
       const recipient = VaultysId.fromSecret(committed.identities[vector.recipient].secret);

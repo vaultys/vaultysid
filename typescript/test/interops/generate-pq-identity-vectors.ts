@@ -20,6 +20,10 @@ import CypherManager from "../../src/KeyManager/CypherManager";
 import { hash } from "../../src/crypto";
 import { dhiesV2Decrypt, dhiesV2Encrypt, dhiesV3Encrypt } from "../../src/KeyManager/dhies";
 import { deriveMlKemKeyPair, derivePrfKey, mlKemEncapsulate } from "../../src/pqCrypto";
+import { ml_dsa87 } from "@noble/post-quantum/ml-dsa.js";
+import { ed25519 } from "@noble/curves/ed25519.js";
+import DilithiumManager from "../../src/KeyManager/DilithiumManager";
+import HybridManager from "../../src/KeyManager/HybridManager";
 
 const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 const label = (text: string) => Buffer.from(text, "ascii");
@@ -132,6 +136,31 @@ export async function generatePqIdentityVectors() {
     );
     assert(secretHash.equals(hash("sha256", Buffer.concat([secretHashData, label("secrethash"), prfKey]))), name + ": getSecretHash formula");
     prf.push({ identity: name, message: prfMessage, hmac: hex(mac), secretHashData: hex(secretHashData), secretHash: hex(secretHash) });
+  }
+
+  // ---- signatures ------------------------------------------------------------------------
+  // VaultysId.sign() signs SHA-256("VAULTYS_RAW" || message) with hedged (randomized)
+  // ML-DSA, which cannot be reproduced. These vectors use the deterministic variant of
+  // FIPS 204 (rnd = 0, noble `extraEntropy: false`), a valid signature for any verifier,
+  // with the same construction as the key managers: ML-DSA-87 alone for Dilithium,
+  // sig_ed || ML-DSA-87(digest || sig_ed) for Hybrid.
+  const signatureMessage = Buffer.from("VaultysID PQ signature test vector", "utf-8");
+  const signatureDigest = hash("sha256", Buffer.concat([label("VAULTYS_RAW"), signatureMessage]));
+  const signatures = [];
+  for (const name of ["pq_dilithium_person", "pq_hybrid_person"]) {
+    const id = ids[name];
+    let signature: Buffer;
+    if (id.keyManager instanceof HybridManager) {
+      const km = id.keyManager as HybridManager;
+      const edSignature = Buffer.from(ed25519.sign(signatureDigest, km.edSigner!.secretKey!));
+      const pqSignature = Buffer.from(ml_dsa87.sign(Buffer.concat([signatureDigest, edSignature]), km.pqSigner!.secretKey!, { extraEntropy: false }));
+      signature = Buffer.concat([edSignature, pqSignature]);
+    } else {
+      const km = id.keyManager as DilithiumManager;
+      signature = Buffer.from(ml_dsa87.sign(signatureDigest, km.signer.secretKey!, { extraEntropy: false }));
+    }
+    assert(VaultysId.fromId(id.id).verify(signatureMessage, signature), name + ": signature does not verify");
+    signatures.push({ identity: name, domain: "VAULTYS_RAW", message: hex(signatureMessage), digest: hex(signatureDigest), signature: hex(signature) });
   }
 
   // ---- DHIES v3 -------------------------------------------------------------------------
@@ -274,6 +303,7 @@ export async function generatePqIdentityVectors() {
     notes: ["Seeds, entropy, ephemeral keys, ML-KEM randomness and nonces are pinned test values (SHA-512 of a label); never reuse them.", "secret = type || MessagePack {v: 1, s: seed} (Dilithium) or {v: 1, alg: 'hybrid', s: seed} (Hybrid).", "dhiesV3[].key is k of §5.2; es, ss, kss and info are intermediate values given for debugging.", "kemRandomness is the 32-byte m of FIPS 203 ML-KEM.Encaps_internal."],
     identities,
     prf,
+    signatures,
     dhiesV3,
     negative: { ids: invalidIds, secrets: invalidSecrets, dhies: invalidDhies },
   };
