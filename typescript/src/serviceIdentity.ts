@@ -68,6 +68,73 @@ function isDnsName(name: string): boolean {
   return true;
 }
 
+/**
+ * True if a Punycode label body (RFC 3492 §6.2, without `xn--`) decodes. Used ONLY to refuse labels
+ * that cannot be decoded; the decoded form is never output. Done here rather than left to the WHATWG
+ * parser, whose answer depends on the runtime (Node 26.13, ada 4.0, accepts `xn--zz`). Same algorithm
+ * as Go (`go/pkg/serviceid/punycode.go`) and Rust (`punycode_decodes`).
+ */
+function punycodeDecodes(input: string): boolean {
+  const base = 36,
+    tMin = 1,
+    tMax = 26,
+    skew = 38,
+    damp = 700,
+    maxInt = 0x7fffffff;
+  const adapt = (delta: number, numPoints: number, first: boolean): number => {
+    delta = first ? Math.floor(delta / damp) : Math.floor(delta / 2);
+    delta += Math.floor(delta / numPoints);
+    let k = 0;
+    while (delta > ((base - tMin) * tMax) / 2) {
+      delta = Math.floor(delta / (base - tMin));
+      k += base;
+    }
+    return k + Math.floor(((base - tMin + 1) * delta) / (delta + skew));
+  };
+  const digit = (c: number): number => {
+    if (c >= 0x30 && c <= 0x39) return c - 0x30 + 26;
+    if (c >= 0x61 && c <= 0x7a) return c - 0x61;
+    if (c >= 0x41 && c <= 0x5a) return c - 0x41;
+    return -1;
+  };
+  let n = 128,
+    i = 0,
+    bias = 72;
+  const b = input.lastIndexOf("-");
+  let length = 0;
+  let rest = input;
+  if (b > 0) {
+    for (let j = 0; j < b; j++) if (input.charCodeAt(j) >= 0x80) return false;
+    length = b;
+    rest = input.slice(b + 1);
+  } else if (b === 0) {
+    rest = input.slice(1);
+  }
+  if (rest.length === 0) return false;
+  for (let pos = 0; pos < rest.length;) {
+    const oldi = i;
+    let w = 1;
+    for (let k = base; ; k += base) {
+      if (pos >= rest.length) return false;
+      const d = digit(rest.charCodeAt(pos++));
+      if (d < 0 || d > Math.floor((maxInt - i) / w)) return false;
+      i += d * w;
+      const t = Math.min(Math.max(k - bias, tMin), tMax);
+      if (d < t) break;
+      if (w > Math.floor(maxInt / (base - t))) return false;
+      w *= base - t;
+    }
+    bias = adapt(i - oldi, length + 1, oldi === 0);
+    if (Math.floor(i / (length + 1)) > maxInt - n) return false;
+    n += Math.floor(i / (length + 1));
+    i %= length + 1;
+    if (n < 0x80 || n > 0x10ffff || (n >= 0xd800 && n <= 0xdfff)) return false;
+    length++;
+    i++;
+  }
+  return true;
+}
+
 /** True if a WHATWG URL parser would read the host as an IPv4 address (numeric or `0x…` last label). */
 function endsInNumber(host: string): boolean {
   const last = host.slice(host.lastIndexOf(".") + 1);
@@ -97,6 +164,7 @@ function canonicalWebOrigin(scheme: string, rawHost: string, port: string | unde
   if (IPV4.test(host) || host === "localhost") {
     developmentHost = true;
   } else if (isDnsName(host) && !endsInNumber(host)) {
+    if (host.split(".").some((l) => l.startsWith("xn--") && !punycodeDecodes(l.slice(4)))) invalidServiceId();
     developmentHost = host.endsWith(".localhost");
   } else {
     return invalidServiceId();
