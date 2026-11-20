@@ -71,3 +71,14 @@ Platform differences are isolated in `typescript/src/platform/` (`node.ts` vs `b
 - Backward compatibility with v0/v2 identities is tested against the real published package (`@vaultys/id_2` devDependency) in `test/backward_compat/` and `test/v0tov1.test.ts` — keep migration paths in `src/utils/migration.ts` working.
 - Post-quantum and WebAuthn key generation are async in both languages; Ed25519-only paths may be sync.
 - `typescript/tsconfig.json` is strict and only compiles `index.ts` + `src/**` — tests run through `tsx` and are not part of the build.
+
+## Issues GitHub
+
+Pour créer, découper ou rattacher une issue, suivre le skill Claude Code `vaultys-issue`
+(source : https://github.com/vaultys/VaultysPilot/blob/main/claude/vaultys-issue/SKILL.md).
+S'il n'est pas installé, le lire avec :
+`gh api repos/vaultys/VaultysPilot/contents/claude/vaultys-issue/SKILL.md --jq .content | base64 -d`
+
+En bref : les tâches de ce repo vont dans le Project VaultysID (#21), au statut Backlog par défaut ;
+une issue qui fait partie d'une release est rattachée comme sous-issue de l'issue de release
+dans vaultys/VaultysPilot (ex. « VaultysHub 2026-R4 ») ; pas de milestone.
