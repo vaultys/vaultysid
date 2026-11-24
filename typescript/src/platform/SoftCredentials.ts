@@ -413,7 +413,9 @@ export default class SoftCredentials {
     signCount.writeUInt32BE(credential.signCount, 0);
     const rawIdLength = Buffer.allocUnsafe(2);
     rawIdLength.writeUInt16BE(credential.rawId.length, 0);
-    const coseKey = cbor.encode(credential.coseKey);
+    // The synchronous encoder can return truncated CBOR on Node 26. Wait
+    // for the encoder stream to finish for both the COSE key and attestation.
+    const coseKey = await cbor.encodeAsync(credential.coseKey);
     const attestationObject = {
       authData: Buffer.concat([rpIdHash, flags, signCount, credential.aaguid, rawIdLength, credential.rawId, coseKey]),
       fmt: "none",
@@ -435,7 +437,7 @@ export default class SoftCredentials {
       toJSON() {},
       response: {
         clientDataJSON: Buffer.from(JSON.stringify(clientData), "utf-8"),
-        attestationObject: cbor.encode(attestationObject),
+        attestationObject: await cbor.encodeAsync(attestationObject),
         getTransports: () => ["usb", "hybrid"],
         getAuthenticatorData: () => attestationObject.authData,
         getPublicKey: () => coseKey,
@@ -532,7 +534,7 @@ export default class SoftCredentials {
     if (!(assertionAuthData[32] & 0x01)) return false;
     if (userVerifiation && !(assertionAuthData[32] & 0x04)) return false;
     const att = attestation.response as AuthenticatorAttestationResponse;
-    let data = Buffer.concat([Buffer.from(ass.authenticatorData), hash]);
+    const data = Buffer.concat([assertionAuthData, hash]);
     const ato = cbor.decode(att.attestationObject);
     const authData = parseAuthData(ato.authData);
     // check if user has actually touched the device
@@ -540,11 +542,6 @@ export default class SoftCredentials {
     // check if the user has entered his PIN code or used biometric sensor
     if ((userVerifiation && !authData.flags.uv) || !authData.COSEPublicKey) return false;
     const ckey = cbor.decode(authData.COSEPublicKey);
-
-    // Hash data for ES256
-    if (ckey.get(3) == -7) {
-      data = myhash("sha256", data);
-    }
 
     // Get key type
     const keyType = ckey.get(1);

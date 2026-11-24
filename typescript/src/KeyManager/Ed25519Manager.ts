@@ -7,6 +7,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { KeyPair } from "./";
 import CypherManager from "./CypherManager";
 import { decodeRecord, readVersion, requireBytes } from "./validation";
+import type { Ed25519Signer } from "../Ed25519Signer";
 
 // // @ts-ignore hack to get compatibility with former @stricahq/bip32ed25519 lib
 // ed25519.CURVE = { ...ed25519.CURVE };
@@ -35,6 +36,7 @@ export default class Ed25519Manager extends CypherManager {
   capability: "private" | "public" = "private";
   entropy: Buffer | undefined;
   signer!: KeyPair;
+  #externalSigner?: Ed25519Signer;
 
   constructor() {
     super();
@@ -68,6 +70,31 @@ export default class Ed25519Manager extends CypherManager {
     return Ed25519Manager.createFromEntropy(randomBytes(32));
   }
 
+  static async fromSigner(signer: Ed25519Signer, encryptionSecretKey: Uint8Array) {
+    const publicKey = requireBytes(await signer.getPublicKey(), "Ed25519 public key", 32);
+    const point = ed25519.Point.fromBytes(publicKey, false);
+    if (point.isSmallOrder() || !point.isTorsionFree()) throw new Error("Invalid Ed25519 public key");
+
+    const secretKey = requireBytes(encryptionSecretKey, "X25519 secret key", 32);
+    const cypher = nacl.box.keyPair.fromSecretKey(secretKey);
+    const km = new Ed25519Manager();
+    km.signer = { publicKey };
+    km.cypher = { publicKey: Buffer.from(cypher.publicKey), secretKey };
+    km.#externalSigner = signer;
+    return km;
+  }
+
+  /** @internal Copy an external signer for consumers that isolate serialization version. */
+  copyWithExternalSigner() {
+    if (!this.#externalSigner || this.capability === "public") return undefined;
+    const copy = Ed25519Manager.fromId(this.id);
+    const secretKey = this.cypher.secretKey;
+    if (secretKey) copy.cypher.secretKey = Buffer.from(secretKey);
+    copy.capability = "private";
+    copy.#externalSigner = this.#externalSigner;
+    return copy;
+  }
+
   get id() {
     return Buffer.from(
       encode({
@@ -92,6 +119,19 @@ export default class Ed25519Manager extends CypherManager {
   getSigner(): Promise<{
     sign: (data: Buffer) => Promise<Buffer | null>;
   }> {
+    const externalSigner = this.#externalSigner;
+    if (externalSigner) {
+      const canSign = () => this.capability === "private";
+      return Promise.resolve({
+        sign: async (data: Buffer) => {
+          if (!canSign()) return null;
+          const signature = requireBytes(await externalSigner.sign(Buffer.from(data)), "external Ed25519 signature", 64);
+          if (!canSign()) return null;
+          if (!this.verify(data, signature)) throw new Error("External Ed25519 signature did not verify for this identity");
+          return signature;
+        },
+      });
+    }
     // todo fetch secretKey here
     const secretKey = this.signer.secretKey!;
     const sign = (data: Buffer) => Promise.resolve(Buffer.from(ed25519.sign(data, secretKey)));
@@ -100,6 +140,7 @@ export default class Ed25519Manager extends CypherManager {
   }
 
   getSecret() {
+    if (this.#externalSigner) throw new Error("Cannot export the secret of an externally signed identity");
     return Buffer.from(
       encode({
         v: this.version,
@@ -163,6 +204,7 @@ export default class Ed25519Manager extends CypherManager {
   }
 
   cleanSecureData() {
+    if (this.#externalSigner) this.capability = "public";
     if (this.cypher?.secretKey) {
       secureErase(this.cypher.secretKey);
       delete this.cypher.secretKey;

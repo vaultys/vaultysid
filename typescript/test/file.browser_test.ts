@@ -91,7 +91,7 @@ describe("IdManager with files in browser", () => {
       const inputBuffer = await fetchFile("assets/testfile.png");
       const file = { arrayBuffer: Buffer.from(inputBuffer), type: "image/png" };
 
-      manager1.acceptSignFile(channel);
+      manager1.acceptSignFile(channel, async () => true);
       const result = await manager2.requestSignFile(channel.otherend, file);
 
       if (!result) return assert.fail("no result of the sign file request");

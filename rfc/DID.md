@@ -42,6 +42,7 @@ The protocol defines the following identity types, encoded as the first byte of 
 | 2     | ORGANIZATION | Identity for organizations or groups          |
 | 3     | FIDO2        | Identity bound to a FIDO2 authenticator       |
 | 4     | FIDO2PRF     | Identity using FIDO2 PRF extension            |
+| 5     | PASSPORT_AA  | Passport Active Authentication identity ([draft](PASSPORT-AA.md)) |
 
 ### 3.2. Identity Structure
 
@@ -86,6 +87,8 @@ The identity is serialized using MessagePack encoding with the following structu
 ```
 
 This serialized structure is prefixed with the identity type byte to form the complete identity.
+
+Post-quantum identity types (`0x10 | role`, with a Dilithium or Hybrid key manager) carry a fourth field `k` holding an ML-KEM-768 encapsulation key. These types, their key derivation, the DHIES v3 scheme and their compatibility with the types of §3.1 are specified in `rfc/PQ-ENCRYPTION.md` (draft).
 
 ## 5. FIDO2-Based Identities
 

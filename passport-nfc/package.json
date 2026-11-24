@@ -1,0 +1,26 @@
+{
+  "name": "@vaultys/passport-nfc",
+  "version": "0.1.0",
+  "description": "Desktop PC/SC reader for VaultysID passport Active Authentication",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "node": {
+        "types": "./index.d.ts",
+        "default": "./index.js"
+      }
+    }
+  },
+  "types": "./index.d.ts",
+  "files": ["index.js", "index.d.ts"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}

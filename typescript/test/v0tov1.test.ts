@@ -34,7 +34,8 @@ describe("VaultysId Migration", () => {
   it("Migrate VaultysId to Version 0", async () => {
     const bob = await createRandomVaultysId();
     bob.toVersion(0);
-    assert.equal(bob.version, 0);
+    // post-quantum ids only exist in version 1
+    assert.equal(bob.version, bob.isPostQuantum() ? 1 : 0);
   });
 
   it("Migrate IdManager to Version 0", async () => {
@@ -59,7 +60,7 @@ describe("VaultysId Migration", () => {
 
     assert.equal(bob.store.substore("wot").list().length, wot.length);
     assert.equal(bob.store.substore("contacts").list().length, wot.length);
-    assert.equal(bob.vaultysId.version, 0);
+    assert.equal(bob.vaultysId.version, bob.vaultysId.isPostQuantum() ? 1 : 0);
 
     bob.migrate(1);
     wot.forEach((jeanjacques) => {

@@ -16,15 +16,15 @@ import VaultysId from "../src/VaultysId";
 import "./shims";
 
 /** Re-emit an attestation with authenticator extension data appended, ED flag set. */
-const withExtensionData = (attestation: any, extension: Map<string, unknown>) => {
+const withExtensionData = async (attestation: any, extension: Map<string, unknown>) => {
   const ato = cbor.decode(Buffer.from(attestation.response.attestationObject) as unknown as Buffer);
   const authData = Buffer.from(ato.authData);
 
   const flagsOffset = 32;
   authData[flagsOffset] = authData[flagsOffset] | 0x80; // ED
-  const patched = Buffer.concat([authData, Buffer.from(cbor.encode(extension))]);
+  const patched = Buffer.concat([authData, Buffer.from(await cbor.encodeAsync(extension))]);
 
-  const rebuilt = cbor.encode({ ...ato, authData: patched });
+  const rebuilt = await cbor.encodeAsync({ ...ato, authData: patched });
   return {
     ...attestation,
     response: { ...attestation.response, attestationObject: Buffer.from(rebuilt) },
@@ -39,7 +39,7 @@ describe("FIDO2 authenticator extension data", () => {
   ] as const) {
     it(`${label}: the COSE key is isolated from trailing extension data`, async () => {
       const attestation = await navigator.credentials.create(SoftCredentials.createRequest(alg, false));
-      const patched = withExtensionData(attestation, new Map([["hmac-secret", true]]));
+      const patched = await withExtensionData(attestation, new Map([["hmac-secret", true]]));
 
       const ckey = SoftCredentials.getCOSEPublicKey(patched as any);
       assert.ok(ckey, "a COSE key must be extracted");
@@ -50,7 +50,7 @@ describe("FIDO2 authenticator extension data", () => {
 
     it(`${label}: an identity can still be created`, async () => {
       const attestation = await navigator.credentials.create(SoftCredentials.createRequest(alg, false));
-      const patched = withExtensionData(attestation, new Map([["hmac-secret", true]]));
+      const patched = await withExtensionData(attestation, new Map([["hmac-secret", true]]));
 
       const id = await VaultysId.fido2FromAttestation(patched as any);
       assert.ok(id, "fido2FromAttestation must succeed");

@@ -285,6 +285,8 @@ Given `out` and the expected sender public key `S_pk`:
 
 Successful decryption proves that the holder of `S_sk` (or of `R_sk`) produced the message. The scheme does not provide forward secrecy for the sender component, and it is not deniable towards third parties holding `R_sk`.
 
+DHIES v2 relies on X25519 only. DHIES v3 (tag `0x03`), which adds an ML-KEM-768 encapsulation for post-quantum recipient identities, is specified in `rfc/PQ-ENCRYPTION.md` (draft). That document also changes the key behind the file encryption PRF of §5.1 for post-quantum identities; the file format is unchanged.
+
 ## 12. References
 
 ### 11.1. Normative References
