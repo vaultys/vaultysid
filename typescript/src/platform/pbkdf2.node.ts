@@ -10,9 +10,9 @@ export function getKeyMaterial(mnemonic: string): Promise<crypto.KeyObject> {
 }
 
 // Node-compatible version of key derivation
-export function getKey(keyMaterial: crypto.KeyObject, salt: Buffer): Promise<Buffer> {
+export function getKey(keyMaterial: crypto.KeyObject, salt: Buffer, info: typeof encryptInfo = encryptInfo): Promise<Buffer> {
   return new Promise((resolve) => {
-    const derivedKey = crypto.pbkdf2Sync(keyMaterial.export(), salt, encryptInfo.ITERATIONS, encryptInfo.DERIVED_KEY_LENGTH / 8, encryptInfo.HASH.replace("-", "").toLowerCase());
+    const derivedKey = crypto.pbkdf2Sync(keyMaterial.export(), salt, info.ITERATIONS, info.DERIVED_KEY_LENGTH / 8, info.HASH.replace("-", "").toLowerCase());
     resolve(Buffer.from(derivedKey));
   });
 }
@@ -26,7 +26,7 @@ export async function decrypt(backup: VaultysBackup, passphrase: string): Promis
     const keyMaterial = await getKeyMaterial(passphrase);
     const salt = Buffer.from(backup.encryptInfo.salt, "base64");
     const iv = Buffer.from(backup.encryptInfo.iv, "base64");
-    const key = await getKey(keyMaterial, salt);
+    const key = await getKey(keyMaterial, salt, backup.encryptInfo);
 
     const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
 

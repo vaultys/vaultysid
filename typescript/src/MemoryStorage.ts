@@ -17,7 +17,7 @@ const replacer = (key: string, value: any) => {
     return "_bx_" + Buffer.from(value.data).toString("base64");
   }
 
-  if (value.constructor.name === "Array" || value.constructor.name === "Uint8Array") {
+  if (value instanceof Uint8Array) {
     return "_bx_" + Buffer.from(value).toString("base64");
   }
   return value;
@@ -54,7 +54,7 @@ export const LocalStorage = (key = "vaultysStorage"): Store => {
 export const MessagePackStorage = (key = "vaultysStorage"): Store => {
   let data: object = {};
   if (!localStorage[key]) localStorage[key] = Buffer.from(encode({})).toString("base64");
-  else data = decode(localStorage[key]) as object;
+  else data = decode(Buffer.from(localStorage[key], "base64")) as object;
   return storagify(
     data,
     () => localStorage.setItem(key, Buffer.from(encode(data)).toString("base64")),
