@@ -8,7 +8,7 @@ const getAlgorithm = (alg: string) => {
   if (cleanAlg === "sha256") return sha256;
   if (cleanAlg === "sha512") return sha512;
   if (cleanAlg === "sha224") return sha224;
-  return sha256;
+  throw new Error(`Unsupported hash algorithm: ${alg}`);
 };
 
 const _randomBytes = (size: number) => Buffer.from(randomBytes(size));

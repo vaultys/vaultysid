@@ -101,9 +101,9 @@ export function StreamChannel(channel: Channel) {
 
   const getWriteStream = () => {
     const stream = new Stream.Writable({
-      write: (chunk: Buffer, encoding: string, done: () => void) => {
-        channel.send(chunk);
-        done();
+      // wait for each send so chunks (and the EOF marker after them) keep their order
+      write: (chunk: Buffer, encoding: string, done: (error?: Error | null) => void) => {
+        channel.send(chunk).then(() => done(), done);
       },
     });
     return stream;
@@ -112,16 +112,16 @@ export function StreamChannel(channel: Channel) {
   const upload = async (stream: Readable) => {
     return new Promise<void>((resolve) => {
       const writeStream = getWriteStream();
-      stream.pipe(writeStream).once("finish", () => {
-        channel.send(Buffer.from("EOF", "utf-8"));
-        writeStream.end();
+      stream.pipe(writeStream).once("finish", async () => {
+        await channel.send(Buffer.from("EOF", "utf-8"));
         resolve();
       });
     });
   };
 
   const uploadData = async (data: Buffer) => {
-    const stream = Readable.from(data);
+    // wrap in an array: Readable.from() would iterate a buffer/ shim Buffer byte by byte
+    const stream = Readable.from([data], { objectMode: false });
     await upload(stream);
   };
 
@@ -156,24 +156,34 @@ export function StreamChannel(channel: Channel) {
   };
 
   const getReadStream = () => {
-    let push: null | ((data: Buffer | null) => boolean);
-    let temp: Buffer | null;
+    const pending: Buffer[] = [];
+    let flowing = false;
+    let eof = false;
+    let ended = false;
+    const flush = () => {
+      while (flowing && pending.length > 0) {
+        flowing = stream.push(pending.shift()!);
+      }
+      if (eof && pending.length === 0 && !ended) {
+        ended = true;
+        stream.push(null);
+      }
+    };
     const stream = new Stream.Readable({
       read() {
-        push = (data) => this.push(data);
+        flowing = true;
+        flush();
       },
     });
     onData((buf: Buffer) => {
-      if (buf.length === 3 && buf.toString("utf-8") === "EOF" && push) {
-        temp && push(temp);
-        push(null);
-        stream.destroy();
+      if (ended) return;
+      if (buf.length === 3 && buf.toString("utf-8") === "EOF") {
+        // EOF marker: never treat it as data; end once pending data is drained
+        eof = true;
+      } else {
+        pending.push(buf);
       }
-      temp = temp ? Buffer.concat([temp, buf]) : buf;
-      if (push) {
-        !push(temp) && (push = null);
-        temp = null;
-      }
+      flush();
     });
     return stream;
   };
@@ -189,39 +199,34 @@ export function StreamChannel(channel: Channel) {
 }
 
 export function convertWebWritableStreamToNodeWritable(webWritableStream: WritableStream) {
+  // Keep a single writer (and its lock) for the whole lifetime of the Node stream.
   const writer = webWritableStream.getWriter();
   return new Writable({
     async write(chunk, encoding, callback) {
       try {
-        // Get a writer from the Web WritableStream
         await writer.write(chunk);
-        writer.releaseLock(); // Release the lock on the writer after writing
-        callback(); // Signal that the chunk has been processed
+        callback();
       } catch (error) {
-        callback(); // Signal an error if it occurred
+        callback(error as Error);
       }
     },
     async final(callback) {
       try {
-        // Close the Web WritableStream
-        const writer = webWritableStream.getWriter();
         await writer.close();
-        writer.releaseLock(); // Release the lock on the writer after closing
-        callback(); // Signal that the stream is finished
+        writer.releaseLock();
+        callback();
       } catch (error) {
-        callback(); // Signal an error if it occurred during close
+        callback(error as Error);
       }
     },
     async destroy(error, callback) {
       try {
-        // Abort the Web WritableStream in case of an error
-        const writer = webWritableStream.getWriter();
         await writer.abort(error);
-        writer.releaseLock(); // Release the lock on the writer after aborting
-        callback(error); // Signal that the stream is destroyed
-      } catch (abortError) {
-        callback(null); // Signal an error if it occurred during abort
+        writer.releaseLock();
+      } catch {
+        // stream already closed or errored: nothing more to abort
       }
+      callback(error);
     },
   });
 }

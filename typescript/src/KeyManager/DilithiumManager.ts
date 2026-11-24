@@ -108,6 +108,7 @@ export default class DilithiumManager extends CypherManager {
         publicKey: obj.kem.publicKey.data ? Buffer.from(obj.kem.publicKey.data) : Buffer.from(obj.kem.publicKey),
       };
     }
+    km.capability = "public"; // instantiated from stored public data only
     return km;
   }
 

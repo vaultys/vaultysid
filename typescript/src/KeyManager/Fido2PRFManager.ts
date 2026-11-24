@@ -6,7 +6,7 @@ import { KeyPair } from ".";
 import { decode, encode } from "@msgpack/msgpack";
 import Fido2Manager from "./Fido2Manager";
 import { Buffer } from "buffer/";
-import { PQ_COSE_ALG, PQ_COSE_KEY_PARAMS } from "../pqCrypto";
+import { PQ_COSE_ALG, PQ_COSE_KEY_PARAMS, PQ_COSE_KEY_TYPE } from "../pqCrypto";
 import { decodeRecord, readVersion, requireBytes } from "./validation";
 
 declare global {
@@ -44,6 +44,8 @@ const getAuthTypeFromCkey = (ckey: Buffer) => {
     return "Ed25519VerificationKey2020";
   } else if (type === 2) {
     return "P256VerificationKey2020";
+  } else if (type === PQ_COSE_KEY_TYPE.DILITHIUM) {
+    return "DilithiumVerificationKey2025";
   } else return "Unknown";
 };
 

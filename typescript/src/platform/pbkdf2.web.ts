@@ -22,16 +22,16 @@ export function getKeyMaterial(mnemonic: string) {
 /**
  * Derives a key from key material and salt
  */
-export function getKey(keyMaterial: CryptoKey, salt: BufferSource) {
+export function getKey(keyMaterial: CryptoKey, salt: BufferSource, info: typeof encryptInfo = encryptInfo) {
   return window.crypto.subtle.deriveKey(
     {
-      name: encryptInfo.ALG,
+      name: info.ALG,
       salt: salt,
-      iterations: encryptInfo.ITERATIONS,
-      hash: encryptInfo.HASH,
+      iterations: info.ITERATIONS,
+      hash: info.HASH,
     },
     keyMaterial,
-    { name: encryptInfo.DERIVED_KEY_TYPE, length: encryptInfo.DERIVED_KEY_LENGTH },
+    { name: info.DERIVED_KEY_TYPE, length: info.DERIVED_KEY_LENGTH },
     true,
     ["encrypt", "decrypt"],
   );
@@ -44,7 +44,7 @@ export async function decrypt(backup: VaultysBackup, passphrase: string) {
   if (!backup.encryptInfo) return backup.data;
   try {
     const keyMaterial = await getKeyMaterial(passphrase);
-    const key = await getKey(keyMaterial, Buffer.from(backup.encryptInfo.salt, "base64"));
+    const key = await getKey(keyMaterial, Buffer.from(backup.encryptInfo.salt, "base64"), backup.encryptInfo);
     const decrypted = await window.crypto.subtle.decrypt(
       {
         name: backup.encryptInfo.DERIVED_KEY_TYPE,

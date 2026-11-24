@@ -1,4 +1,4 @@
-import { hash, randomBytes } from "../crypto";
+import { hash, randomBytes, secureErase } from "../crypto";
 import { Buffer } from "buffer/";
 import nacl from "tweetnacl";
 import { decode, encode } from "@msgpack/msgpack";
@@ -138,7 +138,20 @@ export default class HybridManager extends CypherManager {
         publicKey: obj.kem.publicKey.data ? Buffer.from(obj.kem.publicKey.data) : Buffer.from(obj.kem.publicKey),
       };
     }
+    km.capability = "public"; // instantiated from stored public data only
     return km;
+  }
+
+  cleanSecureData() {
+    for (const secret of [this.seed, this.edSigner?.secretKey, this.pqSigner?.secretKey, this.signer?.secretKey]) {
+      if (secret) secureErase(secret);
+    }
+    delete this.seed;
+    if (this.edSigner) delete this.edSigner.secretKey;
+    if (this.pqSigner) delete this.pqSigner.secretKey;
+    if (this.signer) delete this.signer.secretKey;
+    this.capability = "public";
+    super.cleanSecureData();
   }
 
   static fromId(id: Buffer) {

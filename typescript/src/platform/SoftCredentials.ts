@@ -341,7 +341,7 @@ export default class SoftCredentials {
     const publicKey = options.publicKey!;
     credential.options = publicKey;
     credential.rpId = publicKey.rp.id || publicKey.rp.name!;
-    credential.userHandle = Buffer.from(publicKey.user.id.toString(), "base64");
+    credential.userHandle = Buffer.from(publicKey.user.id as ArrayBuffer);
     credentials[credential.rawId.toString("base64")] = credential; // erase previous instance
 
     // Get the algorithm from pubKeyCredParams
@@ -379,7 +379,7 @@ export default class SoftCredentials {
       credential.coseKey = new Map();
       credential.coseKey.set(1, 2);
       credential.coseKey.set(3, -7);
-      credential.coseKey.set(-1, 6);
+      credential.coseKey.set(-1, 1); // crv: P-256
       const x = credential.keyPair.publicKey.slice(1, 33);
       const y = credential.keyPair.publicKey.slice(33);
       credential.coseKey.set(-2, x);
@@ -403,7 +403,7 @@ export default class SoftCredentials {
     }
     const clientData = {
       type: "webauthn.create",
-      challenge: publicKey.challenge,
+      challenge: Buffer.from(publicKey.challenge as ArrayBuffer).toString("base64"),
       origin,
     };
 

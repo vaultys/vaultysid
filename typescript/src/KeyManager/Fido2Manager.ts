@@ -6,7 +6,7 @@ import { KeyPair } from ".";
 import { decode, encode } from "@msgpack/msgpack";
 import SoftCredentials from "../platform/SoftCredentials";
 import { Buffer } from "buffer/";
-import { PQ_COSE_ALG, PQ_COSE_KEY_PARAMS } from "../pqCrypto";
+import { PQ_COSE_ALG, PQ_COSE_KEY_PARAMS, PQ_COSE_KEY_TYPE } from "../pqCrypto";
 import CypherManager from "./CypherManager";
 import { decodeRecord, readVersion, requireBytes } from "./validation";
 
@@ -56,6 +56,8 @@ const getAuthTypeFromCkey = (ckey: Buffer) => {
     return "Ed25519VerificationKey2020";
   } else if (type === 2) {
     return "P256VerificationKey2020";
+  } else if (type === PQ_COSE_KEY_TYPE.DILITHIUM) {
+    return "DilithiumVerificationKey2025";
   } else return "Unknown";
 };
 
@@ -69,10 +71,13 @@ const getSignerFromCkey = (ckey: Buffer) => {
   return { publicKey: Buffer.from(publicKey) } as KeyPair;
 };
 
+// msgpack bin16 header: 0xc5 followed by a big-endian 16-bit length
+const bin16 = (length: number) => [0xc5, (length >> 8) & 0xff, length & 0xff];
+
 const serializeID_v0 = (km: Fido2Manager) => {
   const version = Buffer.from([0x83, 0xa1, 0x76, 0]);
-  const ckey = Buffer.concat([Buffer.from([0xa1, 0x63, 0xc5, 0x00, km.ckey.length]), km.ckey]);
-  const cypher = Buffer.concat([Buffer.from([0xa1, 0x65, 0xc5, 0x00, km.cypher.publicKey.length]), km.cypher.publicKey]);
+  const ckey = Buffer.concat([Buffer.from([0xa1, 0x63, ...bin16(km.ckey.length)]), km.ckey]);
+  const cypher = Buffer.concat([Buffer.from([0xa1, 0x65, ...bin16(km.cypher.publicKey.length)]), km.cypher.publicKey]);
   return Buffer.concat([version, ckey, cypher]);
 };
 
@@ -176,14 +181,16 @@ export default class Fido2Manager extends CypherManager {
   static instantiate(obj: any) {
     const f2m = new this();
     f2m.version = obj.version ?? 0;
-    f2m.fid = typeof obj.fid === "string" ? Buffer.from(obj.fid, "base64") : obj.fid;
-    f2m._transports = obj.t ? obj.t : 15;
+    if (typeof obj.fid === "string") f2m.fid = Buffer.from(obj.fid, "base64");
+    else if (obj.fid) f2m.fid = Buffer.from(obj.fid.data ?? obj.fid);
+    f2m._transports = obj._transports || obj.t || 15;
     f2m.ckey = obj.ckey.data ? Buffer.from(obj.ckey.data) : Buffer.from(obj.ckey);
     f2m.signer = getSignerFromCkey(f2m.ckey);
     f2m.authType = getAuthTypeFromCkey(f2m.ckey);
     f2m.cypher = {
       publicKey: obj.cypher.publicKey.data ? Buffer.from(obj.cypher.publicKey.data) : Buffer.from(obj.cypher.publicKey),
     };
+    f2m.capability = "public"; // instantiated from stored public data only
     return f2m;
   }
 
@@ -271,15 +278,12 @@ export default class Fido2Manager extends CypherManager {
   }
 
   verifyCredentials(credentials: PublicKeyCredential, userVerification = false) {
-    if (credentials.id !== this.fid.toString("base64")) {
+    // credential ids are base64url: compare the decoded bytes, not the strings
+    if (!this.fid || !Buffer.from(credentials.id, "base64").equals(this.fid)) {
       return false;
     }
     const response = credentials.response as AuthenticatorAssertionResponse;
-    const rpIdHash = Buffer.from(response.authenticatorData.slice(0, 32)).toString("hex");
-    const myIdHash = sha256(Buffer.from(credentials.id, "base64")).toString("hex");
-    if (rpIdHash !== myIdHash) {
-      return false;
-    }
+    // simpleVerify checks rpIdHash against the configured rpId (configureWebAuthn)
     return SoftCredentials.simpleVerify(this.ckey, response, userVerification);
   }
 

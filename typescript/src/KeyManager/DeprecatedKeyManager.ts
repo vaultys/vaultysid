@@ -189,6 +189,7 @@ export default class DeprecatedKeyManager {
     km.cypher = {
       publicKey: obj.cypher.publicKey.data ? Buffer.from(obj.cypher.publicKey.data) : Buffer.from(obj.cypher.publicKey),
     };
+    km.capability = "public"; // instantiated from stored public data only
     return km;
   }
 
@@ -273,7 +274,7 @@ export default class DeprecatedKeyManager {
       const newKey = DeprecatedKeyManager.fromId(hiscp.newId);
       const hiscpBuffer = Buffer.concat([hiscp.newId, hiscp.proofKey, timestampBuffer]);
       const proofVerifier = bip32.Bip32PublicKey.fromBytes(hiscp.proofKey);
-      return proofVerifier.toPublicKey().verify(hiscpBuffer, hiscp.signature);
+      return proofVerifier.toPublicKey().verify(hiscp.signature, hiscpBuffer);
     } else {
       return false;
     }

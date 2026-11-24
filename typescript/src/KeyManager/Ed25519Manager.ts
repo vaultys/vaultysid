@@ -178,6 +178,7 @@ export default class Ed25519Manager extends CypherManager {
     km.cypher = {
       publicKey: obj.cypher.publicKey.data ? Buffer.from(obj.cypher.publicKey.data) : Buffer.from(obj.cypher.publicKey),
     };
+    km.capability = "public"; // instantiated from stored public data only
     return km;
   }
 

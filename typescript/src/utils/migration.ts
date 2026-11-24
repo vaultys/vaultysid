@@ -27,7 +27,7 @@ export function migrateIdManager(idManager: IdManager) {
     const site = instanciateApp(data);
     if (site) {
       if (site.did !== did) {
-        apps.set(site.did, { ...data, site: site.did, oldDid: did });
+        apps.set(site.did, { ...data, site: data.site === did ? site.did : data.site, oldDid: did });
         apps.delete(did);
         // console.log(did, "->", site.did);
       }
